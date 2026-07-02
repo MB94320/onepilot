@@ -1,19 +1,17 @@
-import type { Metadata } from "next";
+import { AuthProvider } from "@/lib/AuthContext";
+import Providers from "./providers"; // Nouveau fichier à créer
 import "./globals.css";
 
-export const metadata: Metadata = {
-  title: "ONEPILOT",
-  description: "Plateforme de pilotage projets, opérations, qualité et finance.",
-};
-
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="fr">
-      <body>{children}</body>
+    <html lang="fr" data-scroll-behavior="smooth">
+      <body>
+        <Providers>
+          <AuthProvider>
+            {children}
+          </AuthProvider>
+        </Providers>
+      </body>
     </html>
   );
 }

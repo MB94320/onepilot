@@ -9,20 +9,20 @@ type AppShellProps = {
 
 export default function AppShell({
   title,
-  subtitle,
   children,
 }: AppShellProps) {
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <Topbar title={title} subtitle={subtitle} />
+    <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-[#0b1020] dark:text-slate-100">
+      <div className="flex min-h-screen">
+        <Sidebar />
 
-      <main className="mx-auto w-full max-w-7xl px-6 py-8">
-        <div className="grid gap-6 lg:grid-cols-[18rem_minmax(0,1fr)]">
-          <Sidebar />
-
-          <section className="min-w-0">{children}</section>
+        <div className="flex min-w-0 flex-1 flex-col">
+          <Topbar title={title} />
+          <main className="flex-1 overflow-y-auto px-6 py-6">
+            <div className="mx-auto w-full max-w-[1600px]">{children}</div>
+          </main>
         </div>
-      </main>
+      </div>
     </div>
   );
 }
