@@ -331,6 +331,12 @@ type WorkloadPoint = {
   utilizationRate: number;
 };
 
+
+type ProjectResourceSummary = {
+  projectId: string;
+  resourceNames: string[];
+};
+
 type ExportRow = {
   type: string;
   name: string;
@@ -2466,20 +2472,22 @@ function EmployeePanel({
 
 function ProjectTable({
   projects,
+  resourcesByProjectId,
 }: {
   projects: ProjectOverview[];
+  resourcesByProjectId: Map<string, ProjectResourceSummary>;
 }) {
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950">
       <PanelHeader
         icon={BriefcaseBusiness}
         title="Projets et couverture staffing"
-        description="Lecture directeur projet / DAF : besoin, affecté, reste à staffer et taux de couverture."
+        description="Lecture directeur projet / DAF : besoin, affecté, ressources mobilisées, reste à staffer et taux de couverture."
         accent="emerald"
       />
 
       <div className="max-h-[420px] overflow-auto">
-        <table className="w-full min-w-[1120px] border-collapse">
+        <table className="w-full min-w-[1380px] border-collapse">
           <thead className="sticky top-0 z-10">
             <tr className="border-b border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900">
               <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wide text-slate-500">
@@ -2487,6 +2495,9 @@ function ProjectTable({
               </th>
               <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wide text-slate-500">
                 Statut
+              </th>
+              <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wide text-slate-500">
+                Ressources affectées
               </th>
               <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wide text-slate-500">
                 Besoins
@@ -2507,63 +2518,77 @@ function ProjectTable({
           </thead>
 
           <tbody>
-            {projects.map((project) => (
-              <tr
-                key={project.project_id}
-                className="border-b border-slate-100 transition last:border-0 hover:bg-indigo-50/60 dark:border-slate-800 dark:hover:bg-indigo-950/20"
-              >
-                <td className="px-4 py-3">
-                  <p className="max-w-72 truncate text-sm font-black text-slate-950 dark:text-white">
-                    {project.project_name}
-                  </p>
-                  <p className="mt-0.5 text-xs font-semibold text-slate-500">
-                    {project.project_code}
-                  </p>
-                </td>
+            {projects.map((project) => {
+              const resourceNames =
+                resourcesByProjectId.get(project.project_id)?.resourceNames ?? [];
 
-                <td className="px-4 py-3">
-                  <ProjectStatusBadge status={project.project_status} />
-                </td>
+              return (
+                <tr
+                  key={project.project_id}
+                  className="border-b border-slate-100 transition last:border-0 hover:bg-indigo-50/60 dark:border-slate-800 dark:hover:bg-indigo-950/20"
+                >
+                  <td className="px-4 py-3">
+                    <p className="max-w-72 truncate text-sm font-black text-slate-950 dark:text-white">
+                      {project.project_name}
+                    </p>
+                    <p className="mt-0.5 text-xs font-semibold text-slate-500">
+                      {project.project_code}
+                    </p>
+                  </td>
 
-                <td className="px-4 py-3">
-                  <p className="text-sm font-black text-indigo-700 dark:text-indigo-300">
-                    {project.staffing_need_count}
-                  </p>
-                </td>
+                  <td className="px-4 py-3">
+                    <ProjectStatusBadge status={project.project_status} />
+                  </td>
 
-                <td className="px-4 py-3">
-                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                    {formatNumber(project.requested_hours)} h
-                  </p>
-                </td>
+                  <td className="px-4 py-3">
+                    <p
+                      title={resourceNames.length > 0 ? resourceNames.join(", ") : "Aucune ressource affectée"}
+                      className="max-w-80 truncate text-sm font-semibold text-slate-700 dark:text-slate-300"
+                    >
+                      {resourceNames.length > 0 ? resourceNames.join(", ") : "—"}
+                    </p>
+                  </td>
 
-                <td className="px-4 py-3">
-                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                    {formatNumber(project.assigned_hours)} h
-                  </p>
-                </td>
+                  <td className="px-4 py-3">
+                    <p className="text-sm font-black text-indigo-700 dark:text-indigo-300">
+                      {project.staffing_need_count}
+                    </p>
+                  </td>
 
-                <td className="px-4 py-3">
-                  <p className="text-sm font-black text-rose-700 dark:text-rose-300">
-                    {formatNumber(project.remaining_to_staff_hours)} h
-                  </p>
-                </td>
+                  <td className="px-4 py-3">
+                    <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                      {formatNumber(project.requested_hours)} h
+                    </p>
+                  </td>
 
-                <td className="px-4 py-3">
-                  <span
-                    className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ring-1 ${
-                      project.staffing_coverage_rate >= 1
-                        ? "bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-900"
-                        : project.staffing_coverage_rate >= 0.75
-                          ? "bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-900"
-                          : "bg-rose-50 text-rose-700 ring-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:ring-rose-900"
-                    }`}
-                  >
-                    {formatPercent(project.staffing_coverage_rate)}
-                  </span>
-                </td>
-              </tr>
-            ))}
+                  <td className="px-4 py-3">
+                    <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                      {formatNumber(project.assigned_hours)} h
+                    </p>
+                  </td>
+
+                  <td className="px-4 py-3">
+                    <p className="text-sm font-black text-rose-700 dark:text-rose-300">
+                      {formatNumber(project.remaining_to_staff_hours)} h
+                    </p>
+                  </td>
+
+                  <td className="px-4 py-3">
+                    <span
+                      className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ring-1 ${
+                        project.staffing_coverage_rate >= 1
+                          ? "bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-900"
+                          : project.staffing_coverage_rate >= 0.75
+                            ? "bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-900"
+                            : "bg-rose-50 text-rose-700 ring-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:ring-rose-900"
+                      }`}
+                    >
+                      {formatPercent(project.staffing_coverage_rate)}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
 
@@ -2588,6 +2613,9 @@ function SkillMatchPanel({
 }: {
   matches: SkillMatch[];
 }) {
+  const [view, setView] =
+    useState<DirectoryView>("cards");
+
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950">
       <PanelHeader
@@ -2595,90 +2623,212 @@ function SkillMatchPanel({
         title="Recommandations compétences / prix / charge"
         description="Proposition de profils selon matching compétences, disponibilité, coût chargé et besoin projet."
         accent="amber"
+        rightSlot={
+          <ViewSwitch
+            view={view}
+            onChange={setView}
+          />
+        }
       />
 
-      <div className="grid gap-4 p-5 lg:grid-cols-2">
-        {matches.slice(0, 12).map((match) => (
-          <article
-            key={`${match.staffing_need_id}-${match.employee_id}`}
-            className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-indigo-200 hover:bg-indigo-50/40 hover:shadow-md dark:border-slate-800 dark:bg-slate-950 dark:hover:border-indigo-900 dark:hover:bg-indigo-950/20"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-sm font-black text-slate-950 dark:text-white">
-                  {match.full_name}
-                </p>
+      {view === "cards" ? (
+        <div className="grid gap-4 p-5 lg:grid-cols-2">
+          {matches.slice(0, 12).map((match) => (
+            <article
+              key={`${match.staffing_need_id}-${match.employee_id}`}
+              className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-indigo-200 hover:bg-indigo-50/40 hover:shadow-md dark:border-slate-800 dark:bg-slate-950 dark:hover:border-indigo-900 dark:hover:bg-indigo-950/20"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-black text-slate-950 dark:text-white">
+                    {match.full_name}
+                  </p>
 
-                <p className="mt-1 text-xs font-semibold text-slate-500">
-                  {match.employee_number} · {match.function_name || match.job_name || "Fonction non renseignée"}
+                  <p className="mt-1 text-xs font-semibold text-slate-500">
+                    {match.employee_number} · {match.function_name || match.job_name || "Fonction non renseignée"}
+                  </p>
+                </div>
+
+                <span
+                  className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ring-1 ${
+                    match.skill_match_rate >= 0.9
+                      ? "bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-900"
+                      : match.skill_match_rate >= 0.6
+                        ? "bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-900"
+                        : "bg-rose-50 text-rose-700 ring-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:ring-rose-900"
+                  }`}
+                >
+                  {formatPercent(match.skill_match_rate)}
+                </span>
+              </div>
+
+              <div className="mt-4 rounded-xl bg-slate-50 p-3 dark:bg-slate-900">
+                <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
+                  Besoin
+                </p>
+                <p className="mt-1 text-sm font-bold text-slate-800 dark:text-slate-200">
+                  {match.staffing_need_title}
                 </p>
               </div>
 
-              <span
-                className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ring-1 ${
-                  match.skill_match_rate >= 0.9
-                    ? "bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-900"
-                    : match.skill_match_rate >= 0.6
-                      ? "bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-900"
-                      : "bg-rose-50 text-rose-700 ring-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:ring-rose-900"
-                }`}
-              >
-                {formatPercent(match.skill_match_rate)}
-              </span>
-            </div>
+              <div className="mt-3 grid grid-cols-3 gap-3">
+                <div className="rounded-xl bg-white p-3 ring-1 ring-slate-200 dark:bg-slate-950 dark:ring-slate-800">
+                  <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
+                    Skills
+                  </p>
+                  <p className="mt-1 text-sm font-black text-indigo-700 dark:text-indigo-300">
+                    {match.matched_skill_count}/{match.required_skill_count}
+                  </p>
+                </div>
 
-            <div className="mt-4 rounded-xl bg-slate-50 p-3 dark:bg-slate-900">
-              <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
-                Besoin
-              </p>
-              <p className="mt-1 text-sm font-bold text-slate-800 dark:text-slate-200">
-                {match.staffing_need_title}
+                <div className="rounded-xl bg-white p-3 ring-1 ring-slate-200 dark:bg-slate-950 dark:ring-slate-800">
+                  <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
+                    Charge besoin
+                  </p>
+                  <p className="mt-1 text-sm font-black text-violet-700 dark:text-violet-300">
+                    {formatNumber(match.requested_hours)} h
+                  </p>
+                </div>
+
+                <div className="rounded-xl bg-white p-3 ring-1 ring-slate-200 dark:bg-slate-950 dark:ring-slate-800">
+                  <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
+                    Coût jour chargé
+                  </p>
+                  <p className="mt-1 text-sm font-black text-emerald-700 dark:text-emerald-300">
+                    {formatCurrency(match.loaded_daily_cost)}
+                  </p>
+                </div>
+              </div>
+            </article>
+          ))}
+
+          {matches.length === 0 && (
+            <div className="rounded-2xl border border-dashed border-slate-300 px-6 py-14 text-center lg:col-span-2 dark:border-slate-700">
+              <Sparkles className="mx-auto h-8 w-8 text-indigo-400" />
+              <h3 className="mt-4 text-base font-black text-slate-950 dark:text-white">
+                Aucune recommandation disponible
+              </h3>
+              <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-slate-500 dark:text-slate-400">
+                Ajoute des besoins de staffing et des compétences validées pour activer les recommandations.
               </p>
             </div>
-
-            <div className="mt-3 grid grid-cols-3 gap-3">
-              <div className="rounded-xl bg-white p-3 ring-1 ring-slate-200 dark:bg-slate-950 dark:ring-slate-800">
-                <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
+          )}
+        </div>
+      ) : (
+        <div className="max-h-[460px] overflow-auto">
+          <table className="w-full min-w-[1320px] border-collapse">
+            <thead className="sticky top-0 z-10">
+              <tr className="border-b border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900">
+                <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wide text-slate-500">
+                  Collaborateur
+                </th>
+                <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wide text-slate-500">
+                  Besoin
+                </th>
+                <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wide text-slate-500">
+                  Fonction
+                </th>
+                <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wide text-slate-500">
+                  Service
+                </th>
+                <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wide text-slate-500">
+                  Matching
+                </th>
+                <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wide text-slate-500">
                   Skills
-                </p>
-                <p className="mt-1 text-sm font-black text-indigo-700 dark:text-indigo-300">
-                  {match.matched_skill_count}/{match.required_skill_count}
-                </p>
-              </div>
-
-              <div className="rounded-xl bg-white p-3 ring-1 ring-slate-200 dark:bg-slate-950 dark:ring-slate-800">
-                <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
+                </th>
+                <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wide text-slate-500">
                   Charge
-                </p>
-                <p className="mt-1 text-sm font-black text-violet-700 dark:text-violet-300">
-                  {formatNumber(match.requested_hours)} h
-                </p>
-              </div>
-
-              <div className="rounded-xl bg-white p-3 ring-1 ring-slate-200 dark:bg-slate-950 dark:ring-slate-800">
-                <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
+                </th>
+                <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wide text-slate-500">
+                  Coût horaire chargé
+                </th>
+                <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wide text-slate-500">
                   Coût jour chargé
-                </p>
-                <p className="mt-1 text-sm font-black text-emerald-700 dark:text-emerald-300">
-                  {formatCurrency(match.loaded_daily_cost)}
-                </p>
-              </div>
-            </div>
-          </article>
-        ))}
+                </th>
+              </tr>
+            </thead>
 
-        {matches.length === 0 && (
-          <div className="rounded-2xl border border-dashed border-slate-300 px-6 py-14 text-center lg:col-span-2 dark:border-slate-700">
-            <Sparkles className="mx-auto h-8 w-8 text-indigo-400" />
-            <h3 className="mt-4 text-base font-black text-slate-950 dark:text-white">
-              Aucune recommandation disponible
-            </h3>
-            <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-slate-500 dark:text-slate-400">
-              Ajoute des besoins de staffing et des compétences validées pour activer les recommandations.
-            </p>
-          </div>
-        )}
-      </div>
+            <tbody>
+              {matches.map((match) => (
+                <tr
+                  key={`${match.staffing_need_id}-${match.employee_id}`}
+                  className="border-b border-slate-100 transition last:border-0 hover:bg-indigo-50/60 dark:border-slate-800 dark:hover:bg-indigo-950/20"
+                >
+                  <td className="px-4 py-3">
+                    <p className="text-sm font-black text-slate-950 dark:text-white">
+                      {match.full_name}
+                    </p>
+                    <p className="text-xs font-semibold text-slate-500">
+                      {match.employee_number}
+                    </p>
+                  </td>
+                  <td className="px-4 py-3">
+                    <p className="max-w-72 truncate text-sm font-semibold text-slate-700 dark:text-slate-300">
+                      {match.staffing_need_title}
+                    </p>
+                  </td>
+                  <td className="px-4 py-3">
+                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                      {match.function_name || match.job_name || "—"}
+                    </p>
+                  </td>
+                  <td className="px-4 py-3">
+                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                      {match.department_name || "—"}
+                    </p>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ring-1 ${
+                        match.skill_match_rate >= 0.9
+                          ? "bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-900"
+                          : match.skill_match_rate >= 0.6
+                            ? "bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-900"
+                            : "bg-rose-50 text-rose-700 ring-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:ring-rose-900"
+                      }`}
+                    >
+                      {formatPercent(match.skill_match_rate)}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <p className="text-sm font-black text-indigo-700 dark:text-indigo-300">
+                      {match.matched_skill_count}/{match.required_skill_count}
+                    </p>
+                  </td>
+                  <td className="px-4 py-3">
+                    <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                      {formatNumber(match.requested_hours)} h
+                    </p>
+                  </td>
+                  <td className="px-4 py-3">
+                    <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                      {formatCurrency(match.loaded_hourly_cost)}
+                    </p>
+                  </td>
+                  <td className="px-4 py-3">
+                    <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                      {formatCurrency(match.loaded_daily_cost)}
+                    </p>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {matches.length === 0 && (
+            <div className="px-6 py-14 text-center">
+              <Sparkles className="mx-auto h-8 w-8 text-indigo-400" />
+              <h3 className="mt-4 text-base font-black text-slate-950 dark:text-white">
+                Aucune recommandation disponible
+              </h3>
+              <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-slate-500 dark:text-slate-400">
+                Ajoute des besoins de staffing et des compétences validées pour activer les recommandations.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
     </section>
   );
 }
@@ -3278,6 +3428,35 @@ export default function StaffingCapacityPage({
     });
   }, [data, filteredProjectIds, filters.employeeId]);
 
+  const resourcesByProjectId = useMemo(() => {
+    const map = new Map<string, ProjectResourceSummary>();
+
+    if (!data) {
+      return map;
+    }
+
+    filteredAssignments.forEach((assignment) => {
+      const employee = data.employeeOverview.find(
+        (item) => item.employee_id === assignment.employee_id,
+      );
+
+      const existing =
+        map.get(assignment.project_id) ??
+        {
+          projectId: assignment.project_id,
+          resourceNames: [],
+        };
+
+      if (employee?.full_name && !existing.resourceNames.includes(employee.full_name)) {
+        existing.resourceNames.push(employee.full_name);
+      }
+
+      map.set(assignment.project_id, existing);
+    });
+
+    return map;
+  }, [data, filteredAssignments]);
+
   const filteredTimeEntries = useMemo(() => {
     if (!data) {
       return [];
@@ -3854,28 +4033,49 @@ export default function StaffingCapacityPage({
           </section>
 
           {projectView === "table" ? (
-            <ProjectTable projects={filteredProjectOverview} />
+            <ProjectTable
+              projects={filteredProjectOverview}
+              resourcesByProjectId={resourcesByProjectId}
+            />
           ) : (
             <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-              {filteredProjectOverview.map((project) => (
-                <article
-                  key={project.project_id}
-                  className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-slate-800 dark:bg-slate-950"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-black text-slate-950 dark:text-white">
-                        {project.project_name}
+              {filteredProjectOverview.map((project) => {
+                const resourceNames =
+                  resourcesByProjectId.get(project.project_id)?.resourceNames ?? [];
+
+                return (
+                  <article
+                    key={project.project_id}
+                    className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-slate-800 dark:bg-slate-950"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-black text-slate-950 dark:text-white">
+                          {project.project_name}
+                        </p>
+                        <p className="mt-1 text-xs font-semibold text-slate-500">
+                          {project.project_code}
+                        </p>
+                      </div>
+
+                      <ProjectStatusBadge status={project.project_status} />
+                    </div>
+
+                    <div className="mt-4 rounded-xl bg-indigo-50 p-3 dark:bg-indigo-950/30">
+                      <p className="text-[10px] font-black uppercase tracking-wide text-indigo-500">
+                        Ressources affectées
                       </p>
-                      <p className="mt-1 text-xs font-semibold text-slate-500">
-                        {project.project_code}
+                      <p
+                        title={resourceNames.length > 0 ? resourceNames.join(", ") : "Aucune ressource affectée"}
+                        className="mt-1 line-clamp-2 text-sm font-bold text-indigo-800 dark:text-indigo-200"
+                      >
+                        {resourceNames.length > 0
+                          ? resourceNames.join(", ")
+                          : "Aucune ressource affectée"}
                       </p>
                     </div>
 
-                    <ProjectStatusBadge status={project.project_status} />
-                  </div>
-
-                  <div className="mt-4 grid grid-cols-2 gap-3">
+                    <div className="mt-4 grid grid-cols-2 gap-3">
                     <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-900">
                       <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
                         Demandé
@@ -3912,8 +4112,9 @@ export default function StaffingCapacityPage({
                       </p>
                     </div>
                   </div>
-                </article>
-              ))}
+                  </article>
+                );
+              })}
             </section>
           )}
         </div>
