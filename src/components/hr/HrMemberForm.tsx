@@ -1,26 +1,51 @@
 "use client";
 
 import {
-  FormEvent,
+  type FormEvent,
+  type ReactNode,
   useEffect,
   useMemo,
   useState,
 } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQuery,
+} from "@tanstack/react-query";
 import {
   AlertCircle,
+  BadgeEuro,
   BriefcaseBusiness,
-  CalendarDays,
-  CheckCircle2,
+  Building2,
+  Check,
+  ClipboardList,
+  ContactRound,
+  FileText,
+  Home,
   Loader2,
+  MapPin,
+  Search,
+  ShieldCheck,
   UserRound,
+  Users,
   X,
 } from "lucide-react";
 
 import HrCompensationFields, {
-  EmployerChargeProfile,
-  HrCompensationValue,
+  type EmployerChargeProfile,
+  type HrCompensationValue,
 } from "@/components/hr/HrCompensationFields";
+import HrWeeklyWorkPatternFields, {
+  calculateWeeklyWorkPatternSummary,
+  createDefaultWeeklyWorkPattern,
+  createEmptyWeeklyWorkPattern,
+  type WeeklyWorkPatternSummary,
+  type WeeklyWorkPatternValue,
+  type WorkDayKey,
+} from "@/components/hr/HrWeeklyWorkPatternFields";
+import {
+  searchFrenchCitiesByPostalCode,
+  type FranceAddressSuggestion,
+} from "@/lib/geo/franceAddress";
 import { createClient } from "@/lib/supabase/client";
 
 const supabase = createClient();
@@ -31,6 +56,11 @@ type HrMemberFormProps = {
   onClose: () => void;
   onCreated: () => void | Promise<void>;
 };
+
+type FormTab =
+  | "identity"
+  | "contract"
+  | "preview";
 
 type ReferenceItem = {
   id: string;
@@ -49,6 +79,13 @@ type WorkSchedule = ReferenceItem & {
   schedule_type: string;
   weekly_hours: number | null;
   annual_working_days: number | null;
+  monday_hours?: number | null;
+  tuesday_hours?: number | null;
+  wednesday_hours?: number | null;
+  thursday_hours?: number | null;
+  friday_hours?: number | null;
+  saturday_hours?: number | null;
+  sunday_hours?: number | null;
 };
 
 type EmployeeReference = {
@@ -103,10 +140,8 @@ type FormData = {
 
   contractTypeId: string;
   workScheduleId: string;
-
   contractStartDate: string;
   contractEndDate: string;
-
   contractEmploymentStatus: string;
   workingTimeType: string;
   activityRatePercent: string;
@@ -115,91 +150,95 @@ type FormData = {
   probationEndDate: string;
   probationDurationMonths: string;
   probationRenewable: boolean;
-
   noticeDurationMonths: string;
+
   contractStatus: string;
   contractComments: string;
 
+  weeklyPattern: WeeklyWorkPatternValue;
   compensation: HrCompensationValue;
 };
 
 const initialCompensation: HrCompensationValue = {
   compensationMode: "salary",
-
   employerChargeProfileId: "",
   employerChargeRatePercent: "42",
-
   annualGrossSalary: "",
-
   externalDailyRate: "",
   externalHourlyRate: "",
   externalOverheadRatePercent: "0",
-
   dailyWorkingHours: "7",
   weeklyHours: "35",
   annualWorkingDays: "218",
 };
 
-const initialFormData: FormData = {
-  title: "",
-  firstName: "",
-  lastName: "",
-  preferredName: "",
-
-  birthDate: "",
-  birthCity: "",
-  birthCountryCode: "FR",
-
-  professionalEmail: "",
-  personalEmail: "",
-  professionalPhone: "",
-  personalPhone: "",
-
-  addressLine1: "",
-  addressLine2: "",
-  postalCode: "",
-  city: "",
-  region: "",
-  countryCode: "FR",
-
-  siteId: "",
-  departmentId: "",
-  jobId: "",
-  functionId: "",
-  managerId: "",
-
-  arrivalDate: "",
-  experienceYears: "0",
-  employmentStatus: "active",
-  comments: "",
-
-  contractTypeId: "",
-  workScheduleId: "",
-
-  contractStartDate: "",
-  contractEndDate: "",
-
-  contractEmploymentStatus: "non_cadre",
-  workingTimeType: "full_time",
-  activityRatePercent: "100",
-
-  probationStartDate: "",
-  probationEndDate: "",
-  probationDurationMonths: "",
-  probationRenewable: false,
-
-  noticeDurationMonths: "",
-  contractStatus: "active",
-  contractComments: "",
-
-  compensation: initialCompensation,
-};
-
 const inputClassName =
-  "h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-400 focus:ring-2 focus:ring-slate-200 dark:border-slate-800 dark:bg-slate-950 dark:text-white dark:focus:border-slate-600 dark:focus:ring-slate-800";
+  "h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-800 dark:bg-slate-950 dark:text-white dark:focus:border-indigo-600 dark:focus:ring-indigo-950 dark:disabled:bg-slate-900";
+
+const selectClassName =
+  "h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-800 dark:bg-slate-950 dark:text-white dark:focus:border-indigo-600 dark:focus:ring-indigo-950 dark:disabled:bg-slate-900";
 
 const textareaClassName =
-  "min-h-24 w-full resize-y rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-400 focus:ring-2 focus:ring-slate-200 dark:border-slate-800 dark:bg-slate-950 dark:text-white dark:focus:border-slate-600 dark:focus:ring-slate-800";
+  "min-h-28 w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-800 dark:bg-slate-950 dark:text-white dark:focus:border-indigo-600 dark:focus:ring-indigo-950 dark:disabled:bg-slate-900";
+
+function createInitialFormData(): FormData {
+  return {
+    title: "",
+    firstName: "",
+    lastName: "",
+    preferredName: "",
+
+    birthDate: "",
+    birthCity: "",
+    birthCountryCode: "FR",
+
+    professionalEmail: "",
+    personalEmail: "",
+    professionalPhone: "",
+    personalPhone: "",
+
+    addressLine1: "",
+    addressLine2: "",
+    postalCode: "",
+    city: "",
+    region: "",
+    countryCode: "FR",
+
+    siteId: "",
+    departmentId: "",
+    jobId: "",
+    functionId: "",
+    managerId: "",
+
+    arrivalDate: "",
+    experienceYears: "",
+    employmentStatus: "active",
+    comments: "",
+
+    contractTypeId: "",
+    workScheduleId: "",
+    contractStartDate: "",
+    contractEndDate: "",
+    contractEmploymentStatus: "non_cadre",
+    workingTimeType: "full_time",
+    activityRatePercent: "100",
+
+    probationStartDate: "",
+    probationEndDate: "",
+    probationDurationMonths: "",
+    probationRenewable: false,
+    noticeDurationMonths: "",
+
+    contractStatus: "active",
+    contractComments: "",
+
+    weeklyPattern: createDefaultWeeklyWorkPattern(),
+
+    compensation: {
+      ...initialCompensation,
+    },
+  };
+}
 
 function emptyToNull(value: string) {
   const normalizedValue = value.trim();
@@ -210,9 +249,7 @@ function emptyToNull(value: string) {
 }
 
 function numberOrNull(value: string) {
-  const normalizedValue = value
-    .trim()
-    .replace(",", ".");
+  const normalizedValue = value.trim().replace(",", ".");
 
   if (normalizedValue.length === 0) {
     return null;
@@ -223,6 +260,123 @@ function numberOrNull(value: string) {
   return Number.isFinite(parsedValue)
     ? parsedValue
     : null;
+}
+
+function formatNumber(value: number) {
+  return new Intl.NumberFormat("fr-FR", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+function cleanChargeProfiles(
+  profiles: EmployerChargeProfile[],
+) {
+  const seen = new Set<string>();
+
+  return profiles.filter((profile) => {
+    const normalizedName = profile.name
+      .trim()
+      .toLowerCase();
+
+    const normalizedCode = profile.code
+      .trim()
+      .toLowerCase();
+
+    if (
+      normalizedName === "saisie manuelle" ||
+      normalizedCode === "manual" ||
+      normalizedCode === "saisie_manuelle"
+    ) {
+      return false;
+    }
+
+    if (seen.has(profile.id)) {
+      return false;
+    }
+
+    seen.add(profile.id);
+
+    return true;
+  });
+}
+
+function getWorkScheduleDayHours(
+  workSchedule: WorkSchedule,
+  day: WorkDayKey,
+) {
+  const fieldByDay: Record<WorkDayKey, keyof WorkSchedule> = {
+    monday: "monday_hours",
+    tuesday: "tuesday_hours",
+    wednesday: "wednesday_hours",
+    thursday: "thursday_hours",
+    friday: "friday_hours",
+    saturday: "saturday_hours",
+    sunday: "sunday_hours",
+  };
+
+  const rawValue = workSchedule[fieldByDay[day]];
+
+  return typeof rawValue === "number"
+    ? rawValue
+    : null;
+}
+
+function buildWeeklyPatternFromWorkSchedule(
+  workSchedule: WorkSchedule,
+  currentPattern: WeeklyWorkPatternValue,
+): WeeklyWorkPatternValue {
+  const days: WorkDayKey[] = [
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+    "sunday",
+  ];
+
+  const hasExplicitDailyHours = days.some(
+    (day) =>
+      getWorkScheduleDayHours(workSchedule, day) !== null,
+  );
+
+  if (!hasExplicitDailyHours) {
+    if (workSchedule.weekly_hours === 35) {
+      return createDefaultWeeklyWorkPattern();
+    }
+
+    return currentPattern;
+  }
+
+  const nextDays = days.reduce(
+    (accumulator, day) => {
+      const totalHours =
+        getWorkScheduleDayHours(workSchedule, day) ?? 0;
+
+      const morningHours =
+        totalHours > 0
+          ? totalHours / 2
+          : 0;
+
+      const afternoonHours =
+        totalHours > 0
+          ? totalHours / 2
+          : 0;
+
+      accumulator[day] = {
+        morningHours: String(morningHours),
+        afternoonHours: String(afternoonHours),
+      };
+
+      return accumulator;
+    },
+    {} as WeeklyWorkPatternValue["days"],
+  );
+
+  return {
+    days: nextDays,
+  };
 }
 
 async function loadReferenceData(
@@ -292,16 +446,21 @@ async function loadReferenceData(
           name,
           schedule_type,
           weekly_hours,
-          annual_working_days
+          annual_working_days,
+          monday_hours,
+          tuesday_hours,
+          wednesday_hours,
+          thursday_hours,
+          friday_hours,
+          saturday_hours,
+          sunday_hours
         `,
       )
       .eq("organization_id", organizationId)
       .eq("is_active", true)
       .order("name"),
 
-    (supabase.from(
-      "hr_employer_charge_profiles" as never,
-    ) as any)
+    (supabase.from("hr_employer_charge_profiles" as never) as any)
       .select(
         `
           id,
@@ -333,58 +492,63 @@ async function loadReferenceData(
 
   return {
     sites: (sitesResult.data ?? []) as ReferenceItem[],
-    departments:
-      (departmentsResult.data ?? []) as ReferenceItem[],
+    departments: (departmentsResult.data ?? []) as ReferenceItem[],
     jobs: (jobsResult.data ?? []) as ReferenceItem[],
-    functions:
-      (functionsResult.data ?? []) as ReferenceItem[],
-    managers:
-      (managersResult.data ?? []) as EmployeeReference[],
-    contractTypes:
-      (contractTypesResult.data ?? []) as ContractType[],
-    workSchedules:
-      (workSchedulesResult.data ?? []) as WorkSchedule[],
-    chargeProfiles:
-      (chargeProfilesResult.data ??
-        []) as EmployerChargeProfile[],
+    functions: (functionsResult.data ?? []) as ReferenceItem[],
+    managers: (managersResult.data ?? []) as EmployeeReference[],
+    contractTypes: (contractTypesResult.data ?? []) as ContractType[],
+    workSchedules: (workSchedulesResult.data ?? []) as WorkSchedule[],
+    chargeProfiles: cleanChargeProfiles(
+      (chargeProfilesResult.data ?? []) as EmployerChargeProfile[],
+    ),
   };
+}
+
+function FieldLabel({
+  children,
+  required = false,
+}: {
+  children: ReactNode;
+  required?: boolean;
+}) {
+  return (
+    <label className="mb-2 block text-xs font-black uppercase tracking-wide text-slate-600 dark:text-slate-300">
+      {children}
+
+      {required && (
+        <span className="ml-1 text-rose-500">
+          *
+        </span>
+      )}
+    </label>
+  );
 }
 
 function Field({
   label,
-  required,
-  fullWidth,
+  required = false,
   description,
   children,
 }: {
   label: string;
   required?: boolean;
-  fullWidth?: boolean;
   description?: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
-    <label
-      className={
-        fullWidth ? "block sm:col-span-2" : "block"
-      }
-    >
-      <span className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-300">
+    <div>
+      <FieldLabel required={required}>
         {label}
-
-        {required && (
-          <span className="ml-1 text-red-500">*</span>
-        )}
-      </span>
+      </FieldLabel>
 
       {children}
 
       {description && (
-        <span className="mt-1.5 block text-xs leading-5 text-slate-500 dark:text-slate-400">
+        <p className="mt-1.5 text-xs leading-5 text-slate-500 dark:text-slate-400">
           {description}
-        </span>
+        </p>
       )}
-    </label>
+    </div>
   );
 }
 
@@ -393,6 +557,7 @@ function FormSection({
   description,
   icon: Icon,
   children,
+  accent = "indigo",
 }: {
   title: string;
   description: string;
@@ -400,20 +565,41 @@ function FormSection({
     className?: string;
     strokeWidth?: number;
   }>;
-  children: React.ReactNode;
+  children: ReactNode;
+  accent?:
+    | "indigo"
+    | "violet"
+    | "emerald"
+    | "amber"
+    | "cyan";
 }) {
+  const iconClasses = {
+    indigo:
+      "bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300",
+    violet:
+      "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300",
+    emerald:
+      "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+    amber:
+      "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+    cyan:
+      "bg-cyan-100 text-cyan-700 dark:bg-cyan-950 dark:text-cyan-300",
+  };
+
   return (
-    <section className="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
-      <div className="flex items-start gap-3 border-b border-slate-100 px-5 py-4 dark:border-slate-800">
-        <div className="rounded-lg bg-slate-100 p-2 dark:bg-slate-900">
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950">
+      <div className="flex items-start gap-3 border-b border-slate-100 bg-gradient-to-r from-slate-50/80 via-white to-white px-5 py-4 dark:border-slate-800 dark:from-slate-900/70 dark:via-slate-950 dark:to-slate-950">
+        <div
+          className={`rounded-xl p-2.5 ${iconClasses[accent]}`}
+        >
           <Icon
-            className="h-4 w-4 text-slate-600 dark:text-slate-300"
-            strokeWidth={1.8}
+            className="h-4 w-4"
+            strokeWidth={1.9}
           />
         </div>
 
         <div>
-          <h3 className="text-sm font-semibold text-slate-950 dark:text-white">
+          <h3 className="text-sm font-black text-slate-950 dark:text-white">
             {title}
           </h3>
 
@@ -430,17 +616,139 @@ function FormSection({
   );
 }
 
+function FormTabs({
+  activeTab,
+  onChange,
+}: {
+  activeTab: FormTab;
+  onChange: (tab: FormTab) => void;
+}) {
+  return (
+    <div className="border-b border-slate-200 bg-white px-5 py-3 dark:border-slate-800 dark:bg-slate-950">
+      <div className="flex justify-center">
+        <div className="inline-flex max-w-full gap-1 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm dark:border-slate-800 dark:bg-slate-950">
+          <button
+            type="button"
+            onClick={() => onChange("identity")}
+            className={`inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-xl px-4 text-xs font-bold transition ${
+              activeTab === "identity"
+                ? "bg-indigo-600 text-white shadow-md shadow-indigo-100 dark:shadow-none"
+                : "text-slate-500 hover:bg-indigo-50 hover:text-indigo-700 dark:hover:bg-indigo-950/30 dark:hover:text-indigo-300"
+            }`}
+          >
+            <ContactRound className="h-3.5 w-3.5" />
+            Identité
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onChange("contract")}
+            className={`inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-xl px-4 text-xs font-bold transition ${
+              activeTab === "contract"
+                ? "bg-violet-600 text-white shadow-md shadow-violet-100 dark:shadow-none"
+                : "text-slate-500 hover:bg-violet-50 hover:text-violet-700 dark:hover:bg-violet-950/30 dark:hover:text-violet-300"
+            }`}
+          >
+            <BriefcaseBusiness className="h-3.5 w-3.5" />
+            Contrat & temps
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onChange("preview")}
+            className={`inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-xl px-4 text-xs font-bold transition ${
+              activeTab === "preview"
+                ? "bg-emerald-600 text-white shadow-md shadow-emerald-100 dark:shadow-none"
+                : "text-slate-500 hover:bg-emerald-50 hover:text-emerald-700 dark:hover:bg-emerald-950/30 dark:hover:text-emerald-300"
+            }`}
+          >
+            <BadgeEuro className="h-3.5 w-3.5" />
+            Aperçu
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SummaryCard({
+  label,
+  value,
+  description,
+  accent = "indigo",
+}: {
+  label: string;
+  value: string;
+  description: string;
+  accent?:
+    | "indigo"
+    | "emerald"
+    | "amber"
+    | "violet"
+    | "cyan";
+}) {
+  const styles = {
+    indigo:
+      "border-indigo-100 bg-indigo-50/60 text-indigo-700 dark:border-indigo-900/50 dark:bg-indigo-950/20 dark:text-indigo-300",
+    emerald:
+      "border-emerald-100 bg-emerald-50/60 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/20 dark:text-emerald-300",
+    amber:
+      "border-amber-100 bg-amber-50/60 text-amber-700 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-300",
+    violet:
+      "border-violet-100 bg-violet-50/60 text-violet-700 dark:border-violet-900/50 dark:bg-violet-950/20 dark:text-violet-300",
+    cyan:
+      "border-cyan-100 bg-cyan-50/60 text-cyan-700 dark:border-cyan-900/50 dark:bg-cyan-950/20 dark:text-cyan-300",
+  };
+
+  return (
+    <article
+      className={`rounded-2xl border p-4 shadow-sm ${styles[accent]}`}
+    >
+      <p className="text-[10px] font-black uppercase tracking-wide opacity-80">
+        {label}
+      </p>
+
+      <p className="mt-2 text-xl font-black">
+        {value}
+      </p>
+
+      <p className="mt-2 text-xs leading-5 opacity-80">
+        {description}
+      </p>
+    </article>
+  );
+}
+
 export default function HrMemberForm({
   organizationId,
   isOpen,
   onClose,
   onCreated,
 }: HrMemberFormProps) {
-  const [formData, setFormData] =
-    useState<FormData>(initialFormData);
+  const [
+    activeTab,
+    setActiveTab,
+  ] = useState<FormTab>("identity");
 
-  const [successMessage, setSuccessMessage] =
-    useState("");
+  const [
+    formData,
+    setFormData,
+  ] = useState<FormData>(() => createInitialFormData());
+
+  const [
+    successMessage,
+    setSuccessMessage,
+  ] = useState("");
+
+  const [
+    addressSuggestions,
+    setAddressSuggestions,
+  ] = useState<FranceAddressSuggestion[]>([]);
+
+  const [
+    isAddressLoading,
+    setIsAddressLoading,
+  ] = useState(false);
 
   const {
     data: references,
@@ -451,8 +759,11 @@ export default function HrMemberForm({
       "hr-member-form-references",
       organizationId,
     ],
-    queryFn: () => loadReferenceData(organizationId),
-    enabled: isOpen && Boolean(organizationId),
+    queryFn: () =>
+      loadReferenceData(organizationId),
+    enabled:
+      isOpen &&
+      Boolean(organizationId),
   });
 
   const selectedContractType = useMemo(
@@ -472,6 +783,255 @@ export default function HrMemberForm({
       ) ?? null,
     [references, formData.workScheduleId],
   );
+
+  const weeklyPatternSummary = useMemo(
+    () =>
+      calculateWeeklyWorkPatternSummary(
+        formData.weeklyPattern,
+      ),
+    [formData.weeklyPattern],
+  );
+
+  const createMemberMutation = useMutation({
+    mutationFn: async () => {
+      const compensation =
+        formData.compensation;
+
+      const {
+        data,
+        error,
+      } = (await supabase.rpc(
+        "create_hr_employee_with_contract" as never,
+        {
+          target_organization_id:
+            organizationId,
+
+          employee_first_name:
+            formData.firstName.trim(),
+
+          employee_last_name:
+            formData.lastName.trim(),
+
+          employee_title:
+            emptyToNull(formData.title),
+
+          employee_preferred_name:
+            emptyToNull(formData.preferredName),
+
+          employee_birth_date:
+            emptyToNull(formData.birthDate),
+
+          employee_birth_city:
+            emptyToNull(formData.birthCity),
+
+          employee_birth_country_code:
+            emptyToNull(formData.birthCountryCode) ?? "FR",
+
+          employee_professional_email:
+            emptyToNull(formData.professionalEmail),
+
+          employee_personal_email:
+            emptyToNull(formData.personalEmail),
+
+          employee_professional_phone:
+            emptyToNull(formData.professionalPhone),
+
+          employee_personal_phone:
+            emptyToNull(formData.personalPhone),
+
+          employee_address_line_1:
+            emptyToNull(formData.addressLine1),
+
+          employee_address_line_2:
+            emptyToNull(formData.addressLine2),
+
+          employee_postal_code:
+            emptyToNull(formData.postalCode),
+
+          employee_city:
+            emptyToNull(formData.city),
+
+          employee_region:
+            emptyToNull(formData.region),
+
+          employee_country_code:
+            emptyToNull(formData.countryCode) ?? "FR",
+
+          employee_site_id:
+            emptyToNull(formData.siteId),
+
+          employee_department_id:
+            emptyToNull(formData.departmentId),
+
+          employee_job_id:
+            emptyToNull(formData.jobId),
+
+          employee_function_id:
+            emptyToNull(formData.functionId),
+
+          employee_manager_id:
+            emptyToNull(formData.managerId),
+
+          employee_arrival_date:
+            emptyToNull(formData.arrivalDate),
+
+          employee_experience_years:
+            numberOrNull(formData.experienceYears) ?? 0,
+
+          employee_employment_status:
+            formData.employmentStatus,
+
+          employee_comments:
+            emptyToNull(formData.comments),
+
+          contract_type_id_value:
+            emptyToNull(formData.contractTypeId),
+
+          work_schedule_id_value:
+            emptyToNull(formData.workScheduleId),
+
+          contract_start_date:
+            emptyToNull(formData.contractStartDate),
+
+          contract_end_date:
+            emptyToNull(formData.contractEndDate),
+
+          contract_employment_status:
+            formData.contractEmploymentStatus,
+
+          contract_working_time_type:
+            formData.workingTimeType,
+
+          contract_activity_rate:
+            (numberOrNull(formData.activityRatePercent) ?? 100) / 100,
+
+          contract_weekly_hours:
+            weeklyPatternSummary.weeklyHours > 0
+              ? weeklyPatternSummary.weeklyHours
+              : numberOrNull(compensation.weeklyHours),
+
+          contract_annual_working_days:
+            numberOrNull(compensation.annualWorkingDays),
+
+          contract_daily_working_hours:
+            weeklyPatternSummary.averageDailyHours > 0
+              ? weeklyPatternSummary.averageDailyHours
+              : numberOrNull(compensation.dailyWorkingHours),
+
+          contract_compensation_mode:
+            compensation.compensationMode,
+
+          contract_annual_gross_salary:
+            compensation.compensationMode === "salary"
+              ? numberOrNull(compensation.annualGrossSalary)
+              : null,
+
+          contract_employer_charge_profile_id:
+            compensation.compensationMode === "salary"
+              ? emptyToNull(compensation.employerChargeProfileId)
+              : null,
+
+          contract_employer_charge_rate:
+            compensation.compensationMode === "salary"
+              ? (numberOrNull(compensation.employerChargeRatePercent) ?? 0) / 100
+              : 0,
+
+          contract_external_daily_rate:
+            compensation.compensationMode === "daily_rate"
+              ? numberOrNull(compensation.externalDailyRate)
+              : null,
+
+          contract_external_hourly_rate:
+            compensation.compensationMode === "hourly_rate"
+              ? numberOrNull(compensation.externalHourlyRate)
+              : null,
+
+          contract_external_overhead_rate:
+            compensation.compensationMode === "daily_rate" ||
+            compensation.compensationMode === "hourly_rate"
+              ? (numberOrNull(compensation.externalOverheadRatePercent) ?? 0) / 100
+              : 0,
+
+          contract_probation_start_date:
+            emptyToNull(formData.probationStartDate),
+
+          contract_probation_end_date:
+            emptyToNull(formData.probationEndDate),
+
+          contract_probation_duration_months:
+            numberOrNull(formData.probationDurationMonths),
+
+          contract_probation_renewable:
+            formData.probationRenewable,
+
+          contract_notice_duration_months:
+            numberOrNull(formData.noticeDurationMonths),
+
+          contract_status:
+            formData.contractStatus,
+
+          contract_comments:
+            emptyToNull(
+              [
+                formData.contractComments,
+                `Rythme hebdomadaire détaillé : ${formatNumber(
+                  weeklyPatternSummary.weeklyHours,
+                )} h / semaine ; ${weeklyPatternSummary.workedDays} jour(s) travaillé(s) ; moyenne ${formatNumber(
+                  weeklyPatternSummary.averageDailyHours,
+                )} h / jour travaillé.`,
+                `Répartition : lundi ${formatNumber(
+                  weeklyPatternSummary.mondayHours,
+                )} h, mardi ${formatNumber(
+                  weeklyPatternSummary.tuesdayHours,
+                )} h, mercredi ${formatNumber(
+                  weeklyPatternSummary.wednesdayHours,
+                )} h, jeudi ${formatNumber(
+                  weeklyPatternSummary.thursdayHours,
+                )} h, vendredi ${formatNumber(
+                  weeklyPatternSummary.fridayHours,
+                )} h, samedi ${formatNumber(
+                  weeklyPatternSummary.saturdayHours,
+                )} h, dimanche ${formatNumber(
+                  weeklyPatternSummary.sundayHours,
+                )} h.`,
+              ]
+                .filter(Boolean)
+                .join("\n"),
+            ),
+        } as never,
+      )) as any;
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      return data;
+    },
+
+    onSuccess: async () => {
+      setSuccessMessage(
+        "Le collaborateur et son contrat ont été créés.",
+      );
+
+      setFormData(createInitialFormData());
+      setAddressSuggestions([]);
+      setActiveTab("identity");
+
+      await onCreated();
+    },
+  });
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    setFormData(createInitialFormData());
+    setActiveTab("identity");
+    setSuccessMessage("");
+    setAddressSuggestions([]);
+    createMemberMutation.reset();
+  }, [isOpen]);
 
   useEffect(() => {
     if (!references) {
@@ -501,9 +1061,12 @@ export default function HrMemberForm({
           ...currentValue.compensation,
           employerChargeProfileId:
             defaultProfile.id,
-          employerChargeRatePercent: String(
-            Number(defaultProfile.charge_rate) * 100,
-          ),
+          employerChargeRatePercent:
+            String(
+              Number(
+                defaultProfile.charge_rate,
+              ) * 100,
+            ),
         },
       };
     });
@@ -514,53 +1077,59 @@ export default function HrMemberForm({
       return;
     }
 
-    let compensationMode:
-      | "salary"
-      | "daily_rate"
-      | "hourly_rate" =
-      formData.compensation.compensationMode;
+    setFormData((currentValue) => {
+      let compensationMode:
+        HrCompensationValue["compensationMode"] =
+          currentValue.compensation.compensationMode;
 
-    if (
-      ["freelance", "subcontractor"].includes(
-        selectedContractType.employment_category,
-      )
-    ) {
-      compensationMode = "daily_rate";
-    } else if (
-      ["employee", "intern", "apprentice"].includes(
-        selectedContractType.employment_category,
-      )
-    ) {
-      compensationMode = "salary";
-    }
+      if (
+        [
+          "freelance",
+          "subcontractor",
+        ].includes(
+          selectedContractType.employment_category,
+        )
+      ) {
+        compensationMode = "daily_rate";
+      } else if (
+        [
+          "employee",
+          "intern",
+          "apprentice",
+        ].includes(
+          selectedContractType.employment_category,
+        )
+      ) {
+        compensationMode = "salary";
+      }
 
-    setFormData((currentValue) => ({
-      ...currentValue,
+      return {
+        ...currentValue,
 
-      contractEmploymentStatus:
-        selectedContractType.employment_status ||
-        currentValue.contractEmploymentStatus,
+        contractEmploymentStatus:
+          selectedContractType.employment_status ||
+          currentValue.contractEmploymentStatus,
 
-      probationDurationMonths:
-        selectedContractType.default_probation_months !==
-        null
-          ? String(
-              selectedContractType.default_probation_months,
-            )
-          : "",
+        probationDurationMonths:
+          selectedContractType.default_probation_months !== null
+            ? String(
+                selectedContractType.default_probation_months,
+              )
+            : "",
 
-      noticeDurationMonths:
-        selectedContractType.default_notice_months !== null
-          ? String(
-              selectedContractType.default_notice_months,
-            )
-          : "",
+        noticeDurationMonths:
+          selectedContractType.default_notice_months !== null
+            ? String(
+                selectedContractType.default_notice_months,
+              )
+            : "",
 
-      compensation: {
-        ...currentValue.compensation,
-        compensationMode,
-      },
-    }));
+        compensation: {
+          ...currentValue.compensation,
+          compensationMode,
+        },
+      };
+    });
   }, [selectedContractType]);
 
   useEffect(() => {
@@ -568,286 +1137,128 @@ export default function HrMemberForm({
       return;
     }
 
-    setFormData((currentValue) => ({
-      ...currentValue,
+    setFormData((currentValue) => {
+      const nextWeeklyPattern =
+        buildWeeklyPatternFromWorkSchedule(
+          selectedWorkSchedule,
+          currentValue.weeklyPattern,
+        );
 
-      workingTimeType:
-        selectedWorkSchedule.schedule_type ===
-        "annual_days"
-          ? "annual_days"
-          : selectedWorkSchedule.schedule_type ===
-              "part_time"
-            ? "part_time"
-            : "full_time",
+      const summary =
+        calculateWeeklyWorkPatternSummary(
+          nextWeeklyPattern,
+        );
 
-      compensation: {
-        ...currentValue.compensation,
+      const nextWeeklyHours =
+        summary.weeklyHours > 0
+          ? summary.weeklyHours
+          : selectedWorkSchedule.weekly_hours;
 
-        weeklyHours:
-          selectedWorkSchedule.weekly_hours !== null
-            ? String(
-                selectedWorkSchedule.weekly_hours,
-              )
-            : "",
+      const nextDailyHours =
+        summary.averageDailyHours > 0
+          ? summary.averageDailyHours
+          : Number(
+              currentValue.compensation.dailyWorkingHours || 7,
+            );
 
-        annualWorkingDays:
-          selectedWorkSchedule.annual_working_days !==
-          null
-            ? String(
-                selectedWorkSchedule.annual_working_days,
-              )
-            : "",
-      },
-    }));
+      const referenceWeeklyHours =
+        selectedWorkSchedule.weekly_hours &&
+        selectedWorkSchedule.weekly_hours > 0
+          ? selectedWorkSchedule.weekly_hours
+          : 35;
+
+      const inferredActivityRate =
+        nextWeeklyHours !== null &&
+        nextWeeklyHours > 0
+          ? Math.min(
+              100,
+              Math.round(
+                (nextWeeklyHours / referenceWeeklyHours) * 100,
+              ),
+            )
+          : Number(currentValue.activityRatePercent);
+
+      return {
+        ...currentValue,
+        weeklyPattern: nextWeeklyPattern,
+        workingTimeType:
+          selectedWorkSchedule.schedule_type === "annual_days"
+            ? "annual_days"
+            : selectedWorkSchedule.schedule_type === "part_time"
+              ? "part_time"
+              : "full_time",
+        activityRatePercent:
+          String(inferredActivityRate),
+        compensation: {
+          ...currentValue.compensation,
+          weeklyHours:
+            nextWeeklyHours !== null
+              ? String(nextWeeklyHours)
+              : currentValue.compensation.weeklyHours,
+          annualWorkingDays:
+            selectedWorkSchedule.annual_working_days !== null
+              ? String(
+                  selectedWorkSchedule.annual_working_days,
+                )
+              : currentValue.compensation.annualWorkingDays,
+          dailyWorkingHours:
+            String(nextDailyHours),
+        },
+      };
+    });
   }, [selectedWorkSchedule]);
 
-  const createMemberMutation = useMutation({
-    mutationFn: async () => {
-      const compensation = formData.compensation;
+  useEffect(() => {
+    const postalCode =
+      formData.postalCode.trim();
 
-      const { data, error } = await (
-        supabase.rpc(
-          "create_hr_employee_with_contract" as never,
-          {
-            target_organization_id: organizationId,
+    if (
+      formData.countryCode !== "FR" ||
+      !/^\d{5}$/.test(postalCode)
+    ) {
+      setAddressSuggestions([]);
+      return;
+    }
 
-            employee_first_name:
-              formData.firstName.trim(),
+    let isCancelled = false;
 
-            employee_last_name:
-              formData.lastName.trim(),
+    async function loadCities() {
+      setIsAddressLoading(true);
 
-            employee_title:
-              emptyToNull(formData.title),
+      try {
+        const suggestions =
+          await searchFrenchCitiesByPostalCode(postalCode);
 
-            employee_preferred_name:
-              emptyToNull(formData.preferredName),
+        if (isCancelled) {
+          return;
+        }
 
-            employee_birth_date:
-              emptyToNull(formData.birthDate),
+        setAddressSuggestions(suggestions);
 
-            employee_birth_city:
-              emptyToNull(formData.birthCity),
+        if (suggestions.length === 1) {
+          const suggestion =
+            suggestions[0];
 
-            employee_birth_country_code:
-              emptyToNull(
-                formData.birthCountryCode,
-              ) ?? "FR",
-
-            employee_professional_email:
-              emptyToNull(
-                formData.professionalEmail,
-              ),
-
-            employee_personal_email:
-              emptyToNull(formData.personalEmail),
-
-            employee_professional_phone:
-              emptyToNull(
-                formData.professionalPhone,
-              ),
-
-            employee_personal_phone:
-              emptyToNull(formData.personalPhone),
-
-            employee_address_line_1:
-              emptyToNull(formData.addressLine1),
-
-            employee_address_line_2:
-              emptyToNull(formData.addressLine2),
-
-            employee_postal_code:
-              emptyToNull(formData.postalCode),
-
-            employee_city:
-              emptyToNull(formData.city),
-
-            employee_region:
-              emptyToNull(formData.region),
-
-            employee_country_code:
-              emptyToNull(formData.countryCode) ??
-              "FR",
-
-            employee_site_id:
-              emptyToNull(formData.siteId),
-
-            employee_department_id:
-              emptyToNull(formData.departmentId),
-
-            employee_job_id:
-              emptyToNull(formData.jobId),
-
-            employee_function_id:
-              emptyToNull(formData.functionId),
-
-            employee_manager_id:
-              emptyToNull(formData.managerId),
-
-            employee_arrival_date:
-              emptyToNull(formData.arrivalDate),
-
-            employee_experience_years:
-              numberOrNull(
-                formData.experienceYears,
-              ) ?? 0,
-
-            employee_employment_status:
-              formData.employmentStatus,
-
-            employee_comments:
-              emptyToNull(formData.comments),
-
-            contract_type_id_value:
-              emptyToNull(formData.contractTypeId),
-
-            work_schedule_id_value:
-              emptyToNull(formData.workScheduleId),
-
-            contract_start_date:
-              emptyToNull(
-                formData.contractStartDate,
-              ),
-
-            contract_end_date:
-              emptyToNull(formData.contractEndDate),
-
-            contract_employment_status:
-              formData.contractEmploymentStatus,
-
-            contract_working_time_type:
-              formData.workingTimeType,
-
-            contract_activity_rate:
-              (
-                numberOrNull(
-                  formData.activityRatePercent,
-                ) ?? 100
-              ) / 100,
-
-            contract_weekly_hours:
-              numberOrNull(
-                compensation.weeklyHours,
-              ),
-
-            contract_annual_working_days:
-              numberOrNull(
-                compensation.annualWorkingDays,
-              ),
-
-            contract_daily_working_hours:
-              numberOrNull(
-                compensation.dailyWorkingHours,
-              ),
-
-            contract_compensation_mode:
-              compensation.compensationMode,
-
-            contract_annual_gross_salary:
-              compensation.compensationMode ===
-              "salary"
-                ? numberOrNull(
-                    compensation.annualGrossSalary,
-                  )
-                : null,
-
-            contract_employer_charge_profile_id:
-              compensation.compensationMode ===
-              "salary"
-                ? emptyToNull(
-                    compensation.employerChargeProfileId,
-                  )
-                : null,
-
-            contract_employer_charge_rate:
-              compensation.compensationMode ===
-              "salary"
-                ? (
-                    numberOrNull(
-                      compensation.employerChargeRatePercent,
-                    ) ?? 0
-                  ) / 100
-                : 0,
-
-            contract_external_daily_rate:
-              compensation.compensationMode ===
-              "daily_rate"
-                ? numberOrNull(
-                    compensation.externalDailyRate,
-                  )
-                : null,
-
-            contract_external_hourly_rate:
-              compensation.compensationMode ===
-              "hourly_rate"
-                ? numberOrNull(
-                    compensation.externalHourlyRate,
-                  )
-                : null,
-
-            contract_external_overhead_rate:
-              compensation.compensationMode ===
-                "daily_rate" ||
-              compensation.compensationMode ===
-                "hourly_rate"
-                ? (
-                    numberOrNull(
-                      compensation.externalOverheadRatePercent,
-                    ) ?? 0
-                  ) / 100
-                : 0,
-
-            contract_probation_start_date:
-              emptyToNull(
-                formData.probationStartDate,
-              ),
-
-            contract_probation_end_date:
-              emptyToNull(
-                formData.probationEndDate,
-              ),
-
-            contract_probation_duration_months:
-              numberOrNull(
-                formData.probationDurationMonths,
-              ),
-
-            contract_probation_renewable:
-              formData.probationRenewable,
-
-            contract_notice_duration_months:
-              numberOrNull(
-                formData.noticeDurationMonths,
-              ),
-
-            contract_status:
-              formData.contractStatus,
-
-            contract_comments:
-              emptyToNull(
-                formData.contractComments,
-              ),
-          } as never,
-        ) as any
-      );
-
-      if (error) {
-        throw new Error(error.message);
+          setFormData((currentValue) => ({
+            ...currentValue,
+            city: suggestion.city,
+            region: suggestion.region,
+            countryCode: suggestion.countryCode,
+          }));
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsAddressLoading(false);
+        }
       }
+    }
 
-      return data;
-    },
+    void loadCities();
 
-    onSuccess: async () => {
-      setSuccessMessage(
-        "Le collaborateur et son contrat ont été créés.",
-      );
-
-      setFormData(initialFormData);
-
-      await onCreated();
-    },
-  });
+    return () => {
+      isCancelled = true;
+    };
+  }, [formData.postalCode, formData.countryCode]);
 
   function updateField<K extends keyof FormData>(
     field: K,
@@ -856,6 +1267,86 @@ export default function HrMemberForm({
     setFormData((currentValue) => ({
       ...currentValue,
       [field]: value,
+    }));
+  }
+
+  function applyAddressSuggestion(
+    suggestion: FranceAddressSuggestion,
+  ) {
+    setFormData((currentValue) => ({
+      ...currentValue,
+      postalCode: suggestion.postalCode,
+      city: suggestion.city,
+      region: suggestion.region,
+      countryCode: suggestion.countryCode,
+    }));
+  }
+
+  function handleWorkingTimeTypeChange(
+    value: string,
+  ) {
+    const nextPattern =
+      value === "part_time"
+        ? createEmptyWeeklyWorkPattern()
+        : createDefaultWeeklyWorkPattern();
+
+    const summary =
+      calculateWeeklyWorkPatternSummary(nextPattern);
+
+    setFormData((currentValue) => ({
+      ...currentValue,
+      workingTimeType: value,
+      weeklyPattern: nextPattern,
+      activityRatePercent:
+        value === "part_time"
+          ? "0"
+          : "100",
+      compensation: {
+        ...currentValue.compensation,
+        weeklyHours:
+          String(summary.weeklyHours),
+        dailyWorkingHours:
+          summary.averageDailyHours > 0
+            ? String(summary.averageDailyHours)
+            : currentValue.compensation.dailyWorkingHours,
+      },
+    }));
+  }
+
+  function handleWeeklyPatternChange(
+    weeklyPattern: WeeklyWorkPatternValue,
+    summary: WeeklyWorkPatternSummary,
+  ) {
+    const referenceWeeklyHours =
+      selectedWorkSchedule?.weekly_hours &&
+      selectedWorkSchedule.weekly_hours > 0
+        ? selectedWorkSchedule.weekly_hours
+        : 35;
+
+    const activityRate =
+      summary.weeklyHours > 0
+        ? Math.min(
+            100,
+            Math.round(
+              (summary.weeklyHours / referenceWeeklyHours) * 100,
+            ),
+          )
+        : 0;
+
+    setFormData((currentValue) => ({
+      ...currentValue,
+      weeklyPattern,
+      activityRatePercent:
+        String(activityRate),
+      compensation: {
+        ...currentValue.compensation,
+        weeklyHours:
+          String(summary.weeklyHours),
+        dailyWorkingHours:
+          summary.averageDailyHours > 0
+            ? String(summary.averageDailyHours)
+            : currentValue.compensation.dailyWorkingHours,
+      },
     }));
   }
 
@@ -868,6 +1359,7 @@ export default function HrMemberForm({
       formData.firstName.trim().length === 0 ||
       formData.lastName.trim().length === 0
     ) {
+      setActiveTab("identity");
       return;
     }
 
@@ -879,817 +1371,1102 @@ export default function HrMemberForm({
       return;
     }
 
-    setFormData(initialFormData);
+    setFormData(createInitialFormData());
+    setAddressSuggestions([]);
+    setActiveTab("identity");
     setSuccessMessage("");
     createMemberMutation.reset();
     onClose();
   }
+
+  useEffect(() => {
+    function handleEscape(event: KeyboardEvent) {
+      if (
+        event.key === "Escape" &&
+        isOpen &&
+        !createMemberMutation.isPending
+      ) {
+        handleClose();
+      }
+    }
+
+    window.addEventListener(
+      "keydown",
+      handleEscape,
+    );
+
+    return () => {
+      window.removeEventListener(
+        "keydown",
+        handleEscape,
+      );
+    };
+  }, [
+    isOpen,
+    createMemberMutation.isPending,
+  ]);
 
   if (!isOpen) {
     return null;
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/55 px-4 py-6 backdrop-blur-sm">
-      <div className="w-full max-w-5xl overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 shadow-2xl dark:border-slate-800 dark:bg-slate-900">
-        <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-slate-200 bg-white px-6 py-5 dark:border-slate-800 dark:bg-slate-950">
-          <div>
-            <h2 className="text-lg font-bold text-slate-950 dark:text-white">
-              Ajouter un membre
-            </h2>
+    <div className="fixed inset-0 z-[100] flex justify-end">
+      <button
+        type="button"
+        aria-label="Fermer le formulaire"
+        onClick={handleClose}
+        className="absolute inset-0 bg-slate-950/45 backdrop-blur-[2px]"
+      />
 
-            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-              Création de la fiche collaborateur, du
-              contrat et de son modèle de coût.
-            </p>
+      <aside className="relative flex h-full w-full max-w-5xl flex-col border-l border-slate-200 bg-slate-50 shadow-2xl dark:border-slate-800 dark:bg-slate-950">
+        <header className="flex items-start justify-between gap-4 border-b border-slate-200 bg-white px-5 py-4 dark:border-slate-800 dark:bg-slate-950">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">
+              <UserRound
+                className="h-4 w-4"
+                strokeWidth={1.9}
+              />
+            </div>
+
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-wide text-indigo-600 dark:text-indigo-300">
+                Nouvelle ressource
+              </p>
+
+              <h2 className="mt-1 text-lg font-black text-slate-950 dark:text-white">
+                Ajouter un membre
+              </h2>
+
+              <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
+                Création de la fiche collaborateur, du rattachement, du contrat, du temps de travail et du modèle de coût.
+              </p>
+            </div>
           </div>
 
           <button
             type="button"
             onClick={handleClose}
-            disabled={createMemberMutation.isPending}
-            className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-slate-900 dark:hover:text-white"
-            aria-label="Fermer le formulaire"
+            disabled={
+              createMemberMutation.isPending
+            }
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-400"
           >
-            <X className="h-5 w-5" />
+            <X className="h-4 w-4" />
           </button>
-        </div>
+        </header>
 
-        {referencesLoading ? (
-          <div className="flex min-h-80 items-center justify-center">
-            <div className="text-center">
-              <Loader2 className="mx-auto h-7 w-7 animate-spin text-slate-500" />
+        <FormTabs
+          activeTab={activeTab}
+          onChange={setActiveTab}
+        />
 
-              <p className="mt-3 text-sm text-slate-500">
-                Chargement des référentiels RH...
-              </p>
-            </div>
-          </div>
-        ) : referencesError ? (
-          <div className="p-6">
-            <div className="rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-900/60 dark:bg-red-950/30">
-              <div className="flex gap-3">
-                <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-600" />
+        <form
+          onSubmit={handleSubmit}
+          className="flex min-h-0 flex-1 flex-col"
+        >
+          <div className="flex-1 overflow-y-auto p-5">
+            {referencesLoading ? (
+              <div className="flex min-h-72 items-center justify-center">
+                <div className="text-center">
+                  <Loader2 className="mx-auto h-7 w-7 animate-spin text-indigo-600" />
 
-                <div>
-                  <p className="text-sm font-semibold text-red-900 dark:text-red-200">
-                    Impossible de charger le formulaire
-                  </p>
-
-                  <p className="mt-1 text-sm text-red-700 dark:text-red-300">
-                    {referencesError instanceof Error
-                      ? referencesError.message
-                      : "Une erreur inconnue est survenue."}
+                  <p className="mt-3 text-sm font-bold text-slate-700 dark:text-slate-300">
+                    Chargement des référentiels RH...
                   </p>
                 </div>
               </div>
-            </div>
+            ) : referencesError ? (
+              <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 dark:border-rose-900/60 dark:bg-rose-950/30">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-rose-600 dark:text-rose-400" />
+
+                  <div>
+                    <p className="text-sm font-black text-rose-700 dark:text-rose-300">
+                      Impossible de charger le formulaire
+                    </p>
+
+                    <p className="mt-1 text-sm text-rose-700 dark:text-rose-300">
+                      {referencesError instanceof Error
+                        ? referencesError.message
+                        : "Une erreur inconnue est survenue."}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-5">
+                {successMessage && (
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900/60 dark:bg-emerald-950/30">
+                    <div className="flex items-start gap-3">
+                      <Check className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+
+                      <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+                        {successMessage}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {createMemberMutation.error && (
+                  <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 dark:border-rose-900/60 dark:bg-rose-950/30">
+                    <div className="flex items-start gap-3">
+                      <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-rose-600 dark:text-rose-400" />
+
+                      <p className="text-sm font-semibold text-rose-700 dark:text-rose-300">
+                        {createMemberMutation.error instanceof Error
+                          ? createMemberMutation.error.message
+                          : "La création a échoué."}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {activeTab === "identity" && (
+                  <>
+                    <FormSection
+                      title="Identité"
+                      description="Informations principales utilisées dans l’annuaire, les contrats et les workflows RH."
+                      icon={ContactRound}
+                      accent="indigo"
+                    >
+                      <Field label="Civilité">
+                        <select
+                          value={formData.title}
+                          onChange={(event) =>
+                            updateField(
+                              "title",
+                              event.target.value,
+                            )
+                          }
+                          className={selectClassName}
+                        >
+                          <option value="">
+                            Non renseignée
+                          </option>
+                          <option value="Madame">
+                            Madame
+                          </option>
+                          <option value="Monsieur">
+                            Monsieur
+                          </option>
+                          <option value="Autre">
+                            Autre
+                          </option>
+                        </select>
+                      </Field>
+
+                      <Field label="Nom d’usage">
+                        <input
+                          value={formData.preferredName}
+                          onChange={(event) =>
+                            updateField(
+                              "preferredName",
+                              event.target.value,
+                            )
+                          }
+                          className={inputClassName}
+                        />
+                      </Field>
+
+                      <Field
+                        label="Prénom"
+                        required
+                      >
+                        <input
+                          value={formData.firstName}
+                          onChange={(event) =>
+                            updateField(
+                              "firstName",
+                              event.target.value,
+                            )
+                          }
+                          className={inputClassName}
+                        />
+                      </Field>
+
+                      <Field
+                        label="Nom"
+                        required
+                      >
+                        <input
+                          value={formData.lastName}
+                          onChange={(event) =>
+                            updateField(
+                              "lastName",
+                              event.target.value,
+                            )
+                          }
+                          className={inputClassName}
+                        />
+                      </Field>
+
+                      <Field label="Date de naissance">
+                        <input
+                          type="date"
+                          value={formData.birthDate}
+                          onChange={(event) =>
+                            updateField(
+                              "birthDate",
+                              event.target.value,
+                            )
+                          }
+                          className={inputClassName}
+                        />
+                      </Field>
+
+                      <Field label="Ville de naissance">
+                        <input
+                          value={formData.birthCity}
+                          onChange={(event) =>
+                            updateField(
+                              "birthCity",
+                              event.target.value,
+                            )
+                          }
+                          className={inputClassName}
+                        />
+                      </Field>
+                    </FormSection>
+
+                    <FormSection
+                      title="Adresse"
+                      description="Adresse administrative de la ressource. En France, le code postal peut proposer automatiquement la ville et la région."
+                      icon={Home}
+                      accent="cyan"
+                    >
+                      <Field label="Adresse ligne 1">
+                        <input
+                          value={formData.addressLine1}
+                          onChange={(event) =>
+                            updateField(
+                              "addressLine1",
+                              event.target.value,
+                            )
+                          }
+                          className={inputClassName}
+                        />
+                      </Field>
+
+                      <Field label="Adresse ligne 2">
+                        <input
+                          value={formData.addressLine2}
+                          onChange={(event) =>
+                            updateField(
+                              "addressLine2",
+                              event.target.value,
+                            )
+                          }
+                          className={inputClassName}
+                        />
+                      </Field>
+
+                      <Field
+                        label="Code postal"
+                        description="Saisis 5 chiffres pour rechercher automatiquement les communes françaises."
+                      >
+                        <div className="relative">
+                          <input
+                            inputMode="numeric"
+                            autoComplete="postal-code"
+                            value={formData.postalCode}
+                            onChange={(event) =>
+                              updateField(
+                                "postalCode",
+                                event.target.value,
+                              )
+                            }
+                            className={`${inputClassName} pr-10`}
+                            placeholder="75008"
+                          />
+
+                          <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
+                            {isAddressLoading ? (
+                              <Loader2 className="h-4 w-4 animate-spin text-indigo-500" />
+                            ) : (
+                              <Search className="h-4 w-4 text-slate-400" />
+                            )}
+                          </div>
+                        </div>
+                      </Field>
+
+                      <Field label="Ville">
+                        <input
+                          value={formData.city}
+                          onChange={(event) =>
+                            updateField(
+                              "city",
+                              event.target.value,
+                            )
+                          }
+                          className={inputClassName}
+                        />
+                      </Field>
+
+                      {addressSuggestions.length > 1 && (
+                        <div className="sm:col-span-2">
+                          <Field label="Commune proposée">
+                            <select
+                              value=""
+                              onChange={(event) => {
+                                const suggestion =
+                                  addressSuggestions.find(
+                                    (item) =>
+                                      item.label === event.target.value,
+                                  );
+
+                                if (suggestion) {
+                                  applyAddressSuggestion(suggestion);
+                                }
+                              }}
+                              className={selectClassName}
+                            >
+                              <option value="">
+                                Choisir une commune
+                              </option>
+
+                              {addressSuggestions.map((suggestion) => (
+                                <option
+                                  key={suggestion.label}
+                                  value={suggestion.label}
+                                >
+                                  {suggestion.label}
+                                </option>
+                              ))}
+                            </select>
+                          </Field>
+                        </div>
+                      )}
+
+                      <Field label="Région">
+                        <input
+                          value={formData.region}
+                          onChange={(event) =>
+                            updateField(
+                              "region",
+                              event.target.value,
+                            )
+                          }
+                          className={inputClassName}
+                        />
+                      </Field>
+
+                      <Field label="Pays">
+                        <input
+                          value={formData.countryCode}
+                          onChange={(event) =>
+                            updateField(
+                              "countryCode",
+                              event.target.value.toUpperCase(),
+                            )
+                          }
+                          className={inputClassName}
+                          placeholder="FR"
+                        />
+                      </Field>
+                    </FormSection>
+
+                    <FormSection
+                      title="Contact"
+                      description="Coordonnées professionnelles et personnelles nécessaires aux échanges et notifications."
+                      icon={Users}
+                      accent="emerald"
+                    >
+                      <Field label="Email professionnel">
+                        <input
+                          type="email"
+                          autoComplete="email"
+                          value={formData.professionalEmail}
+                          onChange={(event) =>
+                            updateField(
+                              "professionalEmail",
+                              event.target.value,
+                            )
+                          }
+                          className={inputClassName}
+                        />
+                      </Field>
+
+                      <Field label="Téléphone professionnel">
+                        <input
+                          type="tel"
+                          inputMode="tel"
+                          autoComplete="tel"
+                          value={formData.professionalPhone}
+                          onChange={(event) =>
+                            updateField(
+                              "professionalPhone",
+                              event.target.value,
+                            )
+                          }
+                          className={inputClassName}
+                          placeholder="+33 6 00 00 00 00"
+                        />
+                      </Field>
+
+                      <Field label="Email personnel">
+                        <input
+                          type="email"
+                          autoComplete="email"
+                          value={formData.personalEmail}
+                          onChange={(event) =>
+                            updateField(
+                              "personalEmail",
+                              event.target.value,
+                            )
+                          }
+                          className={inputClassName}
+                        />
+                      </Field>
+
+                      <Field label="Téléphone personnel">
+                        <input
+                          type="tel"
+                          inputMode="tel"
+                          autoComplete="tel"
+                          value={formData.personalPhone}
+                          onChange={(event) =>
+                            updateField(
+                              "personalPhone",
+                              event.target.value,
+                            )
+                          }
+                          className={inputClassName}
+                          placeholder="+33 6 00 00 00 00"
+                        />
+                      </Field>
+                    </FormSection>
+
+                    <FormSection
+                      title="Rattachement"
+                      description="Site, service, métier, fonction et manager N+1 issus de l’architecture RH."
+                      icon={Building2}
+                      accent="violet"
+                    >
+                      <Field
+                        label="Site"
+                        description="Liste issue du référentiel Architecture RH."
+                      >
+                        <select
+                          value={formData.siteId}
+                          onChange={(event) =>
+                            updateField(
+                              "siteId",
+                              event.target.value,
+                            )
+                          }
+                          className={selectClassName}
+                        >
+                          <option value="">
+                            Non renseigné
+                          </option>
+
+                          {references?.sites.map((item) => (
+                            <option
+                              key={item.id}
+                              value={item.id}
+                            >
+                              {item.name}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+
+                      <Field
+                        label="Service"
+                        description="Liste issue du référentiel Architecture RH."
+                      >
+                        <select
+                          value={formData.departmentId}
+                          onChange={(event) =>
+                            updateField(
+                              "departmentId",
+                              event.target.value,
+                            )
+                          }
+                          className={selectClassName}
+                        >
+                          <option value="">
+                            Non renseigné
+                          </option>
+
+                          {references?.departments.map((item) => (
+                            <option
+                              key={item.id}
+                              value={item.id}
+                            >
+                              {item.name}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+
+                      <Field
+                        label="Métier"
+                        description="Liste issue du référentiel Architecture RH."
+                      >
+                        <select
+                          value={formData.jobId}
+                          onChange={(event) =>
+                            updateField(
+                              "jobId",
+                              event.target.value,
+                            )
+                          }
+                          className={selectClassName}
+                        >
+                          <option value="">
+                            Non renseigné
+                          </option>
+
+                          {references?.jobs.map((item) => (
+                            <option
+                              key={item.id}
+                              value={item.id}
+                            >
+                              {item.name}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+
+                      <Field
+                        label="Fonction"
+                        description="Liste issue du référentiel Architecture RH."
+                      >
+                        <select
+                          value={formData.functionId}
+                          onChange={(event) =>
+                            updateField(
+                              "functionId",
+                              event.target.value,
+                            )
+                          }
+                          className={selectClassName}
+                        >
+                          <option value="">
+                            Non renseignée
+                          </option>
+
+                          {references?.functions.map((item) => (
+                            <option
+                              key={item.id}
+                              value={item.id}
+                            >
+                              {item.name}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+
+                      <Field label="Manager N+1">
+                        <select
+                          value={formData.managerId}
+                          onChange={(event) =>
+                            updateField(
+                              "managerId",
+                              event.target.value,
+                            )
+                          }
+                          className={selectClassName}
+                        >
+                          <option value="">
+                            Aucun manager
+                          </option>
+
+                          {references?.managers.map((manager) => (
+                            <option
+                              key={manager.id}
+                              value={manager.id}
+                            >
+                              {manager.full_name} — {manager.employee_number}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+
+                      <Field label="Date d’arrivée">
+                        <input
+                          type="date"
+                          value={formData.arrivalDate}
+                          onChange={(event) => {
+                            updateField(
+                              "arrivalDate",
+                              event.target.value,
+                            );
+
+                            if (!formData.contractStartDate) {
+                              updateField(
+                                "contractStartDate",
+                                event.target.value,
+                              );
+                            }
+
+                            if (!formData.probationStartDate) {
+                              updateField(
+                                "probationStartDate",
+                                event.target.value,
+                              );
+                            }
+                          }}
+                          className={inputClassName}
+                        />
+                      </Field>
+
+                      <Field
+                        label="Expérience"
+                        description="Nombre d’années d’expérience professionnelle."
+                      >
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.5"
+                          value={formData.experienceYears}
+                          onChange={(event) =>
+                            updateField(
+                              "experienceYears",
+                              event.target.value,
+                            )
+                          }
+                          className={inputClassName}
+                          placeholder="Ex. 5"
+                        />
+                      </Field>
+
+                      <Field label="Statut collaborateur">
+                        <select
+                          value={formData.employmentStatus}
+                          onChange={(event) =>
+                            updateField(
+                              "employmentStatus",
+                              event.target.value,
+                            )
+                          }
+                          className={selectClassName}
+                        >
+                          <option value="draft">
+                            Brouillon
+                          </option>
+                          <option value="preboarding">
+                            Pré-intégration
+                          </option>
+                          <option value="probation">
+                            Période d’essai
+                          </option>
+                          <option value="active">
+                            Actif
+                          </option>
+                        </select>
+                      </Field>
+                    </FormSection>
+                  </>
+                )}
+
+                {activeTab === "contract" && (
+                  <>
+                    <FormSection
+                      title="Contrat"
+                      description="Type de contrat, temps de travail, dates, période d’essai, préavis et statut contractuel."
+                      icon={BriefcaseBusiness}
+                      accent="amber"
+                    >
+                      <Field label="Type de contrat">
+                        <select
+                          value={formData.contractTypeId}
+                          onChange={(event) =>
+                            updateField(
+                              "contractTypeId",
+                              event.target.value,
+                            )
+                          }
+                          className={selectClassName}
+                        >
+                          <option value="">
+                            Aucun contrat
+                          </option>
+
+                          {references?.contractTypes.map((item) => (
+                            <option
+                              key={item.id}
+                              value={item.id}
+                            >
+                              {item.name}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+
+                      <Field label="Rythme de référence">
+                        <select
+                          value={formData.workScheduleId}
+                          onChange={(event) =>
+                            updateField(
+                              "workScheduleId",
+                              event.target.value,
+                            )
+                          }
+                          className={selectClassName}
+                        >
+                          <option value="">
+                            Non renseigné
+                          </option>
+
+                          {references?.workSchedules
+                            .filter(
+                              (item) =>
+                                item.schedule_type !== "annual_days",
+                            )
+                            .map((item) => (
+                              <option
+                                key={item.id}
+                                value={item.id}
+                              >
+                                {item.name}
+                              </option>
+                            ))}
+                        </select>
+                      </Field>
+
+                      <Field label="Début du contrat">
+                        <input
+                          type="date"
+                          value={formData.contractStartDate}
+                          onChange={(event) =>
+                            updateField(
+                              "contractStartDate",
+                              event.target.value,
+                            )
+                          }
+                          className={inputClassName}
+                        />
+                      </Field>
+
+                      <Field label="Fin du contrat">
+                        <input
+                          type="date"
+                          value={formData.contractEndDate}
+                          onChange={(event) =>
+                            updateField(
+                              "contractEndDate",
+                              event.target.value,
+                            )
+                          }
+                          className={inputClassName}
+                        />
+                      </Field>
+
+                      <Field label="Temps de travail">
+                        <select
+                          value={formData.workingTimeType}
+                          onChange={(event) =>
+                            handleWorkingTimeTypeChange(
+                              event.target.value,
+                            )
+                          }
+                          className={selectClassName}
+                        >
+                          <option value="full_time">
+                            Temps plein
+                          </option>
+                          <option value="part_time">
+                            Temps partiel
+                          </option>
+                          <option value="annual_days">
+                            Forfait jours
+                          </option>
+                          <option value="custom">
+                            Personnalisé
+                          </option>
+                        </select>
+                      </Field>
+
+                      <Field label="Taux d’activité (%)">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.01"
+                          value={formData.activityRatePercent}
+                          onChange={(event) =>
+                            updateField(
+                              "activityRatePercent",
+                              event.target.value,
+                            )
+                          }
+                          className={inputClassName}
+                        />
+                      </Field>
+
+                      <Field label="Début période d’essai">
+                        <input
+                          type="date"
+                          value={formData.probationStartDate}
+                          onChange={(event) =>
+                            updateField(
+                              "probationStartDate",
+                              event.target.value,
+                            )
+                          }
+                          className={inputClassName}
+                        />
+                      </Field>
+
+                      <Field label="Fin période d’essai">
+                        <input
+                          type="date"
+                          value={formData.probationEndDate}
+                          onChange={(event) =>
+                            updateField(
+                              "probationEndDate",
+                              event.target.value,
+                            )
+                          }
+                          className={inputClassName}
+                        />
+                      </Field>
+
+                      <Field label="Durée période d’essai">
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={formData.probationDurationMonths}
+                          onChange={(event) =>
+                            updateField(
+                              "probationDurationMonths",
+                              event.target.value,
+                            )
+                          }
+                          className={inputClassName}
+                        />
+                      </Field>
+
+                      <Field label="Durée préavis">
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={formData.noticeDurationMonths}
+                          onChange={(event) =>
+                            updateField(
+                              "noticeDurationMonths",
+                              event.target.value,
+                            )
+                          }
+                          className={inputClassName}
+                        />
+                      </Field>
+
+                      <div className="sm:col-span-2">
+                        <label className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
+                          <input
+                            type="checkbox"
+                            checked={formData.probationRenewable}
+                            onChange={(event) =>
+                              updateField(
+                                "probationRenewable",
+                                event.target.checked,
+                              )
+                            }
+                            className="h-4 w-4 rounded border-slate-300 text-indigo-600"
+                          />
+
+                          La période d’essai peut être renouvelée
+                        </label>
+                      </div>
+                    </FormSection>
+
+                    <HrWeeklyWorkPatternFields
+                      value={formData.weeklyPattern}
+                      workingTimeType={formData.workingTimeType}
+                      referenceLabel={
+                        selectedWorkSchedule?.name ??
+                        "rythme non renseigné"
+                      }
+                      referenceWeeklyHours={
+                        selectedWorkSchedule?.weekly_hours ??
+                        35
+                      }
+                      onChange={handleWeeklyPatternChange}
+                    />
+
+                    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950">
+                      <div className="flex items-start gap-3 border-b border-slate-100 bg-gradient-to-r from-slate-50/80 via-white to-white px-5 py-4 dark:border-slate-800 dark:from-slate-900/70 dark:via-slate-950 dark:to-slate-950">
+                        <div className="rounded-xl bg-emerald-100 p-2.5 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                          <BadgeEuro
+                            className="h-4 w-4"
+                            strokeWidth={1.9}
+                          />
+                        </div>
+
+                        <div>
+                          <h3 className="text-sm font-black text-slate-950 dark:text-white">
+                            Rémunération et coût
+                          </h3>
+
+                          <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
+                            Base utilisée par les projets, le staffing, la capacité et les analyses financières.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="p-5">
+                        <HrCompensationFields
+                          value={formData.compensation}
+                          activityRatePercent={formData.activityRatePercent}
+                          chargeProfiles={references?.chargeProfiles ?? []}
+                          onChange={(compensation) =>
+                            updateField(
+                              "compensation",
+                              compensation,
+                            )
+                          }
+                        />
+                      </div>
+                    </section>
+                  </>
+                )}
+
+                {activeTab === "preview" && (
+                  <>
+                    <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                      <SummaryCard
+                        label="Collaborateur"
+                        value={
+                          [
+                            formData.firstName,
+                            formData.lastName,
+                          ]
+                            .filter(Boolean)
+                            .join(" ") ||
+                          "Non renseigné"
+                        }
+                        description="Identité principale de la fiche."
+                        accent="indigo"
+                      />
+
+                      <SummaryCard
+                        label="Contrat"
+                        value={
+                          selectedContractType?.name ??
+                          "Non renseigné"
+                        }
+                        description="Type de contrat sélectionné."
+                        accent="violet"
+                      />
+
+                      <SummaryCard
+                        label="Heures hebdo"
+                        value={`${formatNumber(
+                          weeklyPatternSummary.weeklyHours,
+                        )} h`}
+                        description="Total issu de la semaine de travail."
+                        accent="emerald"
+                      />
+
+                      <SummaryCard
+                        label="Taux activité"
+                        value={`${formData.activityRatePercent || "0"} %`}
+                        description="Prorata appliqué aux coûts salariés."
+                        accent="cyan"
+                      />
+                    </section>
+
+                    <FormSection
+                      title="Commentaires"
+                      description="Informations complémentaires conservées dans la fiche collaborateur et le contrat."
+                      icon={FileText}
+                      accent="indigo"
+                    >
+                      <div className="sm:col-span-2">
+                        <Field label="Commentaires collaborateur">
+                          <textarea
+                            value={formData.comments}
+                            onChange={(event) =>
+                              updateField(
+                                "comments",
+                                event.target.value,
+                              )
+                            }
+                            className={textareaClassName}
+                          />
+                        </Field>
+                      </div>
+
+                      <div className="sm:col-span-2">
+                        <Field label="Commentaires contrat">
+                          <textarea
+                            value={formData.contractComments}
+                            onChange={(event) =>
+                              updateField(
+                                "contractComments",
+                                event.target.value,
+                              )
+                            }
+                            className={textareaClassName}
+                          />
+                        </Field>
+                      </div>
+                    </FormSection>
+
+                    <section className="rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4 dark:border-indigo-900/50 dark:bg-indigo-950/20">
+                      <div className="flex items-start gap-3">
+                        <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-indigo-600 dark:text-indigo-300" />
+
+                        <div>
+                          <p className="text-sm font-black text-indigo-900 dark:text-indigo-200">
+                            Points de vigilance
+                          </p>
+
+                          <p className="mt-1 text-xs leading-5 text-indigo-700 dark:text-indigo-300">
+                            La semaine de travail pilote les heures hebdomadaires, la base journalière, les coûts et la future capacité. Les droits CP, RTT salarié et RTT employeur seront rattachés automatiquement avec les règles annuelles du modèle Absences.
+                          </p>
+                        </div>
+                      </div>
+                    </section>
+                  </>
+                )}
+              </div>
+            )}
           </div>
-        ) : (
-          <form onSubmit={handleSubmit}>
-            <div className="max-h-[calc(100vh-190px)] space-y-5 overflow-y-auto p-6">
-              {successMessage && (
-                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900/60 dark:bg-emerald-950/30">
-                  <div className="flex gap-3">
-                    <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
 
-                    <p className="text-sm font-medium text-emerald-800 dark:text-emerald-300">
-                      {successMessage}
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {createMemberMutation.error && (
-                <div className="rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-900/60 dark:bg-red-950/30">
-                  <div className="flex gap-3">
-                    <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-600" />
-
-                    <p className="text-sm text-red-700 dark:text-red-300">
-                      {createMemberMutation.error instanceof
-                      Error
-                        ? createMemberMutation.error.message
-                        : "La création a échoué."}
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              <FormSection
-                title="Identité"
-                description="Informations civiles et coordonnées du collaborateur."
-                icon={UserRound}
-              >
-                <Field label="Civilité">
-                  <select
-                    value={formData.title}
-                    onChange={(event) =>
-                      updateField(
-                        "title",
-                        event.target.value,
-                      )
-                    }
-                    className={inputClassName}
-                  >
-                    <option value="">
-                      Non renseignée
-                    </option>
-                    <option value="Madame">
-                      Madame
-                    </option>
-                    <option value="Monsieur">
-                      Monsieur
-                    </option>
-                    <option value="Autre">
-                      Autre
-                    </option>
-                  </select>
-                </Field>
-
-                <Field label="Nom d’usage">
-                  <input
-                    value={formData.preferredName}
-                    onChange={(event) =>
-                      updateField(
-                        "preferredName",
-                        event.target.value,
-                      )
-                    }
-                    className={inputClassName}
-                  />
-                </Field>
-
-                <Field label="Prénom" required>
-                  <input
-                    required
-                    value={formData.firstName}
-                    onChange={(event) =>
-                      updateField(
-                        "firstName",
-                        event.target.value,
-                      )
-                    }
-                    className={inputClassName}
-                  />
-                </Field>
-
-                <Field label="Nom" required>
-                  <input
-                    required
-                    value={formData.lastName}
-                    onChange={(event) =>
-                      updateField(
-                        "lastName",
-                        event.target.value,
-                      )
-                    }
-                    className={inputClassName}
-                  />
-                </Field>
-
-                <Field label="Date de naissance">
-                  <input
-                    type="date"
-                    value={formData.birthDate}
-                    onChange={(event) =>
-                      updateField(
-                        "birthDate",
-                        event.target.value,
-                      )
-                    }
-                    className={inputClassName}
-                  />
-                </Field>
-
-                <Field label="Ville de naissance">
-                  <input
-                    value={formData.birthCity}
-                    onChange={(event) =>
-                      updateField(
-                        "birthCity",
-                        event.target.value,
-                      )
-                    }
-                    className={inputClassName}
-                  />
-                </Field>
-
-                <Field label="Email professionnel">
-                  <input
-                    type="email"
-                    value={
-                      formData.professionalEmail
-                    }
-                    onChange={(event) =>
-                      updateField(
-                        "professionalEmail",
-                        event.target.value,
-                      )
-                    }
-                    className={inputClassName}
-                  />
-                </Field>
-
-                <Field label="Téléphone professionnel">
-                  <input
-                    value={
-                      formData.professionalPhone
-                    }
-                    onChange={(event) =>
-                      updateField(
-                        "professionalPhone",
-                        event.target.value,
-                      )
-                    }
-                    className={inputClassName}
-                  />
-                </Field>
-
-                <Field label="Email personnel">
-                  <input
-                    type="email"
-                    value={formData.personalEmail}
-                    onChange={(event) =>
-                      updateField(
-                        "personalEmail",
-                        event.target.value,
-                      )
-                    }
-                    className={inputClassName}
-                  />
-                </Field>
-
-                <Field label="Téléphone personnel">
-                  <input
-                    value={formData.personalPhone}
-                    onChange={(event) =>
-                      updateField(
-                        "personalPhone",
-                        event.target.value,
-                      )
-                    }
-                    className={inputClassName}
-                  />
-                </Field>
-              </FormSection>
-
-              <FormSection
-                title="Rattachement professionnel"
-                description="Site, service, métier, fonction et responsable hiérarchique."
-                icon={BriefcaseBusiness}
-              >
-                <Field label="Site">
-                  <select
-                    value={formData.siteId}
-                    onChange={(event) =>
-                      updateField(
-                        "siteId",
-                        event.target.value,
-                      )
-                    }
-                    className={inputClassName}
-                  >
-                    <option value="">
-                      Non renseigné
-                    </option>
-
-                    {references?.sites.map((item) => (
-                      <option
-                        key={item.id}
-                        value={item.id}
-                      >
-                        {item.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-
-                <Field label="Département / Service">
-                  <select
-                    value={formData.departmentId}
-                    onChange={(event) =>
-                      updateField(
-                        "departmentId",
-                        event.target.value,
-                      )
-                    }
-                    className={inputClassName}
-                  >
-                    <option value="">
-                      Non renseigné
-                    </option>
-
-                    {references?.departments.map(
-                      (item) => (
-                        <option
-                          key={item.id}
-                          value={item.id}
-                        >
-                          {item.name}
-                        </option>
-                      ),
-                    )}
-                  </select>
-                </Field>
-
-                <Field label="Métier">
-                  <select
-                    value={formData.jobId}
-                    onChange={(event) =>
-                      updateField(
-                        "jobId",
-                        event.target.value,
-                      )
-                    }
-                    className={inputClassName}
-                  >
-                    <option value="">
-                      Non renseigné
-                    </option>
-
-                    {references?.jobs.map((item) => (
-                      <option
-                        key={item.id}
-                        value={item.id}
-                      >
-                        {item.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-
-                <Field label="Fonction">
-                  <select
-                    value={formData.functionId}
-                    onChange={(event) =>
-                      updateField(
-                        "functionId",
-                        event.target.value,
-                      )
-                    }
-                    className={inputClassName}
-                  >
-                    <option value="">
-                      Non renseignée
-                    </option>
-
-                    {references?.functions.map(
-                      (item) => (
-                        <option
-                          key={item.id}
-                          value={item.id}
-                        >
-                          {item.name}
-                        </option>
-                      ),
-                    )}
-                  </select>
-                </Field>
-
-                <Field label="Manager N+1">
-                  <select
-                    value={formData.managerId}
-                    onChange={(event) =>
-                      updateField(
-                        "managerId",
-                        event.target.value,
-                      )
-                    }
-                    className={inputClassName}
-                  >
-                    <option value="">
-                      Aucun manager
-                    </option>
-
-                    {references?.managers.map(
-                      (manager) => (
-                        <option
-                          key={manager.id}
-                          value={manager.id}
-                        >
-                          {manager.full_name} —{" "}
-                          {manager.employee_number}
-                        </option>
-                      ),
-                    )}
-                  </select>
-                </Field>
-
-                <Field label="Date d’arrivée">
-                  <input
-                    type="date"
-                    value={formData.arrivalDate}
-                    onChange={(event) => {
-                      updateField(
-                        "arrivalDate",
-                        event.target.value,
-                      );
-
-                      if (
-                        !formData.contractStartDate
-                      ) {
-                        updateField(
-                          "contractStartDate",
-                          event.target.value,
-                        );
-                      }
-
-                      if (
-                        !formData.probationStartDate
-                      ) {
-                        updateField(
-                          "probationStartDate",
-                          event.target.value,
-                        );
-                      }
-                    }}
-                    className={inputClassName}
-                  />
-                </Field>
-
-                <Field label="Années d’expérience">
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.5"
-                    value={formData.experienceYears}
-                    onChange={(event) =>
-                      updateField(
-                        "experienceYears",
-                        event.target.value,
-                      )
-                    }
-                    className={inputClassName}
-                  />
-                </Field>
-
-                <Field label="Statut du membre">
-                  <select
-                    value={formData.employmentStatus}
-                    onChange={(event) =>
-                      updateField(
-                        "employmentStatus",
-                        event.target.value,
-                      )
-                    }
-                    className={inputClassName}
-                  >
-                    <option value="draft">
-                      Brouillon
-                    </option>
-                    <option value="preboarding">
-                      Pré-intégration
-                    </option>
-                    <option value="probation">
-                      Période d’essai
-                    </option>
-                    <option value="active">
-                      Actif
-                    </option>
-                  </select>
-                </Field>
-              </FormSection>
-
-              <FormSection
-                title="Contrat et temps de travail"
-                description="Conditions contractuelles et capacité de la ressource."
-                icon={CalendarDays}
-              >
-                <Field label="Type de contrat">
-                  <select
-                    value={formData.contractTypeId}
-                    onChange={(event) =>
-                      updateField(
-                        "contractTypeId",
-                        event.target.value,
-                      )
-                    }
-                    className={inputClassName}
-                  >
-                    <option value="">
-                      Aucun contrat
-                    </option>
-
-                    {references?.contractTypes.map(
-                      (item) => (
-                        <option
-                          key={item.id}
-                          value={item.id}
-                        >
-                          {item.name}
-                        </option>
-                      ),
-                    )}
-                  </select>
-                </Field>
-
-                <Field label="Rythme de travail">
-                  <select
-                    value={formData.workScheduleId}
-                    onChange={(event) =>
-                      updateField(
-                        "workScheduleId",
-                        event.target.value,
-                      )
-                    }
-                    className={inputClassName}
-                  >
-                    <option value="">
-                      Non renseigné
-                    </option>
-
-                    {references?.workSchedules.map(
-                      (item) => (
-                        <option
-                          key={item.id}
-                          value={item.id}
-                        >
-                          {item.name}
-                        </option>
-                      ),
-                    )}
-                  </select>
-                </Field>
-
-                <Field label="Début du contrat">
-                  <input
-                    type="date"
-                    value={formData.contractStartDate}
-                    onChange={(event) =>
-                      updateField(
-                        "contractStartDate",
-                        event.target.value,
-                      )
-                    }
-                    className={inputClassName}
-                  />
-                </Field>
-
-                <Field label="Fin du contrat">
-                  <input
-                    type="date"
-                    value={formData.contractEndDate}
-                    onChange={(event) =>
-                      updateField(
-                        "contractEndDate",
-                        event.target.value,
-                      )
-                    }
-                    className={inputClassName}
-                  />
-                </Field>
-
-                <Field label="Temps de travail">
-                  <select
-                    value={formData.workingTimeType}
-                    onChange={(event) =>
-                      updateField(
-                        "workingTimeType",
-                        event.target.value,
-                      )
-                    }
-                    className={inputClassName}
-                  >
-                    <option value="full_time">
-                      Temps plein
-                    </option>
-                    <option value="part_time">
-                      Temps partiel
-                    </option>
-                    <option value="annual_days">
-                      Forfait jours
-                    </option>
-                    <option value="custom">
-                      Personnalisé
-                    </option>
-                  </select>
-                </Field>
-
-                <Field label="Taux d’activité (%)">
-                  <input
-                    type="number"
-                    min="1"
-                    max="100"
-                    step="1"
-                    value={
-                      formData.activityRatePercent
-                    }
-                    onChange={(event) =>
-                      updateField(
-                        "activityRatePercent",
-                        event.target.value,
-                      )
-                    }
-                    className={inputClassName}
-                  />
-                </Field>
-              </FormSection>
-
-              <HrCompensationFields
-                value={formData.compensation}
-                chargeProfiles={
-                  references?.chargeProfiles ?? []
-                }
-                onChange={(compensation) =>
-                  updateField(
-                    "compensation",
-                    compensation,
-                  )
-                }
-              />
-
-              <FormSection
-                title="Période d’essai"
-                description="Paramètres utilisés pour planifier les futurs entretiens de suivi."
-                icon={CalendarDays}
-              >
-                <Field label="Début de période d’essai">
-                  <input
-                    type="date"
-                    value={
-                      formData.probationStartDate
-                    }
-                    onChange={(event) =>
-                      updateField(
-                        "probationStartDate",
-                        event.target.value,
-                      )
-                    }
-                    className={inputClassName}
-                  />
-                </Field>
-
-                <Field label="Fin de période d’essai">
-                  <input
-                    type="date"
-                    value={formData.probationEndDate}
-                    onChange={(event) =>
-                      updateField(
-                        "probationEndDate",
-                        event.target.value,
-                      )
-                    }
-                    className={inputClassName}
-                  />
-                </Field>
-
-                <Field label="Durée en mois">
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.5"
-                    value={
-                      formData.probationDurationMonths
-                    }
-                    onChange={(event) =>
-                      updateField(
-                        "probationDurationMonths",
-                        event.target.value,
-                      )
-                    }
-                    className={inputClassName}
-                  />
-                </Field>
-
-                <Field label="Durée de préavis en mois">
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.5"
-                    value={
-                      formData.noticeDurationMonths
-                    }
-                    onChange={(event) =>
-                      updateField(
-                        "noticeDurationMonths",
-                        event.target.value,
-                      )
-                    }
-                    className={inputClassName}
-                  />
-                </Field>
-
-                <label className="flex items-center gap-3 rounded-lg border border-slate-200 px-3 py-3 sm:col-span-2 dark:border-slate-800">
-                  <input
-                    type="checkbox"
-                    checked={
-                      formData.probationRenewable
-                    }
-                    onChange={(event) =>
-                      updateField(
-                        "probationRenewable",
-                        event.target.checked,
-                      )
-                    }
-                    className="h-4 w-4 rounded border-slate-300"
-                  />
-
-                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                    La période d’essai peut être
-                    renouvelée
-                  </span>
-                </label>
-              </FormSection>
-
-              <FormSection
-                title="Adresse et commentaires"
-                description="Coordonnées personnelles et informations complémentaires."
-                icon={BriefcaseBusiness}
-              >
-                <Field label="Adresse" fullWidth>
-                  <input
-                    value={formData.addressLine1}
-                    onChange={(event) =>
-                      updateField(
-                        "addressLine1",
-                        event.target.value,
-                      )
-                    }
-                    className={inputClassName}
-                  />
-                </Field>
-
-                <Field label="Complément d’adresse" fullWidth>
-                  <input
-                    value={formData.addressLine2}
-                    onChange={(event) =>
-                      updateField(
-                        "addressLine2",
-                        event.target.value,
-                      )
-                    }
-                    className={inputClassName}
-                  />
-                </Field>
-
-                <Field label="Code postal">
-                  <input
-                    value={formData.postalCode}
-                    onChange={(event) =>
-                      updateField(
-                        "postalCode",
-                        event.target.value,
-                      )
-                    }
-                    className={inputClassName}
-                  />
-                </Field>
-
-                <Field label="Ville">
-                  <input
-                    value={formData.city}
-                    onChange={(event) =>
-                      updateField(
-                        "city",
-                        event.target.value,
-                      )
-                    }
-                    className={inputClassName}
-                  />
-                </Field>
-
-                <Field
-                  label="Commentaires sur le membre"
-                  fullWidth
-                >
-                  <textarea
-                    value={formData.comments}
-                    onChange={(event) =>
-                      updateField(
-                        "comments",
-                        event.target.value,
-                      )
-                    }
-                    className={textareaClassName}
-                  />
-                </Field>
-
-                <Field
-                  label="Commentaires sur le contrat"
-                  fullWidth
-                >
-                  <textarea
-                    value={formData.contractComments}
-                    onChange={(event) =>
-                      updateField(
-                        "contractComments",
-                        event.target.value,
-                      )
-                    }
-                    className={textareaClassName}
-                  />
-                </Field>
-              </FormSection>
+          <footer className="flex flex-col-reverse gap-3 border-t border-slate-200 bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between dark:border-slate-800 dark:bg-slate-950">
+            <div className="text-xs leading-5 text-slate-500 dark:text-slate-400">
+              Base actuelle :{" "}
+              <span className="font-black text-indigo-700 dark:text-indigo-300">
+                {formatNumber(
+                  weeklyPatternSummary.weeklyHours,
+                )}{" "}
+                h / semaine
+              </span>
+              {" · "}
+              <span className="font-black text-emerald-700 dark:text-emerald-300">
+                {weeklyPatternSummary.workedDays} jour
+                {weeklyPatternSummary.workedDays > 1
+                  ? "s"
+                  : ""}{" "}
+                travaillé
+                {weeklyPatternSummary.workedDays > 1
+                  ? "s"
+                  : ""}
+              </span>
+              {" · "}
+              <span className="font-black text-cyan-700 dark:text-cyan-300">
+                {formatNumber(
+                  weeklyPatternSummary.averageDailyHours,
+                )}{" "}
+                h / jour
+              </span>
             </div>
 
-            <div className="flex flex-col-reverse gap-3 border-t border-slate-200 bg-white px-6 py-4 sm:flex-row sm:justify-end dark:border-slate-800 dark:bg-slate-950">
+            <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
               <button
                 type="button"
                 onClick={handleClose}
                 disabled={
                   createMemberMutation.isPending
                 }
-                className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-900"
+                className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-900"
               >
                 Annuler
               </button>
@@ -1698,12 +2475,10 @@ export default function HrMemberForm({
                 type="submit"
                 disabled={
                   createMemberMutation.isPending ||
-                  formData.firstName.trim().length ===
-                    0 ||
-                  formData.lastName.trim().length ===
-                    0
+                  formData.firstName.trim().length === 0 ||
+                  formData.lastName.trim().length === 0
                 }
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-slate-900 px-5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200"
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 text-sm font-bold text-white shadow-md shadow-indigo-100 transition hover:-translate-y-0.5 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50 dark:shadow-none"
               >
                 {createMemberMutation.isPending ? (
                   <>
@@ -1712,15 +2487,15 @@ export default function HrMemberForm({
                   </>
                 ) : (
                   <>
-                    <UserRound className="h-4 w-4" />
+                    <ClipboardList className="h-4 w-4" />
                     Créer le membre
                   </>
                 )}
               </button>
             </div>
-          </form>
-        )}
-      </div>
+          </footer>
+        </form>
+      </aside>
     </div>
   );
 }

@@ -1,66 +1,79 @@
 "use client";
 
 import {
-  Archive,
+  type ComponentType,
+  type ReactNode,
+  useMemo,
+  useState,
+} from "react";
+import {
   BadgeEuro,
   BriefcaseBusiness,
   Building2,
   CalendarDays,
-  CheckCircle2,
   Clock3,
-  Edit3,
+  ContactRound,
   FileText,
-  History,
+  Home,
   Mail,
   MapPin,
   Phone,
-  RotateCcw,
-  ShieldAlert,
+  ShieldCheck,
   UserRound,
-  UsersRound,
+  Users,
   X,
 } from "lucide-react";
-import { useEffect, useState } from "react";
 
-import type { HrDirectoryEmployee } from "@/components/hr/HrDirectory";
-import HrEmployeeHistory from "@/components/hr/HrEmployeeHistory";
-import { createClient } from "@/lib/supabase/client";
+import {
+  type HrDirectoryEmployee,
+} from "@/components/hr/HrDirectory";
 
-const supabase = createClient();
-
-type DrawerTab = "information" | "history";
+type DrawerTab =
+  | "identity"
+  | "contract"
+  | "costs";
 
 type HrEmployeeDrawerProps = {
   employee: HrDirectoryEmployee | null;
   organizationId: string;
-
   isOpen: boolean;
-  historyRefreshKey?: number;
-
   onClose: () => void;
 
   onEdit?: (
     employee: HrDirectoryEmployee,
   ) => void;
 
-  onArchived?: () => Promise<void> | void;
+  onArchived?: () => void | Promise<void>;
 };
 
-function formatDate(value: string | null) {
+type InfoItemProps = {
+  label: string;
+  value: ReactNode;
+  description?: string;
+};
+
+function formatDate(
+  value: string | null | undefined,
+) {
   if (!value) {
     return "Non renseignée";
   }
 
-  return new Intl.DateTimeFormat("fr-FR", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-  }).format(new Date(value));
+  return new Intl.DateTimeFormat(
+    "fr-FR",
+    {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    },
+  ).format(new Date(value));
 }
 
 function formatCurrency(
-  value: number | null | undefined,
-  maximumFractionDigits = 2,
+  value:
+    | number
+    | null
+    | undefined,
 ) {
   if (
     value === null ||
@@ -69,12 +82,30 @@ function formatCurrency(
     return "Non renseigné";
   }
 
-  return new Intl.NumberFormat("fr-FR", {
-    style: "currency",
-    currency: "EUR",
-    minimumFractionDigits: 0,
-    maximumFractionDigits,
-  }).format(value);
+  return new Intl.NumberFormat(
+    "fr-FR",
+    {
+      style: "currency",
+      currency: "EUR",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    },
+  ).format(value);
+}
+
+function formatText(
+  value:
+    | string
+    | null
+    | undefined,
+) {
+  const normalizedValue =
+    value?.trim();
+
+  return normalizedValue &&
+    normalizedValue.length > 0
+    ? normalizedValue
+    : "Non renseigné";
 }
 
 function getInitials(
@@ -96,751 +127,688 @@ function getInitials(
   );
 }
 
-function getStatusDefinition(
+function getStatusLabel(
   status: string,
 ) {
-  const definitions: Record<
-    string,
+  const labels: Record<string, string> =
     {
-      label: string;
-      classes: string;
-    }
-  > = {
-    draft: {
-      label: "Brouillon",
-      classes:
-        "bg-slate-100 text-slate-700 ring-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700",
-    },
+      draft: "Brouillon",
+      preboarding:
+        "Pré-intégration",
+      probation:
+        "Période d’essai",
+      active: "Actif",
+      notice_period: "Préavis",
+      suspended: "Suspendu",
+      departed: "Sorti",
+    };
 
-    preboarding: {
-      label: "Pré-intégration",
-      classes:
-        "bg-sky-50 text-sky-700 ring-sky-200 dark:bg-sky-950/50 dark:text-sky-300 dark:ring-sky-900",
-    },
-
-    probation: {
-      label: "Période d’essai",
-      classes:
-        "bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:ring-amber-900",
-    },
-
-    active: {
-      label: "Actif",
-      classes:
-        "bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:ring-emerald-900",
-    },
-
-    suspended: {
-      label: "Suspendu",
-      classes:
-        "bg-orange-50 text-orange-700 ring-orange-200 dark:bg-orange-950/50 dark:text-orange-300 dark:ring-orange-900",
-    },
-
-    notice_period: {
-      label: "Préavis",
-      classes:
-        "bg-violet-50 text-violet-700 ring-violet-200 dark:bg-violet-950/50 dark:text-violet-300 dark:ring-violet-900",
-    },
-
-    departed: {
-      label: "Sorti",
-      classes:
-        "bg-rose-50 text-rose-700 ring-rose-200 dark:bg-rose-950/50 dark:text-rose-300 dark:ring-rose-900",
-    },
-
-    archived: {
-      label: "Archivé",
-      classes:
-        "bg-slate-100 text-slate-500 ring-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:ring-slate-700",
-    },
-  };
-
-  return (
-    definitions[status] ?? {
-      label: status,
-      classes:
-        "bg-slate-100 text-slate-700 ring-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700",
-    }
-  );
+  return labels[status] ?? status;
 }
 
 function getCompensationModeLabel(
-  value: string | null | undefined,
+  value:
+    | string
+    | null
+    | undefined,
 ) {
-  const labels: Record<string, string> = {
-    salary: "Salaire",
-    daily_rate: "TJM",
-    hourly_rate: "Taux horaire",
-    fixed_fee: "Forfait",
-  };
+  const labels: Record<string, string> =
+    {
+      salary: "Salarié",
+      daily_rate: "Freelance au TJM",
+      hourly_rate:
+        "Prestataire horaire",
+      fixed_fee: "Forfait",
+    };
 
   return value
     ? labels[value] ?? value
     : "Non renseigné";
 }
 
-function DetailRow({
-  icon: Icon,
+function InfoItem({
   label,
   value,
-}: {
-  icon: React.ComponentType<{
-    className?: string;
-  }>;
-  label: string;
-  value: string;
-}) {
+  description,
+}: InfoItemProps) {
   return (
-    <div className="flex items-start gap-3 rounded-xl border border-slate-100 bg-slate-50/80 p-3 dark:border-slate-800 dark:bg-slate-900/70">
-      <div className="rounded-lg bg-white p-2 text-indigo-600 shadow-sm dark:bg-slate-950 dark:text-indigo-300">
-        <Icon className="h-4 w-4" />
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950">
+      <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
+        {label}
+      </p>
+
+      <div className="mt-1 text-sm font-bold text-slate-900 dark:text-white">
+        {value}
       </div>
 
-      <div className="min-w-0">
-        <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
-          {label}
+      {description && (
+        <p className="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">
+          {description}
         </p>
+      )}
+    </div>
+  );
+}
 
-        <p className="mt-1 break-words text-sm font-semibold text-slate-800 dark:text-slate-200">
-          {value}
-        </p>
+function DrawerSection({
+  title,
+  description,
+  icon: Icon,
+  children,
+  accent = "indigo",
+}: {
+  title: string;
+  description: string;
+  icon: ComponentType<{
+    className?: string;
+    strokeWidth?: number;
+  }>;
+  children: ReactNode;
+  accent?:
+    | "indigo"
+    | "emerald"
+    | "violet"
+    | "amber"
+    | "cyan";
+}) {
+  const iconClasses = {
+    indigo:
+      "bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300",
+    emerald:
+      "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+    violet:
+      "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300",
+    amber:
+      "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+    cyan:
+      "bg-cyan-100 text-cyan-700 dark:bg-cyan-950 dark:text-cyan-300",
+  };
+
+  return (
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950">
+      <div className="flex items-start gap-3 border-b border-slate-100 bg-gradient-to-r from-slate-50/80 via-white to-white px-5 py-4 dark:border-slate-800 dark:from-slate-900/70 dark:via-slate-950 dark:to-slate-950">
+        <div
+          className={`rounded-xl p-2.5 ${iconClasses[accent]}`}
+        >
+          <Icon
+            className="h-4 w-4"
+            strokeWidth={1.9}
+          />
+        </div>
+
+        <div>
+          <h3 className="text-sm font-black text-slate-950 dark:text-white">
+            {title}
+          </h3>
+
+          <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
+            {description}
+          </p>
+        </div>
+      </div>
+
+      <div className="grid gap-4 p-5 sm:grid-cols-2">
+        {children}
+      </div>
+    </section>
+  );
+}
+
+function DrawerTabs({
+  activeTab,
+  onChange,
+}: {
+  activeTab: DrawerTab;
+  onChange: (
+    tab: DrawerTab,
+  ) => void;
+}) {
+  return (
+    <div className="border-b border-slate-200 bg-white px-5 py-3 dark:border-slate-800 dark:bg-slate-950">
+      <div className="flex justify-center">
+        <div className="inline-flex max-w-full gap-1 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm dark:border-slate-800 dark:bg-slate-950">
+          <button
+            type="button"
+            onClick={() =>
+              onChange("identity")
+            }
+            className={`inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-xl px-4 text-xs font-bold transition ${
+              activeTab === "identity"
+                ? "bg-indigo-600 text-white shadow-md shadow-indigo-100 dark:shadow-none"
+                : "text-slate-500 hover:bg-indigo-50 hover:text-indigo-700 dark:hover:bg-indigo-950/30 dark:hover:text-indigo-300"
+            }`}
+          >
+            <ContactRound className="h-3.5 w-3.5" />
+            Identité
+          </button>
+
+          <button
+            type="button"
+            onClick={() =>
+              onChange("contract")
+            }
+            className={`inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-xl px-4 text-xs font-bold transition ${
+              activeTab === "contract"
+                ? "bg-violet-600 text-white shadow-md shadow-violet-100 dark:shadow-none"
+                : "text-slate-500 hover:bg-violet-50 hover:text-violet-700 dark:hover:bg-violet-950/30 dark:hover:text-violet-300"
+            }`}
+          >
+            <BriefcaseBusiness className="h-3.5 w-3.5" />
+            Contrat & temps
+          </button>
+
+          <button
+            type="button"
+            onClick={() =>
+              onChange("costs")
+            }
+            className={`inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-xl px-4 text-xs font-bold transition ${
+              activeTab === "costs"
+                ? "bg-emerald-600 text-white shadow-md shadow-emerald-100 dark:shadow-none"
+                : "text-slate-500 hover:bg-emerald-50 hover:text-emerald-700 dark:hover:bg-emerald-950/30 dark:hover:text-emerald-300"
+            }`}
+          >
+            <BadgeEuro className="h-3.5 w-3.5" />
+            Coûts
+          </button>
+        </div>
       </div>
     </div>
   );
 }
 
-function CostCard({
+function SummaryCard({
   label,
   value,
-  accent,
+  description,
+  accent = "indigo",
 }: {
   label: string;
   value: string;
-  accent:
+  description: string;
+  accent?:
     | "indigo"
-    | "violet"
     | "emerald"
-    | "amber";
+    | "violet"
+    | "amber"
+    | "cyan";
 }) {
-  const styles = {
+  const classes = {
     indigo:
-      "border-indigo-100 from-indigo-50 to-white text-indigo-700 dark:border-indigo-900/60 dark:from-indigo-950/30 dark:to-slate-950 dark:text-indigo-300",
-
-    violet:
-      "border-violet-100 from-violet-50 to-white text-violet-700 dark:border-violet-900/60 dark:from-violet-950/30 dark:to-slate-950 dark:text-violet-300",
-
+      "border-indigo-100 bg-indigo-50/60 text-indigo-700 dark:border-indigo-900/50 dark:bg-indigo-950/20 dark:text-indigo-300",
     emerald:
-      "border-emerald-100 from-emerald-50 to-white text-emerald-700 dark:border-emerald-900/60 dark:from-emerald-950/30 dark:to-slate-950 dark:text-emerald-300",
-
+      "border-emerald-100 bg-emerald-50/60 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/20 dark:text-emerald-300",
+    violet:
+      "border-violet-100 bg-violet-50/60 text-violet-700 dark:border-violet-900/50 dark:bg-violet-950/20 dark:text-violet-300",
     amber:
-      "border-amber-100 from-amber-50 to-white text-amber-700 dark:border-amber-900/60 dark:from-amber-950/30 dark:to-slate-950 dark:text-amber-300",
+      "border-amber-100 bg-amber-50/60 text-amber-700 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-300",
+    cyan:
+      "border-cyan-100 bg-cyan-50/60 text-cyan-700 dark:border-cyan-900/50 dark:bg-cyan-950/20 dark:text-cyan-300",
   };
 
   return (
-    <div
-      className={`rounded-xl border bg-gradient-to-br p-4 ${styles[accent]}`}
+    <article
+      className={`rounded-2xl border p-4 shadow-sm ${classes[accent]}`}
     >
-      <p className="text-[10px] font-bold uppercase tracking-wide opacity-70">
+      <p className="text-[10px] font-black uppercase tracking-wide opacity-80">
         {label}
       </p>
 
-      <p className="mt-2 text-lg font-black">
+      <p className="mt-2 text-xl font-black">
         {value}
       </p>
-    </div>
+
+      <p className="mt-2 text-xs leading-5 opacity-80">
+        {description}
+      </p>
+    </article>
   );
 }
 
 export default function HrEmployeeDrawer({
   employee,
-  organizationId,
   isOpen,
-  historyRefreshKey = 0,
   onClose,
-  onEdit,
-  onArchived,
 }: HrEmployeeDrawerProps) {
-  const [activeTab, setActiveTab] =
-    useState<DrawerTab>("information");
-
   const [
-    isConfirmingArchive,
-    setIsConfirmingArchive,
-  ] = useState(false);
-
-  const [isSubmitting, setIsSubmitting] =
-    useState(false);
-
-  const [errorMessage, setErrorMessage] =
-    useState<string | null>(null);
-
-  useEffect(() => {
-    if (!isOpen) {
-      setActiveTab("information");
-      setIsConfirmingArchive(false);
-      setIsSubmitting(false);
-      setErrorMessage(null);
-    }
-  }, [isOpen]);
-
-  useEffect(() => {
-    function handleEscape(
-      event: KeyboardEvent,
-    ) {
-      if (
-        event.key === "Escape" &&
-        isOpen &&
-        !isSubmitting
-      ) {
-        onClose();
-      }
-    }
-
-    window.addEventListener(
-      "keydown",
-      handleEscape,
+    activeTab,
+    setActiveTab,
+  ] =
+    useState<DrawerTab>(
+      "identity",
     );
 
-    return () => {
-      window.removeEventListener(
-        "keydown",
-        handleEscape,
-      );
-    };
-  }, [
-    isOpen,
-    isSubmitting,
-    onClose,
-  ]);
+  const compensationMode =
+    useMemo(
+      () =>
+        getCompensationModeLabel(
+          employee?.compensation_mode,
+        ),
+      [employee],
+    );
 
-  if (!employee) {
+  if (
+    !isOpen ||
+    !employee
+  ) {
     return null;
   }
 
-  const statusDefinition =
-    getStatusDefinition(
-      employee.employment_status,
-    );
-
-  const isArchived =
-    employee.employment_status ===
-      "archived" ||
-    !employee.is_active;
-
-  async function handleArchiveChange() {
-    if (!employee) {
-      return;
-    }
-
-    try {
-      setIsSubmitting(true);
-      setErrorMessage(null);
-
-      const { error } = await (
-        supabase.rpc as any
-      )("set_hr_employee_archived", {
-        target_employee_id: employee.id,
-        archived: !isArchived,
-      });
-
-      if (error) {
-        throw error;
-      }
-
-      await onArchived?.();
-
-      setIsConfirmingArchive(false);
-      onClose();
-    } catch (error: unknown) {
-      console.error(
-        "Erreur lors de l’archivage du collaborateur :",
-        error,
-      );
-
-      if (
-        typeof error === "object" &&
-        error !== null &&
-        "message" in error &&
-        typeof error.message === "string"
-      ) {
-        setErrorMessage(error.message);
-      } else {
-        setErrorMessage(
-          "L’opération n’a pas pu être effectuée.",
-        );
-      }
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
   return (
-    <>
-      <div
-        aria-hidden={!isOpen}
-        onClick={
-          isSubmitting
-            ? undefined
-            : onClose
-        }
-        className={`fixed inset-0 z-40 bg-slate-950/40 backdrop-blur-sm transition-opacity duration-300 ${
-          isOpen
-            ? "pointer-events-auto opacity-100"
-            : "pointer-events-none opacity-0"
-        }`}
+    <div className="fixed inset-0 z-[100] flex justify-end">
+      <button
+        type="button"
+        aria-label="Fermer la fiche collaborateur"
+        onClick={onClose}
+        className="absolute inset-0 bg-slate-950/45 backdrop-blur-[2px]"
       />
 
-      <aside
-        role="dialog"
-        aria-modal="true"
-        aria-label={`Fiche de ${employee.full_name}`}
-        className={`fixed inset-y-0 right-0 z-50 flex w-full max-w-2xl flex-col border-l border-slate-200 bg-white shadow-2xl transition-transform duration-300 dark:border-slate-800 dark:bg-slate-950 ${
-          isOpen
-            ? "translate-x-0"
-            : "translate-x-full"
-        }`}
-      >
-        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-slate-800">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-wide text-indigo-600 dark:text-indigo-400">
-              Fiche collaborateur
-            </p>
+      <aside className="relative flex h-full w-full max-w-5xl flex-col border-l border-slate-200 bg-slate-50 shadow-2xl dark:border-slate-800 dark:bg-slate-950">
+        <header className="flex items-start justify-between gap-4 border-b border-slate-200 bg-white px-5 py-4 dark:border-slate-800 dark:bg-slate-950">
+          <div className="flex items-start gap-4">
+            {employee.photo_url ? (
+              <img
+                src={
+                  employee.photo_url
+                }
+                alt={
+                  employee.full_name
+                }
+                className="h-12 w-12 rounded-2xl object-cover ring-2 ring-white dark:ring-slate-900"
+              />
+            ) : (
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 text-sm font-black text-white shadow-sm">
+                {getInitials(employee)}
+              </div>
+            )}
 
-            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-              Consultation et gestion du cycle de vie RH.
-            </p>
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-wide text-indigo-600 dark:text-indigo-300">
+                Fiche collaborateur
+              </p>
+
+              <h2 className="mt-1 text-lg font-black text-slate-950 dark:text-white">
+                {employee.full_name}
+              </h2>
+
+              <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
+                Lecture seule de la fiche RH, du rattachement, du contrat, du rythme et des coûts.
+              </p>
+            </div>
           </div>
 
           <button
             type="button"
             onClick={onClose}
-            disabled={isSubmitting}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition hover:bg-slate-100 hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-800 dark:hover:bg-slate-900 dark:hover:text-white"
-            aria-label="Fermer la fiche"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-400"
           >
-            <X className="h-5 w-5" />
+            <X className="h-4 w-4" />
           </button>
-        </div>
+        </header>
 
-        <div className="border-b border-slate-100 bg-gradient-to-br from-indigo-50/80 via-white to-violet-50/70 p-6 dark:border-slate-800 dark:from-indigo-950/30 dark:via-slate-950 dark:to-violet-950/20">
-          <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
-            <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 text-xl font-black text-white shadow-lg shadow-indigo-200 dark:shadow-none">
-              {employee.photo_url ? (
-                <img
-                  src={employee.photo_url}
-                  alt={employee.full_name}
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                getInitials(employee)
-              )}
-            </div>
+        <DrawerTabs
+          activeTab={activeTab}
+          onChange={setActiveTab}
+        />
 
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-2xl font-black text-slate-950 dark:text-white">
-                  {employee.full_name}
-                </h2>
+        <div className="flex-1 overflow-y-auto p-5">
+          <div className="space-y-5">
+            <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <SummaryCard
+                label="Matricule"
+                value={
+                  employee.employee_number ||
+                  "Non renseigné"
+                }
+                description="Identifiant RH de référence."
+                accent="indigo"
+              />
 
-                <span
-                  className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ring-1 ring-inset ${statusDefinition.classes}`}
+              <SummaryCard
+                label="Statut"
+                value={getStatusLabel(
+                  employee.employment_status,
+                )}
+                description="État actuel de la fiche collaborateur."
+                accent={
+                  employee.is_active
+                    ? "emerald"
+                    : "amber"
+                }
+              />
+
+              <SummaryCard
+                label="Contrat"
+                value={formatText(
+                  employee.contract_type_name,
+                )}
+                description="Type de contrat actif ou principal."
+                accent="violet"
+              />
+
+              <SummaryCard
+                label="Coût jour"
+                value={formatCurrency(
+                  employee.loaded_daily_cost,
+                )}
+                description="Coût journalier chargé exploitable."
+                accent="cyan"
+              />
+            </section>
+
+            {activeTab ===
+              "identity" && (
+              <>
+                <DrawerSection
+                  title="Identité"
+                  description="Informations principales visibles dans l’annuaire et les workflows RH."
+                  icon={ContactRound}
+                  accent="indigo"
                 >
-                  {statusDefinition.label}
-                </span>
-              </div>
+                  <InfoItem
+                    label="Nom complet"
+                    value={
+                      employee.full_name
+                    }
+                  />
 
-              <p className="mt-2 text-sm font-semibold text-indigo-700 dark:text-indigo-300">
-                {employee.function_name ||
-                  employee.job_name ||
-                  "Fonction non renseignée"}
-              </p>
+                  <InfoItem
+                    label="Matricule"
+                    value={
+                      employee.employee_number ||
+                      "Non renseigné"
+                    }
+                  />
 
-              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                Matricule :{" "}
-                {employee.employee_number}
-              </p>
-            </div>
-          </div>
-        </div>
+                  <InfoItem
+                    label="Prénom"
+                    value={formatText(
+                      employee.first_name,
+                    )}
+                  />
 
-        <div className="border-b border-slate-200 bg-white px-5 py-3 dark:border-slate-800 dark:bg-slate-950">
-          <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1 dark:border-slate-800 dark:bg-slate-900">
-            <button
-              type="button"
-              onClick={() =>
-                setActiveTab("information")
-              }
-              className={`inline-flex h-9 items-center gap-2 rounded-lg px-4 text-xs font-bold transition ${
-                activeTab === "information"
-                  ? "bg-indigo-600 text-white shadow-sm"
-                  : "text-slate-500 hover:bg-white hover:text-indigo-700 dark:hover:bg-slate-950 dark:hover:text-indigo-300"
-              }`}
-            >
-              <FileText className="h-4 w-4" />
-              Informations
-            </button>
+                  <InfoItem
+                    label="Nom"
+                    value={formatText(
+                      employee.last_name,
+                    )}
+                  />
+                </DrawerSection>
 
-            <button
-              type="button"
-              onClick={() =>
-                setActiveTab("history")
-              }
-              className={`inline-flex h-9 items-center gap-2 rounded-lg px-4 text-xs font-bold transition ${
-                activeTab === "history"
-                  ? "bg-violet-600 text-white shadow-sm"
-                  : "text-slate-500 hover:bg-white hover:text-violet-700 dark:hover:bg-slate-950 dark:hover:text-violet-300"
-              }`}
-            >
-              <History className="h-4 w-4" />
-              Historique
-            </button>
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto">
-          {activeTab === "information" ? (
-            <div className="space-y-7 p-6">
-              <section>
-                <div className="mb-4 flex items-center gap-2">
-                  <UserRound className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
-
-                  <h3 className="text-base font-black text-slate-950 dark:text-white">
-                    Coordonnées et organisation
-                  </h3>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <DetailRow
-                    icon={Mail}
+                <DrawerSection
+                  title="Contact"
+                  description="Coordonnées professionnelles disponibles pour les échanges et notifications."
+                  icon={Users}
+                  accent="emerald"
+                >
+                  <InfoItem
                     label="Email professionnel"
                     value={
-                      employee.professional_email ||
-                      "Non renseigné"
+                      employee.professional_email ? (
+                        <a
+                          href={`mailto:${employee.professional_email}`}
+                          className="inline-flex items-center gap-2 text-indigo-700 hover:underline dark:text-indigo-300"
+                        >
+                          <Mail className="h-4 w-4" />
+                          {
+                            employee.professional_email
+                          }
+                        </a>
+                      ) : (
+                        "Non renseigné"
+                      )
                     }
                   />
 
-                  <DetailRow
-                    icon={Phone}
+                  <InfoItem
                     label="Téléphone professionnel"
                     value={
-                      employee.professional_phone ||
-                      "Non renseigné"
+                      employee.professional_phone ? (
+                        <a
+                          href={`tel:${employee.professional_phone}`}
+                          className="inline-flex items-center gap-2 text-indigo-700 hover:underline dark:text-indigo-300"
+                        >
+                          <Phone className="h-4 w-4" />
+                          {
+                            employee.professional_phone
+                          }
+                        </a>
+                      ) : (
+                        "Non renseigné"
+                      )
                     }
                   />
+                </DrawerSection>
 
-                  <DetailRow
-                    icon={MapPin}
+                <DrawerSection
+                  title="Rattachement"
+                  description="Positionnement de la ressource dans l’architecture RH."
+                  icon={Building2}
+                  accent="violet"
+                >
+                  <InfoItem
                     label="Site"
                     value={
-                      employee.site_name ||
-                      "Non renseigné"
+                      <span className="inline-flex items-center gap-2">
+                        <MapPin className="h-4 w-4 text-rose-500" />
+                        {formatText(
+                          employee.site_name,
+                        )}
+                      </span>
                     }
                   />
 
-                  <DetailRow
-                    icon={Building2}
+                  <InfoItem
                     label="Service"
-                    value={
-                      employee.department_name ||
-                      "Non renseigné"
-                    }
+                    value={formatText(
+                      employee.department_name,
+                    )}
                   />
 
-                  <DetailRow
-                    icon={BriefcaseBusiness}
-                    label="Métier / fonction"
-                    value={
-                      employee.function_name ||
-                      employee.job_name ||
-                      "Non renseigné"
-                    }
+                  <InfoItem
+                    label="Métier"
+                    value={formatText(
+                      employee.job_name,
+                    )}
                   />
 
-                  <DetailRow
-                    icon={UsersRound}
+                  <InfoItem
+                    label="Fonction"
+                    value={formatText(
+                      employee.function_name,
+                    )}
+                  />
+
+                  <InfoItem
                     label="Manager N+1"
-                    value={
-                      employee.manager_name ||
-                      "Non renseigné"
-                    }
+                    value={formatText(
+                      employee.manager_name,
+                    )}
                   />
-                </div>
-              </section>
+                </DrawerSection>
+              </>
+            )}
 
-              <section>
-                <div className="mb-4 flex items-center gap-2">
-                  <CalendarDays className="h-5 w-5 text-violet-600 dark:text-violet-400" />
-
-                  <h3 className="text-base font-black text-slate-950 dark:text-white">
-                    Contrat et activité
-                  </h3>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <DetailRow
-                    icon={BriefcaseBusiness}
+            {activeTab ===
+              "contract" && (
+              <>
+                <DrawerSection
+                  title="Contrat"
+                  description="Contrat, statut, date d’arrivée et rythme de référence."
+                  icon={BriefcaseBusiness}
+                  accent="amber"
+                >
+                  <InfoItem
                     label="Type de contrat"
-                    value={
-                      employee.contract_type_name ||
-                      "Non renseigné"
-                    }
+                    value={formatText(
+                      employee.contract_type_name,
+                    )}
                   />
 
-                  <DetailRow
-                    icon={Clock3}
+                  <InfoItem
                     label="Rythme de travail"
+                    value={formatText(
+                      employee.work_schedule_name,
+                    )}
+                  />
+
+                  <InfoItem
+                    label="Date d’arrivée"
                     value={
-                      employee.work_schedule_name ||
-                      "Non renseigné"
+                      <span className="inline-flex items-center gap-2">
+                        <CalendarDays className="h-4 w-4 text-indigo-500" />
+                        {formatDate(
+                          employee.arrival_date,
+                        )}
+                      </span>
                     }
                   />
 
-                  <DetailRow
-                    icon={CalendarDays}
-                    label="Date d’arrivée"
-                    value={formatDate(
-                      employee.arrival_date,
+                  <InfoItem
+                    label="Statut RH"
+                    value={getStatusLabel(
+                      employee.employment_status,
                     )}
                   />
 
-                  <DetailRow
-                    icon={BadgeEuro}
-                    label="Mode de rémunération"
-                    value={getCompensationModeLabel(
-                      employee.compensation_mode,
+                  <InfoItem
+                    label="Fiche active"
+                    value={
+                      employee.is_active
+                        ? "Oui"
+                        : "Non"
+                    }
+                  />
+                </DrawerSection>
+
+                <DrawerSection
+                  title="Temps de travail"
+                  description="Base utilisée par les absences, la capacité et les coûts lorsqu’elle est disponible."
+                  icon={Clock3}
+                  accent="cyan"
+                >
+                  <InfoItem
+                    label="Rythme"
+                    value={formatText(
+                      employee.work_schedule_name,
                     )}
                   />
-                </div>
-              </section>
 
-              <section>
-                <div className="mb-4 flex items-center gap-2">
-                  <BadgeEuro className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-
-                  <h3 className="text-base font-black text-slate-950 dark:text-white">
-                    Coûts de la ressource
-                  </h3>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <CostCard
-                    label="Salaire brut annuel"
-                    value={formatCurrency(
-                      employee.annual_gross_salary,
-                      0,
-                    )}
-                    accent="indigo"
-                  />
-
-                  <CostCard
-                    label="TJM d’achat"
-                    value={formatCurrency(
-                      employee.external_daily_rate,
-                    )}
-                    accent="violet"
-                  />
-
-                  <CostCard
-                    label="Taux horaire externe"
-                    value={formatCurrency(
-                      employee.external_hourly_rate,
-                    )}
-                    accent="amber"
-                  />
-
-                  <CostCard
+                  <InfoItem
                     label="Taux horaire brut"
                     value={formatCurrency(
                       employee.gross_hourly_rate,
                     )}
-                    accent="indigo"
                   />
 
-                  <CostCard
+                  <InfoItem
                     label="Taux horaire chargé"
                     value={formatCurrency(
                       employee.loaded_hourly_cost,
                     )}
-                    accent="emerald"
                   />
 
-                  <CostCard
+                  <InfoItem
                     label="Coût journalier chargé"
                     value={formatCurrency(
                       employee.loaded_daily_cost,
                     )}
-                    accent="violet"
                   />
-                </div>
-              </section>
-
-              <section className="rounded-2xl border border-slate-200 bg-slate-50 p-5 dark:border-slate-800 dark:bg-slate-900/60">
-                <div className="flex items-start gap-3">
-                  <div className="rounded-xl bg-indigo-100 p-2.5 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">
-                    <CheckCircle2 className="h-5 w-5" />
-                  </div>
-
-                  <div>
-                    <h3 className="text-sm font-bold text-slate-950 dark:text-white">
-                      Conservation de l’historique
-                    </h3>
-
-                    <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
-                      L’archivage désactive la fiche
-                      et son contrat actif sans
-                      supprimer les données
-                      historiques.
-                    </p>
-                  </div>
-                </div>
-              </section>
-
-              {errorMessage && (
-                <div className="rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-900/60 dark:bg-red-950/30">
-                  <div className="flex items-start gap-3">
-                    <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-red-600 dark:text-red-400" />
-
-                    <p className="text-sm text-red-700 dark:text-red-300">
-                      {errorMessage}
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {isConfirmingArchive && (
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 dark:border-amber-900/60 dark:bg-amber-950/30">
-                  <div className="flex items-start gap-3">
-                    <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
-
-                    <div>
-                      <h3 className="text-sm font-bold text-amber-950 dark:text-amber-200">
-                        {isArchived
-                          ? "Réactiver ce collaborateur ?"
-                          : "Archiver ce collaborateur ?"}
-                      </h3>
-
-                      <p className="mt-1 text-xs leading-5 text-amber-800 dark:text-amber-300">
-                        {isArchived
-                          ? "La fiche et son dernier contrat principal redeviendront actifs."
-                          : "La fiche et le contrat actif seront désactivés, mais l’historique sera conservé."}
-                      </p>
-
-                      <div className="mt-4 flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          disabled={isSubmitting}
-                          onClick={
-                            handleArchiveChange
-                          }
-                          className={`inline-flex h-10 items-center justify-center gap-2 rounded-xl px-4 text-sm font-bold text-white transition disabled:cursor-not-allowed disabled:opacity-50 ${
-                            isArchived
-                              ? "bg-emerald-600 hover:bg-emerald-700"
-                              : "bg-amber-600 hover:bg-amber-700"
-                          }`}
-                        >
-                          {isArchived ? (
-                            <RotateCcw className="h-4 w-4" />
-                          ) : (
-                            <Archive className="h-4 w-4" />
-                          )}
-
-                          {isSubmitting
-                            ? "Traitement..."
-                            : isArchived
-                              ? "Confirmer la réactivation"
-                              : "Confirmer l’archivage"}
-                        </button>
-
-                        <button
-                          type="button"
-                          disabled={isSubmitting}
-                          onClick={() =>
-                            setIsConfirmingArchive(
-                              false,
-                            )
-                          }
-                          className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-900"
-                        >
-                          Annuler
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="p-6">
-              <HrEmployeeHistory
-                employeeId={employee.id}
-                organizationId={organizationId}
-                refreshKey={
-                  historyRefreshKey
-                }
-              />
-            </div>
-          )}
-        </div>
-
-        <div className="border-t border-slate-200 bg-white px-5 py-4 dark:border-slate-800 dark:bg-slate-950">
-          <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
-            {activeTab === "information" && (
-              <>
-                {onEdit && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      onEdit(employee)
-                    }
-                    className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 text-sm font-bold text-indigo-700 transition hover:border-indigo-300 hover:bg-indigo-100 dark:border-indigo-900 dark:bg-indigo-950/30 dark:text-indigo-300 dark:hover:bg-indigo-950/50"
-                  >
-                    <Edit3 className="h-4 w-4" />
-                    Modifier
-                  </button>
-                )}
-
-                <button
-                  type="button"
-                  disabled={isSubmitting}
-                  onClick={() =>
-                    setIsConfirmingArchive(
-                      true,
-                    )
-                  }
-                  className={`inline-flex h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-50 ${
-                    isArchived
-                      ? "bg-emerald-600 text-white hover:bg-emerald-700"
-                      : "border border-amber-200 bg-amber-50 text-amber-700 hover:border-amber-300 hover:bg-amber-100 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300"
-                  }`}
-                >
-                  {isArchived ? (
-                    <RotateCcw className="h-4 w-4" />
-                  ) : (
-                    <Archive className="h-4 w-4" />
-                  )}
-
-                  {isArchived
-                    ? "Réactiver"
-                    : "Archiver"}
-                </button>
+                </DrawerSection>
               </>
             )}
 
-            {activeTab === "history" && (
-              <button
-                type="button"
-                onClick={() =>
-                  setActiveTab("information")
-                }
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-600 transition hover:bg-slate-100 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-900"
-              >
-                <FileText className="h-4 w-4" />
-                Revenir aux informations
-              </button>
+            {activeTab ===
+              "costs" && (
+              <>
+                <DrawerSection
+                  title="Rémunération et coûts"
+                  description="Synthèse économique utilisée par les projets, le staffing et la finance."
+                  icon={BadgeEuro}
+                  accent="emerald"
+                >
+                  <InfoItem
+                    label="Mode de rémunération"
+                    value={compensationMode}
+                  />
+
+                  <InfoItem
+                    label="Salaire brut annuel"
+                    value={formatCurrency(
+                      employee.annual_gross_salary,
+                    )}
+                  />
+
+                  <InfoItem
+                    label="TJM d’achat"
+                    value={formatCurrency(
+                      employee.external_daily_rate,
+                    )}
+                  />
+
+                  <InfoItem
+                    label="Taux horaire externe"
+                    value={formatCurrency(
+                      employee.external_hourly_rate,
+                    )}
+                  />
+
+                  <InfoItem
+                    label="Taux horaire brut"
+                    value={formatCurrency(
+                      employee.gross_hourly_rate,
+                    )}
+                  />
+
+                  <InfoItem
+                    label="Taux horaire chargé"
+                    value={formatCurrency(
+                      employee.loaded_hourly_cost,
+                    )}
+                  />
+
+                  <InfoItem
+                    label="Coût journalier chargé"
+                    value={formatCurrency(
+                      employee.loaded_daily_cost,
+                    )}
+                  />
+                </DrawerSection>
+
+                <section className="rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4 dark:border-indigo-900/50 dark:bg-indigo-950/20">
+                  <div className="flex items-start gap-3">
+                    <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-indigo-600 dark:text-indigo-300" />
+
+                    <div>
+                      <p className="text-sm font-black text-indigo-900 dark:text-indigo-200">
+                        Lecture seule
+                      </p>
+
+                      <p className="mt-1 text-xs leading-5 text-indigo-700 dark:text-indigo-300">
+                        Cette fiche affiche les informations consolidées du collaborateur. Les modifications doivent passer par le menu trois points puis “Modifier la fiche”.
+                      </p>
+                    </div>
+                  </div>
+                </section>
+              </>
             )}
           </div>
         </div>
+
+        <footer className="flex items-center justify-between gap-3 border-t border-slate-200 bg-white px-5 py-4 dark:border-slate-800 dark:bg-slate-950">
+          <p className="text-xs leading-5 text-slate-500 dark:text-slate-400">
+            Fiche consultable en lecture seule. Utilise le menu trois points de la carte ou du tableau pour modifier, archiver ou réactiver.
+          </p>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-900"
+          >
+            Fermer
+          </button>
+        </footer>
       </aside>
-    </>
+    </div>
   );
 }

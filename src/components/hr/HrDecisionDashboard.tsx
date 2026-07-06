@@ -1,6 +1,10 @@
 "use client";
 
 import {
+  type ComponentType,
+  type ReactNode,
+} from "react";
+import {
   AlertTriangle,
   BarChart3,
   CheckCircle2,
@@ -99,7 +103,10 @@ function groupByValue(
     const rawValue = selector(employee)?.trim();
     const label = rawValue || fallbackLabel;
 
-    values.set(label, (values.get(label) ?? 0) + 1);
+    values.set(
+      label,
+      (values.get(label) ?? 0) + 1,
+    );
   });
 
   return Array.from(values.entries())
@@ -122,200 +129,9 @@ function formatCurrency(value: number) {
   }).format(value);
 }
 
-function InsightCard({
-  title,
-  description,
-  level,
-}: InsightCardProps) {
-  const styles = {
-    info: {
-      container:
-        "border-sky-100 bg-sky-50/70 dark:border-sky-900/50 dark:bg-sky-950/20",
-      icon:
-        "bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300",
-      Icon: CircleAlert,
-    },
-
-    warning: {
-      container:
-        "border-amber-100 bg-amber-50/70 dark:border-amber-900/50 dark:bg-amber-950/20",
-      icon:
-        "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
-      Icon: AlertTriangle,
-    },
-
-    success: {
-      container:
-        "border-emerald-100 bg-emerald-50/70 dark:border-emerald-900/50 dark:bg-emerald-950/20",
-      icon:
-        "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
-      Icon: CheckCircle2,
-    },
-  };
-
-  const selectedStyle = styles[level];
-  const Icon = selectedStyle.Icon;
-
-  return (
-    <article
-      className={`rounded-xl border p-4 ${selectedStyle.container}`}
-    >
-      <div className="flex items-start gap-3">
-        <div
-          className={`rounded-lg p-2 ${selectedStyle.icon}`}
-        >
-          <Icon className="h-4 w-4" />
-        </div>
-
-        <div className="min-w-0">
-          <h4 className="text-sm font-bold text-slate-950 dark:text-white">
-            {title}
-          </h4>
-
-          <p className="mt-1 text-xs leading-5 text-slate-600 dark:text-slate-400">
-            {description}
-          </p>
-        </div>
-      </div>
-    </article>
-  );
-}
-
-function DecisionPanel({
-  icon: Icon,
-  title,
-  description,
-  accent,
-  children,
-}: {
-  icon: React.ComponentType<{
-    className?: string;
-  }>;
-  title: string;
-  description: string;
-  accent:
-    | "emerald"
-    | "amber"
-    | "violet";
-  children: React.ReactNode;
-}) {
-  const accents = {
-    emerald: {
-      header:
-        "from-emerald-50/80 via-white to-white dark:from-emerald-950/20 dark:via-slate-950 dark:to-slate-950",
-      icon:
-        "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
-      border:
-        "border-emerald-100 dark:border-emerald-900/50",
-    },
-
-    amber: {
-      header:
-        "from-amber-50/80 via-white to-white dark:from-amber-950/20 dark:via-slate-950 dark:to-slate-950",
-      icon:
-        "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
-      border:
-        "border-amber-100 dark:border-amber-900/50",
-    },
-
-    violet: {
-      header:
-        "from-violet-50/80 via-white to-white dark:from-violet-950/20 dark:via-slate-950 dark:to-slate-950",
-      icon:
-        "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300",
-      border:
-        "border-violet-100 dark:border-violet-900/50",
-    },
-  };
-
-  const selectedAccent = accents[accent];
-
-  return (
-    <section
-      className={`overflow-hidden rounded-2xl border bg-white shadow-sm dark:bg-slate-950 ${selectedAccent.border}`}
-    >
-      <div
-        className={`border-b border-slate-100 bg-gradient-to-r px-5 py-4 dark:border-slate-800 ${selectedAccent.header}`}
-      >
-        <div className="flex items-start gap-3">
-          <div
-            className={`rounded-xl p-2.5 ${selectedAccent.icon}`}
-          >
-            <Icon className="h-4 w-4" />
-          </div>
-
-          <div>
-            <h3 className="text-sm font-black text-slate-950 dark:text-white">
-              {title}
-            </h3>
-
-            <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
-              {description}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <div className="space-y-3 p-5">
-        {children}
-      </div>
-    </section>
-  );
-}
-
-function ChartCard({
-  title,
-  description,
-  children,
-}: {
-  title: string;
-  description: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950">
-      <div className="border-b border-slate-100 bg-gradient-to-r from-indigo-50/60 via-white to-violet-50/50 px-5 py-4 dark:border-slate-800 dark:from-indigo-950/20 dark:via-slate-950 dark:to-violet-950/20">
-        <h3 className="text-sm font-bold text-slate-950 dark:text-white">
-          {title}
-        </h3>
-
-        <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
-          {description}
-        </p>
-      </div>
-
-      <div className="h-80 p-4">
-        {children}
-      </div>
-    </article>
-  );
-}
-
-export default function HrDecisionDashboard({
-  employees,
-  totalEmployees,
-}: HrDecisionDashboardProps) {
-  const statusData = groupByValue(
-    employees,
-    (employee) =>
-      getStatusLabel(employee.employment_status),
-    "Non renseigné",
-  );
-
-  const contractData = groupByValue(
-    employees,
-    (employee) =>
-      employee.contract_type_name,
-    "Sans contrat",
-  ).slice(0, 8);
-
-  const departmentData = groupByValue(
-    employees,
-    (employee) =>
-      employee.department_name,
-    "Sans service",
-  ).slice(0, 8);
-
+function getDecisionMetrics(
+  employees: HrDirectoryEmployee[],
+) {
   const employeesWithoutStructure =
     employees.filter(
       (employee) =>
@@ -436,15 +252,6 @@ export default function HrDecisionDashboard({
     },
   ];
 
-  const filteredRatio =
-    totalEmployees > 0
-      ? Math.round(
-          (employees.length /
-            totalEmployees) *
-            100,
-        )
-      : 0;
-
   const qualityScore =
     radarData.reduce(
       (total, item) =>
@@ -487,6 +294,306 @@ export default function HrDecisionDashboard({
     });
   }
 
+  return {
+    radarData,
+    qualityScore,
+    alerts,
+    averageLoadedHourlyCost,
+  };
+}
+
+function InsightCard({
+  title,
+  description,
+  level,
+}: InsightCardProps) {
+  const styles = {
+    info: {
+      container:
+        "border-sky-100 bg-sky-50/70 dark:border-sky-900/50 dark:bg-sky-950/20",
+      icon:
+        "bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300",
+      Icon: CircleAlert,
+    },
+
+    warning: {
+      container:
+        "border-amber-100 bg-amber-50/70 dark:border-amber-900/50 dark:bg-amber-950/20",
+      icon:
+        "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+      Icon: AlertTriangle,
+    },
+
+    success: {
+      container:
+        "border-emerald-100 bg-emerald-50/70 dark:border-emerald-900/50 dark:bg-emerald-950/20",
+      icon:
+        "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+      Icon: CheckCircle2,
+    },
+  };
+
+  const selectedStyle = styles[level];
+  const Icon = selectedStyle.Icon;
+
+  return (
+    <article
+      className={`rounded-xl border p-4 ${selectedStyle.container}`}
+    >
+      <div className="flex items-start gap-3">
+        <div
+          className={`rounded-lg p-2 ${selectedStyle.icon}`}
+        >
+          <Icon className="h-4 w-4" />
+        </div>
+
+        <div className="min-w-0">
+          <h4 className="text-sm font-bold text-slate-950 dark:text-white">
+            {title}
+          </h4>
+
+          <p className="mt-1 text-xs leading-5 text-slate-600 dark:text-slate-400">
+            {description}
+          </p>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function DecisionPanel({
+  icon: Icon,
+  title,
+  description,
+  accent,
+  children,
+}: {
+  icon: ComponentType<{
+    className?: string;
+  }>;
+  title: string;
+  description: string;
+  accent:
+    | "emerald"
+    | "amber"
+    | "violet";
+  children: ReactNode;
+}) {
+  const accents = {
+    emerald: {
+      header:
+        "from-emerald-50/80 via-white to-white dark:from-emerald-950/20 dark:via-slate-950 dark:to-slate-950",
+      icon:
+        "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+      border:
+        "border-emerald-100 dark:border-emerald-900/50",
+    },
+
+    amber: {
+      header:
+        "from-amber-50/80 via-white to-white dark:from-amber-950/20 dark:via-slate-950 dark:to-slate-950",
+      icon:
+        "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+      border:
+        "border-amber-100 dark:border-amber-900/50",
+    },
+
+    violet: {
+      header:
+        "from-violet-50/80 via-white to-white dark:from-violet-950/20 dark:via-slate-950 dark:to-slate-950",
+      icon:
+        "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300",
+      border:
+        "border-violet-100 dark:border-violet-900/50",
+    },
+  };
+
+  const selectedAccent = accents[accent];
+
+  return (
+    <section
+      className={`overflow-hidden rounded-2xl border bg-white shadow-sm dark:bg-slate-950 ${selectedAccent.border}`}
+    >
+      <div
+        className={`border-b border-slate-100 bg-gradient-to-r px-5 py-4 dark:border-slate-800 ${selectedAccent.header}`}
+      >
+        <div className="flex items-start gap-3">
+          <div
+            className={`rounded-xl p-2.5 ${selectedAccent.icon}`}
+          >
+            <Icon className="h-4 w-4" />
+          </div>
+
+          <div>
+            <h3 className="text-sm font-black text-slate-950 dark:text-white">
+              {title}
+            </h3>
+
+            <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
+              {description}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-3 p-5">
+        {children}
+      </div>
+    </section>
+  );
+}
+
+function ChartCard({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description: string;
+  children: ReactNode;
+}) {
+  return (
+    <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950">
+      <div className="border-b border-slate-100 bg-gradient-to-r from-indigo-50/60 via-white to-violet-50/50 px-5 py-4 dark:border-slate-800 dark:from-indigo-950/20 dark:via-slate-950 dark:to-violet-950/20">
+        <h3 className="text-sm font-bold text-slate-950 dark:text-white">
+          {title}
+        </h3>
+
+        <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
+          {description}
+        </p>
+      </div>
+
+      <div className="h-80 p-4">
+        {children}
+      </div>
+    </article>
+  );
+}
+
+export function HrDecisionInsightPanels({
+  employees,
+}: {
+  employees: HrDirectoryEmployee[];
+}) {
+  const {
+    qualityScore,
+    alerts,
+    averageLoadedHourlyCost,
+  } = getDecisionMetrics(employees);
+
+  return (
+    <div className="grid gap-5 xl:grid-cols-3">
+      <DecisionPanel
+        icon={Gauge}
+        title="Synthèse"
+        description="Lecture rapide de la qualité et du coût"
+        accent="emerald"
+      >
+        <div className="rounded-xl border border-slate-100 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+            Coût horaire moyen
+          </p>
+
+          <p className="mt-2 text-2xl font-black text-indigo-700 dark:text-indigo-300">
+            {formatCurrency(
+              averageLoadedHourlyCost,
+            )}
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-slate-100 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+            Qualité globale
+          </p>
+
+          <p className="mt-2 text-2xl font-black text-emerald-700 dark:text-emerald-300">
+            {Math.round(qualityScore)} %
+          </p>
+        </div>
+      </DecisionPanel>
+
+      <DecisionPanel
+        icon={AlertTriangle}
+        title="Alertes"
+        description="Points nécessitant une vérification ou une action."
+        accent="amber"
+      >
+        {alerts.map((alert) => (
+          <InsightCard
+            key={alert.title}
+            {...alert}
+          />
+        ))}
+      </DecisionPanel>
+
+      <DecisionPanel
+        icon={Lightbulb}
+        title="Recommandations"
+        description="Actions suggérées pour améliorer le pilotage."
+        accent="violet"
+      >
+        <InsightCard
+          title="Améliorer les données les plus faibles"
+          description="Le radar identifie immédiatement les dimensions nécessitant une campagne de complétion."
+          level={
+            qualityScore >= 80
+              ? "success"
+              : "info"
+          }
+        />
+
+        {averageLoadedHourlyCost > 0 && (
+          <InsightCard
+            title="Comparer coût et facturation"
+            description={`Le coût horaire moyen est de ${formatCurrency(
+              averageLoadedHourlyCost,
+            )}. Il devra être comparé aux taux de vente des projets.`}
+            level="success"
+          />
+        )}
+      </DecisionPanel>
+    </div>
+  );
+}
+
+export default function HrDecisionDashboard({
+  employees,
+  totalEmployees,
+}: HrDecisionDashboardProps) {
+  const statusData = groupByValue(
+    employees,
+    (employee) =>
+      getStatusLabel(employee.employment_status),
+    "Non renseigné",
+  );
+
+  const contractData = groupByValue(
+    employees,
+    (employee) =>
+      employee.contract_type_name,
+    "Sans contrat",
+  ).slice(0, 8);
+
+  const departmentData = groupByValue(
+    employees,
+    (employee) =>
+      employee.department_name,
+    "Sans service",
+  ).slice(0, 8);
+
+  const { radarData } =
+    getDecisionMetrics(employees);
+
+  const filteredRatio =
+    totalEmployees > 0
+      ? Math.round(
+          (employees.length /
+            totalEmployees) *
+            100,
+        )
+      : 0;
+
   return (
     <section className="space-y-6">
       <div className="flex flex-col gap-3 rounded-2xl border border-indigo-100 bg-gradient-to-r from-indigo-50/70 via-white to-violet-50/60 p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between dark:border-indigo-900/60 dark:from-indigo-950/20 dark:via-slate-950 dark:to-violet-950/20">
@@ -500,8 +607,7 @@ export default function HrDecisionDashboard({
           </div>
 
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            Les résultats suivent le périmètre
-            filtré.
+            Les résultats suivent le périmètre filtré.
           </p>
         </div>
 
@@ -513,87 +619,6 @@ export default function HrDecisionDashboard({
           {filteredRatio}% de l’effectif
         </div>
       </div>
-
-      <div className="grid gap-5 xl:grid-cols-3">
-        <DecisionPanel
-          icon={Gauge}
-          title="Synthèse"
-          description="Lecture rapide de la qualité et du coût"
-          accent="emerald"
-        >
-          <div className="rounded-xl border border-slate-100 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900">
-            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
-              Coût horaire moyen
-            </p>
-
-            <p className="mt-2 text-2xl font-black text-indigo-700 dark:text-indigo-300">
-              {formatCurrency(
-                averageLoadedHourlyCost,
-              )}
-            </p>
-          </div>
-
-          <div className="rounded-xl border border-slate-100 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900">
-            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
-              Qualité globale
-            </p>
-
-            <p className="mt-2 text-2xl font-black text-emerald-700 dark:text-emerald-300">
-              {Math.round(qualityScore)} %
-            </p>
-          </div>
-        </DecisionPanel>
-
-        <DecisionPanel
-          icon={AlertTriangle}
-          title="Alertes"
-          description="Points nécessitant une vérification ou une action."
-          accent="amber"
-        >
-          {alerts.map((alert) => (
-            <InsightCard
-              key={alert.title}
-              {...alert}
-            />
-          ))}
-        </DecisionPanel>
-
-        <DecisionPanel
-          icon={Lightbulb}
-          title="Recommandations"
-          description="Actions suggérées pour améliorer le pilotage."
-          accent="violet"
-        >
-          <InsightCard
-            title="Améliorer les données les plus faibles"
-            description="Le radar identifie immédiatement les dimensions nécessitant une campagne de complétion."
-            level={
-              qualityScore >= 80
-                ? "success"
-                : "info"
-            }
-          />
-
-          {averageLoadedHourlyCost > 0 && (
-            <InsightCard
-              title="Comparer coût et facturation"
-              description={`Le coût horaire moyen est de ${formatCurrency(
-                averageLoadedHourlyCost,
-              )}. Il devra être comparé aux taux de vente des projets.`}
-              level="success"
-            />
-          )}
-        </DecisionPanel>
-      </div>
-
-      <div>
-        <div className="mb-4 flex items-center gap-2">
-          <BarChart3 className="h-5 w-5 text-violet-600" />
-
-          <h2 className="text-base font-black text-slate-950 dark:text-white">
-            Graphiques de pilotage
-          </h2>
-        </div>
 
         <div className="grid gap-5 xl:grid-cols-2">
           <ChartCard
@@ -743,7 +768,6 @@ export default function HrDecisionDashboard({
             </ResponsiveContainer>
           </ChartCard>
         </div>
-      </div>
     </section>
   );
 }
