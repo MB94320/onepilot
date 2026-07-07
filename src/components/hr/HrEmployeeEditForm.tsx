@@ -2409,6 +2409,21 @@ export default function HrEmployeeEditForm({
                         </select>
                       </Field>
 
+                      <Field
+                        label="Fonction libre"
+                        description="Optionnel : utile si la fonction n’existe pas encore dans le référentiel."
+                      >
+                        <input
+                          type="text"
+                          value={formData.functionFreeText}
+                          onChange={(event) =>
+                            updateField("functionFreeText", event.target.value)
+                          }
+                          className={inputClassName}
+                          placeholder="Ex. Directeur delivery, Lead RH, PMO transverse..."
+                        />
+                      </Field>
+
                       <Field label="Manager N+1">
                         <select
                           value={formData.managerId}

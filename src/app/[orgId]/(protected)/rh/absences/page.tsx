@@ -103,6 +103,8 @@ type EmployeeReference = {
   photo_url?: string | null;
   site_name: string | null;
   department_name: string | null;
+  manager_id: string | null;
+  manager_name: string | null;
 };
 
 type AbsenceTypeReference = {
@@ -868,9 +870,11 @@ async function loadAbsencePageData(
         []
       ).map((rawRequest: HrAbsenceRequestRow) => {
         const mutableRequest = rawRequest as any;
+        const employee = employeesById.get(rawRequest.employee_id);
         const managerId =
           mutableRequest.manager_employee_id ??
           mutableRequest.manager_id ??
+          employee?.manager_id ??
           null;
 
         const manager = managerId
@@ -882,6 +886,7 @@ async function loadAbsencePageData(
           manager_name:
             rawRequest.manager_name ??
             manager?.full_name ??
+            employee?.manager_name ??
             null,
         } as HrAbsenceRequestRow;
       }),
@@ -1847,6 +1852,186 @@ function BalanceCard({
   );
 }
 
+type BalanceEmployeeGroup = {
+  employeeId: string;
+  employeeName: string | null;
+  employeeNumber: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  photoUrl: string | null;
+  siteName: string | null;
+  departmentName: string | null;
+  balances: AbsenceBalance[];
+};
+
+function getBalanceByCode(
+  group: BalanceEmployeeGroup,
+  code: string,
+) {
+  return (
+    group.balances.find(
+      (balance) => balance.absence_type_code === code,
+    ) ?? null
+  );
+}
+
+function getBalanceAvailable(balance: AbsenceBalance | null) {
+  if (!balance) {
+    return 0;
+  }
+
+  return (
+    toNumber(balance.opening_balance) +
+    toNumber(balance.carried_over_amount) +
+    toNumber(balance.accrued_amount) +
+    toNumber(balance.adjustment_amount) -
+    toNumber(balance.consumed_amount) -
+    toNumber(balance.pending_amount)
+  );
+}
+
+function BalanceMetricCell({
+  label,
+  balance,
+  accent,
+}: {
+  label: string;
+  balance: AbsenceBalance | null;
+  accent: "indigo" | "violet" | "emerald";
+}) {
+  const styles = {
+    indigo:
+      "border-indigo-100 bg-indigo-50/60 text-indigo-700 dark:border-indigo-900/50 dark:bg-indigo-950/20 dark:text-indigo-300",
+    violet:
+      "border-violet-100 bg-violet-50/60 text-violet-700 dark:border-violet-900/50 dark:bg-violet-950/20 dark:text-violet-300",
+    emerald:
+      "border-emerald-100 bg-emerald-50/60 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/20 dark:text-emerald-300",
+  };
+
+  const available = getBalanceAvailable(balance);
+
+  return (
+    <div className={`rounded-xl border p-3 ${styles[accent]}`}>
+      <p className="text-[10px] font-black uppercase tracking-wide opacity-80">
+        {label}
+      </p>
+
+      <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
+        <div>
+          <p className="font-black uppercase opacity-70">Droit</p>
+          <p className="mt-1 text-sm font-black">{formatNumber(balance?.annual_entitlement ?? 0)}</p>
+        </div>
+
+        <div>
+          <p className="font-black uppercase opacity-70">Solde</p>
+          <p className="mt-1 text-sm font-black">{formatNumber(available)}</p>
+        </div>
+
+        <div>
+          <p className="font-black uppercase opacity-70">Consommé</p>
+          <p className="mt-1 text-sm font-black">{formatNumber(balance?.consumed_amount ?? 0)}</p>
+        </div>
+
+        <div>
+          <p className="font-black uppercase opacity-70">En cours</p>
+          <p className="mt-1 text-sm font-black">{formatNumber(balance?.pending_amount ?? 0)}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BalanceGroupCard({
+  group,
+}: {
+  group: BalanceEmployeeGroup;
+}) {
+  const avatarBalance =
+    group.balances[0] ??
+    ({
+      employee_name: group.employeeName,
+      first_name: group.firstName,
+      last_name: group.lastName,
+      photo_url: group.photoUrl,
+    } as AbsenceBalance);
+
+  return (
+    <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-slate-800 dark:bg-slate-950">
+      <div className="flex items-center gap-3">
+        <BalanceAvatar balance={avatarBalance} />
+
+        <div className="min-w-0">
+          <p className="truncate text-sm font-black text-slate-950 dark:text-white">
+            {group.employeeName ?? "Collaborateur non renseigné"}
+          </p>
+
+          <p className="mt-1 text-xs font-semibold text-indigo-600 dark:text-indigo-400">
+            {group.employeeNumber ?? "Matricule non renseigné"}
+          </p>
+
+          <p className="mt-1 truncate text-[11px] text-slate-400">
+            {group.departmentName ?? "Service non renseigné"}
+            {" · "}
+            {group.siteName ?? "Site non renseigné"}
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-3">
+        <BalanceMetricCell
+          label="Congés payés"
+          balance={getBalanceByCode(group, "CP")}
+          accent="indigo"
+        />
+
+        <BalanceMetricCell
+          label="RTT employé"
+          balance={getBalanceByCode(group, "RTT_EMPLOYE")}
+          accent="violet"
+        />
+
+        <BalanceMetricCell
+          label="RTT employeur"
+          balance={getBalanceByCode(group, "RTT_EMPLOYEUR")}
+          accent="emerald"
+        />
+      </div>
+
+      <p className="mt-4 text-[11px] text-slate-400">
+        Période 01/06/2026 — 31/05/2027
+      </p>
+    </article>
+  );
+}
+
+function createBalanceGroups(balances: AbsenceBalance[]) {
+  const groups = new Map<string, BalanceEmployeeGroup>();
+
+  balances.forEach((balance) => {
+    const key = balance.employee_id;
+
+    if (!groups.has(key)) {
+      groups.set(key, {
+        employeeId: balance.employee_id,
+        employeeName: balance.employee_name,
+        employeeNumber: balance.employee_number,
+        firstName: balance.first_name,
+        lastName: balance.last_name,
+        photoUrl: balance.photo_url,
+        siteName: balance.site_name,
+        departmentName: balance.department_name,
+        balances: [],
+      });
+    }
+
+    groups.get(key)?.balances.push(balance);
+  });
+
+  return Array.from(groups.values()).sort((first, second) =>
+    (first.employeeName ?? "").localeCompare(second.employeeName ?? "", "fr"),
+  );
+}
+
 function BalancesPanel({
   balances,
 }: {
@@ -1860,18 +2045,20 @@ function BalancesPanel({
       "cards",
     );
 
+  const balanceGroups = createBalanceGroups(balances);
+
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950">
       <PanelHeader
         icon={WalletCards}
         title="Soldes d’absence"
-        description="Droits annuels CP, RTT employeur et RTT employé, reports, consommations et solde disponible."
+        description="Vue consolidée par collaborateur : CP, RTT employé et RTT employeur, avec droits, consommé, en cours et solde restant."
         accent="amber"
-        countText={`${balances.length} résultat${
-          balances.length > 1
+        countText={`${balanceGroups.length} collaborateur${
+          balanceGroups.length > 1
             ? "s"
             : ""
-        } sur ${balances.length}`}
+        }`}
         right={
           <ViewSwitch
             mode={displayMode}
@@ -1882,203 +2069,71 @@ function BalancesPanel({
         }
       />
 
-      {balances.length === 0 ? (
+      {balanceGroups.length === 0 ? (
         <EmptyState
           title="Aucun solde enregistré"
-          description="Les soldes apparaîtront après l’enregistrement des premières demandes et la configuration des règles de droits."
+          description="Les soldes apparaîtront après la configuration des compteurs CP, RTT employé et RTT employeur."
           icon={WalletCards}
         />
       ) : displayMode ===
         "cards" ? (
         <div className="grid gap-4 p-5 md:grid-cols-2 2xl:grid-cols-3">
-          {balances.map(
-            (balance) => (
-              <BalanceCard
-                key={balance.id}
-                balance={balance}
+          {balanceGroups.map(
+            (group) => (
+              <BalanceGroupCard
+                key={group.employeeId}
+                group={group}
               />
             ),
           )}
         </div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[1250px]">
-            <thead className="bg-slate-50/80 dark:bg-slate-900/70">
+        <div className="max-h-[430px] overflow-auto">
+          <table className="w-full min-w-[1400px]">
+            <thead className="sticky top-0 z-10 bg-slate-50/95 backdrop-blur dark:bg-slate-900/95">
               <tr className="border-b border-slate-200 dark:border-slate-800">
-                <th className="px-4 py-2.5 text-left text-[10px] font-black uppercase tracking-wide text-slate-500">
-                  Collaborateur
-                </th>
-
-                <th className="px-3 py-2.5 text-left text-[10px] font-black uppercase tracking-wide text-slate-500">
-                  Type
-                </th>
-
-                <th className="px-3 py-2.5 text-left text-[10px] font-black uppercase tracking-wide text-slate-500">
-                  Période
-                </th>
-
-                <th className="px-3 py-2.5 text-right text-[10px] font-black uppercase tracking-wide text-slate-500">
-                  Droit annuel
-                </th>
-
-                <th className="px-3 py-2.5 text-right text-[10px] font-black uppercase tracking-wide text-slate-500">
-                  Report
-                </th>
-
-                <th className="px-3 py-2.5 text-right text-[10px] font-black uppercase tracking-wide text-slate-500">
-                  Ajustement
-                </th>
-
-                <th className="px-3 py-2.5 text-right text-[10px] font-black uppercase tracking-wide text-slate-500">
-                  Consommé
-                </th>
-
-                <th className="px-3 py-2.5 text-right text-[10px] font-black uppercase tracking-wide text-slate-500">
-                  En attente
-                </th>
-
-                <th className="px-4 py-2.5 text-right text-[10px] font-black uppercase tracking-wide text-slate-500">
-                  Disponible
-                </th>
+                <th className="px-4 py-2.5 text-left text-[10px] font-black uppercase tracking-wide text-slate-500">Collaborateur</th>
+                <th className="px-3 py-2.5 text-right text-[10px] font-black uppercase tracking-wide text-slate-500">CP droit</th>
+                <th className="px-3 py-2.5 text-right text-[10px] font-black uppercase tracking-wide text-slate-500">CP consommé</th>
+                <th className="px-3 py-2.5 text-right text-[10px] font-black uppercase tracking-wide text-slate-500">CP en cours</th>
+                <th className="px-3 py-2.5 text-right text-[10px] font-black uppercase tracking-wide text-slate-500">CP solde</th>
+                <th className="px-3 py-2.5 text-right text-[10px] font-black uppercase tracking-wide text-slate-500">RTT employé droit</th>
+                <th className="px-3 py-2.5 text-right text-[10px] font-black uppercase tracking-wide text-slate-500">RTT employé solde</th>
+                <th className="px-3 py-2.5 text-right text-[10px] font-black uppercase tracking-wide text-slate-500">RTT employeur droit</th>
+                <th className="px-4 py-2.5 text-right text-[10px] font-black uppercase tracking-wide text-slate-500">RTT employeur solde</th>
               </tr>
             </thead>
 
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {balances.map(
-                (balance) => {
-                  const availableBalance =
-                    toNumber(
-                      balance.available_balance,
-                    );
+              {balanceGroups.map((group) => {
+                const cp = getBalanceByCode(group, "CP");
+                const rttEmployee = getBalanceByCode(group, "RTT_EMPLOYE");
+                const rttEmployer = getBalanceByCode(group, "RTT_EMPLOYEUR");
+                const avatarBalance = group.balances[0];
 
-                  const unit =
-                    getUnitLabel(
-                      balance.absence_type_unit,
-                      availableBalance,
-                    );
-
-                  return (
-                    <tr
-                      key={balance.id}
-                      className="transition hover:bg-slate-50/70 dark:hover:bg-slate-900/50"
-                    >
-                      <td className="px-4 py-3">
-                        <div className="flex min-w-[230px] items-center gap-2.5">
-                          <BalanceAvatar
-                            balance={
-                              balance
-                            }
-                          />
-
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-black text-slate-950 dark:text-white">
-                              {balance.employee_name ??
-                                "Collaborateur non renseigné"}
-                            </p>
-
-                            <p className="mt-0.5 text-xs font-semibold text-indigo-600 dark:text-indigo-400">
-                              {balance.employee_number ??
-                                "Matricule non renseigné"}
-                            </p>
-
-                            <p className="mt-0.5 truncate text-[11px] text-slate-400">
-                              {balance.department_name ??
-                                "Service non renseigné"}
-                              {" · "}
-                              {balance.site_name ??
-                                "Site non renseigné"}
-                            </p>
-                          </div>
+                return (
+                  <tr key={group.employeeId} className="transition hover:bg-indigo-50/60 dark:hover:bg-indigo-950/20">
+                    <td className="px-4 py-3">
+                      <div className="flex min-w-[230px] items-center gap-2.5">
+                        {avatarBalance ? <BalanceAvatar balance={avatarBalance} /> : null}
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-black text-slate-950 dark:text-white">{group.employeeName ?? "Collaborateur non renseigné"}</p>
+                          <p className="mt-0.5 text-xs font-semibold text-indigo-600 dark:text-indigo-400">{group.employeeNumber ?? "Matricule non renseigné"}</p>
+                          <p className="mt-0.5 truncate text-[11px] text-slate-400">{group.departmentName ?? "Service non renseigné"} · {group.siteName ?? "Site non renseigné"}</p>
                         </div>
-                      </td>
-
-                      <td className="px-3 py-3">
-                        <div className="flex items-center gap-2.5">
-                          <span
-                            className="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-500"
-                            style={
-                              balance.absence_type_color
-                                ? {
-                                    backgroundColor:
-                                      balance.absence_type_color,
-                                  }
-                                : undefined
-                            }
-                          />
-
-                          <div>
-                            <p className="text-sm font-bold text-slate-800 dark:text-slate-200">
-                              {balance.absence_type_name ??
-                                "Non renseigné"}
-                            </p>
-
-                            <p className="mt-0.5 text-[10px] font-black uppercase tracking-wide text-slate-400">
-                              {balance.absence_type_code ??
-                                "—"}
-                            </p>
-                          </div>
-                        </div>
-                      </td>
-
-                      <td className="px-3 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300">
-                        {formatDate(
-                          balance.period_start,
-                        )}{" "}
-                        —{" "}
-                        {formatDate(
-                          balance.period_end,
-                        )}
-                      </td>
-
-                      <td className="px-3 py-3 text-right text-sm font-bold text-slate-700 dark:text-slate-300">
-                        {formatNumber(
-                          balance.annual_entitlement,
-                        )}
-                      </td>
-
-                      <td className="px-3 py-3 text-right text-sm font-bold text-slate-700 dark:text-slate-300">
-                        {formatNumber(
-                          balance.carried_over_amount,
-                        )}
-                      </td>
-
-                      <td className="px-3 py-3 text-right text-sm font-bold text-slate-700 dark:text-slate-300">
-                        {formatNumber(
-                          balance.adjustment_amount,
-                        )}
-                      </td>
-
-                      <td className="px-3 py-3 text-right text-sm font-bold text-rose-600 dark:text-rose-300">
-                        {formatNumber(
-                          balance.consumed_amount,
-                        )}
-                      </td>
-
-                      <td className="px-3 py-3 text-right text-sm font-bold text-amber-600 dark:text-amber-300">
-                        {formatNumber(
-                          balance.pending_amount,
-                        )}
-                      </td>
-
-                      <td className="px-4 py-3 text-right">
-                        <p
-                          className={`text-sm font-black ${getBalanceClasses(
-                            availableBalance,
-                          )}`}
-                        >
-                          {formatNumber(
-                            availableBalance,
-                          )}
-                        </p>
-
-                        <p className="mt-0.5 text-[10px] font-black uppercase tracking-wide text-slate-400">
-                          {unit}
-                        </p>
-                      </td>
-                    </tr>
-                  );
-                },
-              )}
+                      </div>
+                    </td>
+                    <td className="px-3 py-3 text-right text-sm font-bold text-slate-700 dark:text-slate-300">{formatNumber(cp?.annual_entitlement ?? 0)}</td>
+                    <td className="px-3 py-3 text-right text-sm font-bold text-rose-600 dark:text-rose-300">{formatNumber(cp?.consumed_amount ?? 0)}</td>
+                    <td className="px-3 py-3 text-right text-sm font-bold text-amber-600 dark:text-amber-300">{formatNumber(cp?.pending_amount ?? 0)}</td>
+                    <td className="px-3 py-3 text-right text-sm font-black text-indigo-700 dark:text-indigo-300">{formatNumber(getBalanceAvailable(cp))}</td>
+                    <td className="px-3 py-3 text-right text-sm font-bold text-slate-700 dark:text-slate-300">{formatNumber(rttEmployee?.annual_entitlement ?? 0)}</td>
+                    <td className="px-3 py-3 text-right text-sm font-black text-violet-700 dark:text-violet-300">{formatNumber(getBalanceAvailable(rttEmployee))}</td>
+                    <td className="px-3 py-3 text-right text-sm font-bold text-slate-700 dark:text-slate-300">{formatNumber(rttEmployer?.annual_entitlement ?? 0)}</td>
+                    <td className="px-4 py-3 text-right text-sm font-black text-emerald-700 dark:text-emerald-300">{formatNumber(getBalanceAvailable(rttEmployer))}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

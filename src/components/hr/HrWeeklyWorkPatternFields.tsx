@@ -614,8 +614,9 @@ export default function HrWeeklyWorkPatternFields({
                       <td className="px-3 py-3">
                         <input
                           type="number"
+                          inputMode="decimal"
                           min="0"
-                          step="0.25"
+                          step="any"
                           value={
                             pattern.morningHours
                           }
@@ -633,8 +634,9 @@ export default function HrWeeklyWorkPatternFields({
                       <td className="px-3 py-3">
                         <input
                           type="number"
+                          inputMode="decimal"
                           min="0"
-                          step="0.25"
+                          step="any"
                           value={
                             pattern.afternoonHours
                           }
