@@ -11,18 +11,26 @@ import {
 } from "@tanstack/react-query";
 import {
   AlertCircle,
+  Archive,
   BarChart3,
   CalendarCheck2,
   CalendarClock,
   CalendarDays,
   CheckCircle2,
   CircleAlert,
+  Copy,
+  Expand,
   Grid2X2,
+  Eye,
   List,
+  MoreVertical,
+  Pencil,
   Plus,
+  Send,
   ShieldCheck,
   Users,
   WalletCards,
+  X,
 } from "lucide-react";
 import {
   Bar,
@@ -131,6 +139,7 @@ type AbsencePageData = {
 
 type PageTab =
   | "requests"
+  | "approvals"
   | "analytics"
   | "balances";
 
@@ -1114,6 +1123,224 @@ function ViewSwitch({
   );
 }
 
+
+function escapeSvgText(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+function buildDistributionSvg(
+  title: string,
+  data: DistributionItem[],
+) {
+  const width = 960;
+  const rowHeight = 42;
+  const height = Math.max(280, 110 + data.length * rowHeight);
+  const maxValue = Math.max(
+    1,
+    ...data.map((item) => item.value),
+  );
+
+  const rows = data
+    .slice(0, 16)
+    .map((item, index) => {
+      const y = 86 + index * rowHeight;
+      const barWidth = Math.max(8, (item.value / maxValue) * 520);
+
+      return `
+        <text x="52" y="${y + 16}" font-size="14" font-family="Arial" fill="#334155">${escapeSvgText(item.name)}</text>
+        <rect x="300" y="${y}" width="${barWidth}" height="22" rx="7" fill="${chartColors[index % chartColors.length]}" />
+        <text x="${315 + barWidth}" y="${y + 16}" font-size="13" font-family="Arial" font-weight="700" fill="#0F172A">${item.value}</text>
+      `;
+    })
+    .join("");
+
+  return `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+      <rect width="100%" height="100%" fill="#FFFFFF" />
+      <text x="48" y="42" font-size="22" font-family="Arial" font-weight="800" fill="#0F172A">${escapeSvgText(title)}</text>
+      <text x="48" y="64" font-size="12" font-family="Arial" fill="#64748B">Export SVG depuis OnePilot · Absences & congés</text>
+      ${rows}
+    </svg>
+  `.trim();
+}
+
+async function svgToPngBlob(svg: string) {
+  return new Promise<Blob | null>((resolve) => {
+    if (typeof window === "undefined") {
+      resolve(null);
+      return;
+    }
+
+    const image = new Image();
+    const svgBlob = new Blob([svg], {
+      type: "image/svg+xml;charset=utf-8",
+    });
+    const objectUrl = URL.createObjectURL(svgBlob);
+
+    image.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = image.width || 960;
+      canvas.height = image.height || 520;
+
+      const context = canvas.getContext("2d");
+
+      if (!context) {
+        URL.revokeObjectURL(objectUrl);
+        resolve(null);
+        return;
+      }
+
+      context.fillStyle = "#FFFFFF";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(image, 0, 0);
+
+      canvas.toBlob((blob) => {
+        URL.revokeObjectURL(objectUrl);
+        resolve(blob);
+      }, "image/png");
+    };
+
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(null);
+    };
+
+    image.src = objectUrl;
+  });
+}
+
+async function copyDistributionSvg(
+  title: string,
+  data: DistributionItem[],
+) {
+  const svg = buildDistributionSvg(
+    title,
+    data,
+  );
+
+  try {
+    if (
+      typeof ClipboardItem !== "undefined" &&
+      navigator.clipboard?.write
+    ) {
+      const pngBlob = await svgToPngBlob(svg);
+
+      if (pngBlob) {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            "image/png": pngBlob,
+          }),
+        ]);
+
+        return;
+      }
+
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          "image/svg+xml": new Blob([svg], {
+            type: "image/svg+xml",
+          }),
+          "text/plain": new Blob([svg], {
+            type: "text/plain",
+          }),
+        }),
+      ]);
+
+      return;
+    }
+  } catch {
+    // Fallback texte.
+  }
+
+  await navigator.clipboard.writeText(svg);
+}
+
+function ChartFullScreenModal({
+  title,
+  description,
+  isOpen,
+  onClose,
+  children,
+}: {
+  title: string;
+  description: string;
+  isOpen: boolean;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  if (!isOpen) {
+    return null;
+  }
+
+  return (
+    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
+      <div className="flex max-h-[92vh] w-full max-w-7xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-950">
+        <div className="flex items-start justify-between gap-4 border-b border-slate-100 bg-gradient-to-r from-indigo-50 via-white to-sky-50 px-5 py-4 dark:border-slate-800 dark:from-indigo-950/30 dark:via-slate-950 dark:to-sky-950/20">
+          <div>
+            <h3 className="text-base font-black text-slate-950 dark:text-white">
+              {title}
+            </h3>
+
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              {description}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-slate-500 transition hover:bg-slate-100 hover:text-slate-950 dark:hover:bg-slate-900 dark:hover:text-white"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-auto p-5">
+          <div className="h-[70vh]">
+            {children}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ChartActions({
+  title,
+  data,
+  onExpand,
+}: {
+  title: string;
+  data: DistributionItem[];
+  onExpand: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <button
+        type="button"
+        onClick={() => void copyDistributionSvg(title, data)}
+        title="Copier le graphique en SVG"
+        className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-indigo-100 bg-white text-indigo-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-indigo-50 dark:border-indigo-900 dark:bg-slate-950 dark:text-indigo-300"
+      >
+        <Copy className="h-4 w-4" />
+      </button>
+
+      <button
+        type="button"
+        onClick={onExpand}
+        title="Agrandir le graphique"
+        className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-indigo-100 bg-white text-indigo-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-indigo-50 dark:border-indigo-900 dark:bg-slate-950 dark:text-indigo-300"
+      >
+        <Expand className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
+
 function PieDistributionCard({
   title,
   description,
@@ -1132,101 +1359,141 @@ function PieDistributionCard({
 
   accent: Accent;
 }) {
+  const [isExpanded, setIsExpanded] =
+    useState(false);
+
+  const chart = (
+    <ResponsiveContainer
+      width="100%"
+      height="100%"
+    >
+      <PieChart>
+        <Pie
+          data={data}
+          dataKey="value"
+          nameKey="name"
+          cx="50%"
+          cy="50%"
+          innerRadius={58}
+          outerRadius={96}
+          paddingAngle={3}
+          stroke="transparent"
+        >
+          {data.map(
+            (item, index) => (
+              <Cell
+                key={`${item.name}-${index}`}
+                fill={
+                  chartColors[
+                    index %
+                      chartColors.length
+                  ]
+                }
+              />
+            ),
+          )}
+        </Pie>
+
+        <Tooltip
+          formatter={(value) => [
+            Number(value),
+            "Demandes",
+          ]}
+        />
+      </PieChart>
+    </ResponsiveContainer>
+  );
+
+  const legend = (
+    <div className="space-y-2">
+      {data
+        .slice(0, 12)
+        .map(
+          (item, index) => (
+            <div
+              key={item.name}
+              title={`${item.name} · ${item.value} demande(s)`}
+              className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2.5 dark:bg-slate-900"
+            >
+              <div className="flex min-w-0 items-center gap-2">
+                <span
+                  className="h-2.5 w-2.5 shrink-0 rounded-full"
+                  style={{
+                    backgroundColor:
+                      chartColors[
+                        index %
+                          chartColors.length
+                      ],
+                  }}
+                />
+
+                <span className="truncate text-xs font-semibold text-slate-700 dark:text-slate-300">
+                  {item.name}
+                </span>
+              </div>
+
+              <span className="shrink-0 text-xs font-black text-slate-950 dark:text-white">
+                {item.value}
+              </span>
+            </div>
+          ),
+        )}
+    </div>
+  );
+
   return (
-    <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950">
-      <PanelHeader
+    <>
+      <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950">
+        <PanelHeader
+          title={title}
+          description={description}
+          icon={icon}
+          accent={accent}
+          right={
+            data.length > 0 ? (
+              <ChartActions
+                title={title}
+                data={data}
+                onExpand={() => setIsExpanded(true)}
+              />
+            ) : null
+          }
+        />
+
+        {data.length > 0 ? (
+          <div className="grid gap-4 p-5 lg:grid-cols-[minmax(0,1fr)_220px] lg:items-center">
+            <div className="h-[280px]">
+              {chart}
+            </div>
+
+            {legend}
+          </div>
+        ) : (
+          <EmptyState
+            title="Aucune donnée à analyser"
+            description="Les graphiques apparaîtront dès que des demandes seront enregistrées."
+            icon={BarChart3}
+          />
+        )}
+      </article>
+
+      <ChartFullScreenModal
         title={title}
         description={description}
-        icon={icon}
-        accent={accent}
-      />
-
-      {data.length > 0 ? (
-        <div className="grid gap-4 p-5 lg:grid-cols-[minmax(0,1fr)_220px] lg:items-center">
-          <div className="h-[280px]">
-            <ResponsiveContainer
-              width="100%"
-              height="100%"
-            >
-              <PieChart>
-                <Pie
-                  data={data}
-                  dataKey="value"
-                  nameKey="name"
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={58}
-                  outerRadius={96}
-                  paddingAngle={3}
-                  stroke="transparent"
-                >
-                  {data.map(
-                    (item, index) => (
-                      <Cell
-                        key={`${item.name}-${index}`}
-                        fill={
-                          chartColors[
-                            index %
-                              chartColors.length
-                          ]
-                        }
-                      />
-                    ),
-                  )}
-                </Pie>
-
-                <Tooltip
-                  formatter={(value) => [
-                    Number(value),
-                    "Demandes",
-                  ]}
-                />
-              </PieChart>
-            </ResponsiveContainer>
+        isOpen={isExpanded}
+        onClose={() => setIsExpanded(false)}
+      >
+        <div className="grid h-full gap-5 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-center">
+          <div className="h-full min-h-[420px]">
+            {chart}
           </div>
 
-          <div className="space-y-2">
-            {data
-              .slice(0, 7)
-              .map(
-                (item, index) => (
-                  <div
-                    key={item.name}
-                    className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2.5 dark:bg-slate-900"
-                  >
-                    <div className="flex min-w-0 items-center gap-2">
-                      <span
-                        className="h-2.5 w-2.5 shrink-0 rounded-full"
-                        style={{
-                          backgroundColor:
-                            chartColors[
-                              index %
-                                chartColors.length
-                            ],
-                        }}
-                      />
-
-                      <span className="truncate text-xs font-semibold text-slate-700 dark:text-slate-300">
-                        {item.name}
-                      </span>
-                    </div>
-
-                    <span className="shrink-0 text-xs font-black text-slate-950 dark:text-white">
-                      {item.value}
-                    </span>
-                  </div>
-                ),
-              )}
+          <div className="max-h-[68vh] overflow-auto pr-1">
+            {legend}
           </div>
         </div>
-      ) : (
-        <EmptyState
-          title="Aucune donnée à analyser"
-          description="Les graphiques apparaîtront dès que des demandes seront enregistrées."
-          icon={BarChart3}
-        />
-      )}
-    </article>
+      </ChartFullScreenModal>
+    </>
   );
 }
 
@@ -1248,80 +1515,107 @@ function BarDistributionCard({
 
   accent: Accent;
 }) {
+  const [isExpanded, setIsExpanded] =
+    useState(false);
+
   const visibleData =
     data.slice(0, 8);
 
+  const chart = (
+    <ResponsiveContainer
+      width="100%"
+      height="100%"
+    >
+      <BarChart
+        data={visibleData}
+        layout="vertical"
+        margin={{
+          top: 4,
+          right: 16,
+          bottom: 4,
+          left: 12,
+        }}
+      >
+        <CartesianGrid
+          strokeDasharray="3 3"
+          horizontal={false}
+          stroke="#e2e8f0"
+        />
+
+        <XAxis
+          type="number"
+          allowDecimals={false}
+          tick={{
+            fontSize: 11,
+          }}
+        />
+
+        <YAxis
+          type="category"
+          dataKey="name"
+          width={125}
+          tick={{
+            fontSize: 11,
+          }}
+        />
+
+        <Tooltip
+          formatter={(value) => [
+            Number(value),
+            "Demandes",
+          ]}
+        />
+
+        <Bar
+          dataKey="value"
+          radius={[0, 8, 8, 0]}
+          fill="#4f46e5"
+        />
+      </BarChart>
+    </ResponsiveContainer>
+  );
+
   return (
-    <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950">
-      <PanelHeader
+    <>
+      <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950">
+        <PanelHeader
+          title={title}
+          description={description}
+          icon={icon}
+          accent={accent}
+          right={
+            visibleData.length > 0 ? (
+              <ChartActions
+                title={title}
+                data={visibleData}
+                onExpand={() => setIsExpanded(true)}
+              />
+            ) : null
+          }
+        />
+
+        {visibleData.length > 0 ? (
+          <div className="h-[340px] p-5">
+            {chart}
+          </div>
+        ) : (
+          <EmptyState
+            title="Aucune donnée à analyser"
+            description="La répartition apparaîtra dès que des demandes seront enregistrées."
+            icon={BarChart3}
+          />
+        )}
+      </article>
+
+      <ChartFullScreenModal
         title={title}
         description={description}
-        icon={icon}
-        accent={accent}
-      />
-
-      {visibleData.length > 0 ? (
-        <div className="h-[340px] p-5">
-          <ResponsiveContainer
-            width="100%"
-            height="100%"
-          >
-            <BarChart
-              data={visibleData}
-              layout="vertical"
-              margin={{
-                top: 4,
-                right: 16,
-                bottom: 4,
-                left: 12,
-              }}
-            >
-              <CartesianGrid
-                strokeDasharray="3 3"
-                horizontal={false}
-                stroke="#e2e8f0"
-              />
-
-              <XAxis
-                type="number"
-                allowDecimals={false}
-                tick={{
-                  fontSize: 11,
-                }}
-              />
-
-              <YAxis
-                type="category"
-                dataKey="name"
-                width={125}
-                tick={{
-                  fontSize: 11,
-                }}
-              />
-
-              <Tooltip
-                formatter={(value) => [
-                  Number(value),
-                  "Demandes",
-                ]}
-              />
-
-              <Bar
-                dataKey="value"
-                radius={[0, 8, 8, 0]}
-                fill="#4f46e5"
-              />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      ) : (
-        <EmptyState
-          title="Aucune donnée à analyser"
-          description="La répartition apparaîtra dès que des demandes seront enregistrées."
-          icon={BarChart3}
-        />
-      )}
-    </article>
+        isOpen={isExpanded}
+        onClose={() => setIsExpanded(false)}
+      >
+        {chart}
+      </ChartFullScreenModal>
+    </>
   );
 }
 
@@ -1841,6 +2135,436 @@ const exportColumns: ExportColumn<ExportRow>[] = [
   },
 ];
 
+
+function ValidationActionButtons({
+  request,
+  onEdit,
+  onArchive,
+}: {
+  request: HrAbsenceRequestRow;
+  onEdit: (request: HrAbsenceRequestRow) => void;
+  onArchive: (request: HrAbsenceRequestRow) => void;
+}) {
+  function showDetails() {
+    window.alert(
+      [
+        `Collaborateur : ${request.employee_name ?? "—"}`,
+        `Type : ${request.absence_type_name ?? "—"}`,
+        `Période : ${formatDate(request.start_date)} → ${formatDate(request.end_date)}`,
+        `Décompte : ${formatNumber(request.requested_amount)} ${getUnitLabel(
+          request.absence_unit,
+          toNumber(request.requested_amount),
+        )}`,
+        `Statut : ${getStatusLabel(request.status)}`,
+        `Manager : ${request.manager_name ?? "—"}`,
+        `Service : ${request.department_name ?? "—"}`,
+        `Site : ${request.site_name ?? "—"}`,
+      ].join("\n"),
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-3 dark:border-slate-800">
+      <span className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-2.5 text-xs font-black text-slate-400 dark:border-slate-800 dark:bg-slate-900">
+        <MoreVertical className="h-3.5 w-3.5" />
+        Actions
+      </span>
+
+      <button
+        type="button"
+        onClick={showDetails}
+        className="inline-flex h-9 items-center gap-2 rounded-xl border border-sky-200 bg-white px-3 text-xs font-bold text-sky-700 transition hover:-translate-y-0.5 hover:bg-sky-50 dark:border-sky-900 dark:bg-slate-950 dark:text-sky-300"
+      >
+        <Eye className="h-3.5 w-3.5" />
+        Voir
+      </button>
+
+      <button
+        type="button"
+        onClick={() => onEdit(request)}
+        className="inline-flex h-9 items-center gap-2 rounded-xl border border-indigo-200 bg-white px-3 text-xs font-bold text-indigo-700 transition hover:-translate-y-0.5 hover:bg-indigo-50 dark:border-indigo-900 dark:bg-slate-950 dark:text-indigo-300"
+      >
+        <Pencil className="h-3.5 w-3.5" />
+        Modifier
+      </button>
+
+      <button
+        type="button"
+        onClick={() => onArchive(request)}
+        className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 transition hover:-translate-y-0.5 hover:bg-slate-100 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300"
+      >
+        <Archive className="h-3.5 w-3.5" />
+        Archiver
+      </button>
+    </div>
+  );
+}
+
+function ApprovalQueueTable({
+  requests,
+  onManagerApprove,
+  onHrApprove,
+  onReject,
+  onEdit,
+  onArchive,
+}: {
+  requests: HrAbsenceRequestRow[];
+  onManagerApprove: (request: HrAbsenceRequestRow) => void;
+  onHrApprove: (request: HrAbsenceRequestRow) => void;
+  onReject: (request: HrAbsenceRequestRow) => void;
+  onEdit: (request: HrAbsenceRequestRow) => void;
+  onArchive: (request: HrAbsenceRequestRow) => void;
+}) {
+  return (
+    <div className="max-h-[520px] overflow-auto">
+      <table className="w-full min-w-[1380px] border-collapse">
+        <thead className="sticky top-0 z-10">
+          <tr className="border-b border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900">
+            <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wide text-slate-500">Collaborateur</th>
+            <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wide text-slate-500">Type</th>
+            <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wide text-slate-500">Période</th>
+            <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wide text-slate-500">Décompte</th>
+            <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wide text-slate-500">Étape</th>
+            <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wide text-slate-500">Manager</th>
+            <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wide text-slate-500">Service / site</th>
+            <th className="px-4 py-3 text-right text-[10px] font-black uppercase tracking-wide text-slate-500">Validation</th>
+            <th className="px-4 py-3 text-right text-[10px] font-black uppercase tracking-wide text-slate-500">Actions</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {requests.map((request) => {
+            const isManagerStep = request.status === "submitted";
+
+            return (
+              <tr
+                key={request.id}
+                className="border-b border-slate-100 transition last:border-0 hover:bg-indigo-50/60 dark:border-slate-800 dark:hover:bg-indigo-950/20"
+              >
+                <td className="px-4 py-3">
+                  <p title={request.employee_name ?? "Collaborateur"} className="max-w-56 truncate text-sm font-black text-slate-950 dark:text-white">
+                    {request.employee_name ?? "Collaborateur non renseigné"}
+                  </p>
+                  <p className="mt-0.5 text-xs font-semibold text-slate-500">{request.employee_number ?? "—"}</p>
+                </td>
+
+                <td className="px-4 py-3">
+                  <p title={request.absence_type_name ?? "Type"} className="max-w-52 truncate text-sm font-semibold text-slate-700 dark:text-slate-300">
+                    {request.absence_type_name ?? "—"}
+                  </p>
+                  <p className="mt-0.5 text-[10px] font-black uppercase tracking-wide text-slate-400">{request.absence_type_code ?? "—"}</p>
+                </td>
+
+                <td className="px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300">
+                  {formatDate(request.start_date)} → {formatDate(request.end_date)}
+                </td>
+
+                <td className="px-4 py-3 text-sm font-black text-indigo-700 dark:text-indigo-300">
+                  {formatNumber(request.requested_amount)} {getUnitLabel(request.absence_unit, toNumber(request.requested_amount))}
+                </td>
+
+                <td className="px-4 py-3">
+                  <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ring-1 ${
+                    isManagerStep
+                      ? "bg-violet-50 text-violet-700 ring-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:ring-violet-900"
+                      : "bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-900"
+                  }`}>
+                    {isManagerStep ? "Validation N+1" : "Approbation RH"}
+                  </span>
+                </td>
+
+                <td className="px-4 py-3">
+                  <p title={request.manager_name ?? "Manager non renseigné"} className="max-w-52 truncate text-sm font-semibold text-slate-700 dark:text-slate-300">
+                    {request.manager_name ?? "Manager non renseigné"}
+                  </p>
+                </td>
+
+                <td className="px-4 py-3">
+                  <p title={[request.department_name, request.site_name].filter(Boolean).join(" · ")} className="max-w-60 truncate text-sm text-slate-600 dark:text-slate-400">
+                    {request.department_name ?? "Service non renseigné"} · {request.site_name ?? "Site non renseigné"}
+                  </p>
+                </td>
+
+                <td className="px-4 py-3">
+                  <div className="flex justify-end gap-2">
+                    <button type="button" onClick={() => onReject(request)} className="inline-flex h-9 items-center gap-2 rounded-xl border border-rose-200 bg-white px-3 text-xs font-bold text-rose-700 transition hover:bg-rose-50 dark:border-rose-900 dark:bg-slate-950 dark:text-rose-300">
+                      <X className="h-3.5 w-3.5" />
+                      Refuser
+                    </button>
+                    {isManagerStep ? (
+                      <button type="button" onClick={() => onManagerApprove(request)} className="inline-flex h-9 items-center gap-2 rounded-xl bg-violet-600 px-3 text-xs font-bold text-white shadow-md shadow-violet-100 transition hover:bg-violet-700 dark:shadow-none">
+                        <Send className="h-3.5 w-3.5" />
+                        N+1
+                      </button>
+                    ) : (
+                      <button type="button" onClick={() => onHrApprove(request)} className="inline-flex h-9 items-center gap-2 rounded-xl bg-emerald-600 px-3 text-xs font-bold text-white shadow-md shadow-emerald-100 transition hover:bg-emerald-700 dark:shadow-none">
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        RH
+                      </button>
+                    )}
+                  </div>
+                </td>
+
+                <td className="px-4 py-3">
+                  <div className="flex justify-end gap-2">
+                    <button type="button" onClick={() => window.alert(`Collaborateur : ${request.employee_name ?? "—"}\nType : ${request.absence_type_name ?? "—"}\nPériode : ${formatDate(request.start_date)} → ${formatDate(request.end_date)}\nStatut : ${getStatusLabel(request.status)}`)} className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-sky-200 bg-white text-sky-700 transition hover:bg-sky-50 dark:border-sky-900 dark:bg-slate-950 dark:text-sky-300" title="Voir">
+                      <Eye className="h-3.5 w-3.5" />
+                    </button>
+                    <button type="button" onClick={() => onEdit(request)} className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-indigo-200 bg-white text-indigo-700 transition hover:bg-indigo-50 dark:border-indigo-900 dark:bg-slate-950 dark:text-indigo-300" title="Modifier">
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button type="button" onClick={() => onArchive(request)} className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-100 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300" title="Archiver">
+                      <Archive className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ApprovalQueuePanel({
+  requests,
+  totalCount,
+  onManagerApprove,
+  onHrApprove,
+  onReject,
+  onEdit,
+  onArchive,
+}: {
+  requests: HrAbsenceRequestRow[];
+  totalCount: number;
+  onManagerApprove: (request: HrAbsenceRequestRow) => void;
+  onHrApprove: (request: HrAbsenceRequestRow) => void;
+  onReject: (request: HrAbsenceRequestRow) => void;
+  onEdit: (request: HrAbsenceRequestRow) => void;
+  onArchive: (request: HrAbsenceRequestRow) => void;
+}) {
+  const [displayMode, setDisplayMode] =
+    useState<DisplayMode>("cards");
+
+  const managerRequests =
+    requests.filter(
+      (request) =>
+        request.status === "submitted" &&
+        !request.is_archived,
+    );
+
+  const hrRequests =
+    requests.filter(
+      (request) =>
+        request.status === "manager_approved" &&
+        !request.is_archived,
+    );
+
+  const visibleRequests = [
+    ...managerRequests,
+    ...hrRequests,
+  ];
+
+  return (
+    <section className="overflow-visible rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950">
+      <PanelHeader
+        icon={ShieldCheck}
+        title="Circuit de validation"
+        description="Vue manager / RH : validation N+1 obligatoire, approbation RH facultative après N+1, refus tracés et archivage contrôlé."
+        accent="violet"
+        countText={`${visibleRequests.length} validation${
+          visibleRequests.length > 1 ? "s" : ""
+        } à traiter sur ${totalCount} demande${
+          totalCount > 1 ? "s" : ""
+        }`}
+        right={
+          visibleRequests.length > 0 ? (
+            <ViewSwitch
+              mode={displayMode}
+              onChange={setDisplayMode}
+            />
+          ) : null
+        }
+      />
+
+      {visibleRequests.length === 0 ? (
+        <EmptyState
+          title="Aucune validation en attente"
+          description="Les demandes soumises apparaissent en validation N+1. Après validation N+1, elles apparaissent en approbation RH facultative."
+          icon={ShieldCheck}
+        />
+      ) : displayMode === "table" ? (
+        <ApprovalQueueTable
+          requests={visibleRequests}
+          onManagerApprove={onManagerApprove}
+          onHrApprove={onHrApprove}
+          onReject={onReject}
+          onEdit={onEdit}
+          onArchive={onArchive}
+        />
+      ) : (
+        <div className="grid gap-4 p-5 xl:grid-cols-2">
+          {visibleRequests.map((request) => {
+            const isManagerStep =
+              request.status === "submitted";
+
+            return (
+              <article
+                key={request.id}
+                className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-indigo-200 hover:bg-indigo-50/40 hover:shadow-md dark:border-slate-800 dark:bg-slate-950 dark:hover:border-indigo-900 dark:hover:bg-indigo-950/20"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p
+                      title={request.employee_name ?? "Collaborateur"}
+                      className="truncate text-sm font-black text-slate-950 dark:text-white"
+                    >
+                      {request.employee_name ?? "Collaborateur non renseigné"}
+                    </p>
+
+                    <p className="mt-1 text-xs font-semibold text-indigo-600 dark:text-indigo-400">
+                      {request.employee_number ?? "Matricule non renseigné"}
+                    </p>
+
+                    <p
+                      title={[
+                        request.department_name,
+                        request.site_name,
+                        request.manager_name,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                      className="mt-1 truncate text-[11px] text-slate-400"
+                    >
+                      {request.department_name ?? "Service non renseigné"}
+                      {" · "}
+                      {request.site_name ?? "Site non renseigné"}
+                      {" · Manager : "}
+                      {request.manager_name ?? "non renseigné"}
+                    </p>
+                  </div>
+
+                  <span
+                    className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ring-1 ${
+                      isManagerStep
+                        ? "bg-violet-50 text-violet-700 ring-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:ring-violet-900"
+                        : "bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-900"
+                    }`}
+                  >
+                    {isManagerStep ? "Validation N+1" : "Approbation RH"}
+                  </span>
+                </div>
+
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-900">
+                    <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
+                      Type
+                    </p>
+
+                    <p
+                      title={request.absence_type_name ?? "Type non renseigné"}
+                      className="mt-1 truncate text-sm font-bold text-slate-800 dark:text-slate-200"
+                    >
+                      {request.absence_type_name ?? "Type non renseigné"}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-900">
+                    <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
+                      Période
+                    </p>
+
+                    <p className="mt-1 text-sm font-bold text-slate-800 dark:text-slate-200">
+                      {formatDate(request.start_date)} → {formatDate(request.end_date)}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-900">
+                    <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
+                      Décompte
+                    </p>
+
+                    <p className="mt-1 text-sm font-black text-indigo-700 dark:text-indigo-300">
+                      {formatNumber(request.requested_amount)}{" "}
+                      {getUnitLabel(
+                        request.absence_unit,
+                        toNumber(request.requested_amount),
+                      )}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-900">
+                    <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
+                      Statut
+                    </p>
+
+                    <p className="mt-1 text-sm font-bold text-slate-800 dark:text-slate-200">
+                      {getStatusLabel(request.status)}
+                    </p>
+                  </div>
+                </div>
+
+                {request.reason && (
+                  <div className="mt-3 rounded-xl bg-amber-50 p-3 dark:bg-amber-950/30">
+                    <p className="text-[10px] font-black uppercase tracking-wide text-amber-600 dark:text-amber-300">
+                      Motif
+                    </p>
+
+                    <p className="mt-1 text-xs leading-5 text-amber-800 dark:text-amber-200">
+                      {request.reason}
+                    </p>
+                  </div>
+                )}
+
+                <div className="mt-4 flex flex-wrap justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onReject(request)}
+                    className="inline-flex h-9 items-center gap-2 rounded-xl border border-rose-200 bg-white px-3 text-xs font-bold text-rose-700 transition hover:-translate-y-0.5 hover:bg-rose-50 dark:border-rose-900 dark:bg-slate-950 dark:text-rose-300"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                    Refuser
+                  </button>
+
+                  {isManagerStep ? (
+                    <button
+                      type="button"
+                      onClick={() => onManagerApprove(request)}
+                      className="inline-flex h-9 items-center gap-2 rounded-xl bg-violet-600 px-3 text-xs font-bold text-white shadow-md shadow-violet-100 transition hover:-translate-y-0.5 hover:bg-violet-700 dark:shadow-none"
+                    >
+                      <Send className="h-3.5 w-3.5" />
+                      Valider N+1
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => onHrApprove(request)}
+                      className="inline-flex h-9 items-center gap-2 rounded-xl bg-emerald-600 px-3 text-xs font-bold text-white shadow-md shadow-emerald-100 transition hover:-translate-y-0.5 hover:bg-emerald-700 dark:shadow-none"
+                    >
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      Approuver RH
+                    </button>
+                  )}
+                </div>
+
+                <div className="mt-4">
+                  <ValidationActionButtons
+                    request={request}
+                    onEdit={onEdit}
+                    onArchive={onArchive}
+                  />
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+
 export default function HrAbsencesPage({
   params,
 }: {
@@ -2002,14 +2726,22 @@ export default function HrAbsencesPage({
     const total =
       activeRequests.length;
 
-    const pending =
+    const pendingManager =
       activeRequests.filter(
         (request) =>
           request.status ===
-            "submitted" ||
-          request.status ===
-            "manager_approved",
+          "submitted",
       ).length;
+
+    const pendingHr =
+      activeRequests.filter(
+        (request) =>
+          request.status ===
+          "manager_approved",
+      ).length;
+
+    const pending =
+      pendingManager + pendingHr;
 
     const approved =
       activeRequests.filter(
@@ -2031,6 +2763,8 @@ export default function HrAbsencesPage({
     return {
       total,
       pending,
+      pendingManager,
+      pendingHr,
       approved,
       requestedAmount,
     };
@@ -2365,6 +3099,128 @@ export default function HrAbsencesPage({
     }
   }
 
+
+  async function handleWorkflowAction(
+    request: HrAbsenceRequestRow,
+    action: "manager_approve" | "hr_approve" | "reject",
+  ) {
+    const actionLabels = {
+      manager_approve: "valider par le manager",
+      hr_approve: "approuver par les RH",
+      reject: "refuser",
+    };
+
+    const comment =
+      action === "reject"
+        ? window.prompt(
+            `Motif du refus pour ${request.employee_name ?? "ce collaborateur"} :`,
+          )
+        : window.prompt(
+            `Commentaire optionnel pour ${actionLabels[action]} la demande de ${request.employee_name ?? "ce collaborateur"} :`,
+          );
+
+    if (action === "reject" && !comment?.trim()) {
+      setActionError(
+        "Un commentaire est obligatoire pour refuser une demande.",
+      );
+      return;
+    }
+
+    const confirmed =
+      window.confirm(
+        `Confirmer l’action : ${actionLabels[action]} cette demande ?`,
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setActionError(null);
+
+      const {
+        data: userData,
+        error: userError,
+      } =
+        await supabase.auth.getUser();
+
+      if (userError) {
+        throw new Error(
+          userError.message,
+        );
+      }
+
+      const functionName =
+        action === "manager_approve"
+          ? "approve_hr_absence_request_manager"
+          : action === "hr_approve"
+            ? "approve_hr_absence_request_hr"
+            : "reject_hr_absence_request";
+
+      const {
+        error: workflowError,
+      } = await (
+        supabase as any
+      ).rpc(
+        functionName,
+        {
+          target_request_id:
+            request.id,
+
+          actor_user_id:
+            userData.user?.id ?? null,
+
+          actor_employee_id:
+            null,
+
+          action_comment:
+            comment?.trim() || null,
+        },
+      );
+
+      if (workflowError) {
+        throw new Error(
+          workflowError.message,
+        );
+      }
+
+      await refreshData();
+    } catch (actionException: unknown) {
+      setActionError(
+        actionException instanceof Error
+          ? actionException.message
+          : "L’action de validation n’a pas pu être exécutée.",
+      );
+    }
+  }
+
+  function handleManagerApproveRequest(
+    request: HrAbsenceRequestRow,
+  ) {
+    void handleWorkflowAction(
+      request,
+      "manager_approve",
+    );
+  }
+
+  function handleHrApproveRequest(
+    request: HrAbsenceRequestRow,
+  ) {
+    void handleWorkflowAction(
+      request,
+      "hr_approve",
+    );
+  }
+
+  function handleRejectRequest(
+    request: HrAbsenceRequestRow,
+  ) {
+    void handleWorkflowAction(
+      request,
+      "reject",
+    );
+  }
+
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -2612,14 +3468,32 @@ export default function HrAbsencesPage({
               type="button"
               onClick={() =>
                 setActiveTab(
+                  "approvals",
+                )
+              }
+              className={`inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl px-5 text-sm font-bold transition ${
+                activeTab ===
+                "approvals"
+                  ? "bg-violet-600 text-white shadow-md shadow-violet-100 dark:shadow-none"
+                  : "text-slate-500 hover:bg-violet-50 hover:text-violet-700 dark:hover:bg-violet-950/30 dark:hover:text-violet-300"
+              }`}
+            >
+              <ShieldCheck className="h-4 w-4" />
+              Validations
+            </button>
+
+            <button
+              type="button"
+              onClick={() =>
+                setActiveTab(
                   "analytics",
                 )
               }
               className={`inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl px-5 text-sm font-bold transition ${
                 activeTab ===
                 "analytics"
-                  ? "bg-violet-600 text-white shadow-md shadow-violet-100 dark:shadow-none"
-                  : "text-slate-500 hover:bg-violet-50 hover:text-violet-700 dark:hover:bg-violet-950/30 dark:hover:text-violet-300"
+                  ? "bg-emerald-600 text-white shadow-md shadow-emerald-100 dark:shadow-none"
+                  : "text-slate-500 hover:bg-emerald-50 hover:text-emerald-700 dark:hover:bg-emerald-950/30 dark:hover:text-emerald-300"
               }`}
             >
               <BarChart3 className="h-4 w-4" />
@@ -2636,8 +3510,8 @@ export default function HrAbsencesPage({
               className={`inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl px-5 text-sm font-bold transition ${
                 activeTab ===
                 "balances"
-                  ? "bg-emerald-600 text-white shadow-md shadow-emerald-100 dark:shadow-none"
-                  : "text-slate-500 hover:bg-emerald-50 hover:text-emerald-700 dark:hover:bg-emerald-950/30 dark:hover:text-emerald-300"
+                  ? "bg-amber-600 text-white shadow-md shadow-amber-100 dark:shadow-none"
+                  : "text-slate-500 hover:bg-amber-50 hover:text-amber-700 dark:hover:bg-amber-950/30 dark:hover:text-amber-300"
               }`}
             >
               <WalletCards className="h-4 w-4" />
@@ -2665,6 +3539,29 @@ export default function HrAbsencesPage({
             onRestore={
               handleRestoreRequest
             }
+          />
+        )}
+
+        {activeTab ===
+          "approvals" && (
+          <ApprovalQueuePanel
+            requests={
+              filteredRequests
+            }
+            totalCount={
+              data.requests.length
+            }
+            onManagerApprove={
+              handleManagerApproveRequest
+            }
+            onHrApprove={
+              handleHrApproveRequest
+            }
+            onReject={
+              handleRejectRequest
+            }
+            onEdit={openEditForm}
+            onArchive={handleArchiveRequest}
           />
         )}
 
