@@ -22,6 +22,7 @@ import {
   ShieldCheck,
   UserRound,
   Users,
+  WalletCards,
   X,
 } from "lucide-react";
 
@@ -164,6 +165,14 @@ type FormData = {
 
   weeklyPattern: WeeklyWorkPatternValue;
   compensation: HrCompensationValue;
+
+  leaveAcquisitionStartMonth: string;
+  paidLeaveAnnualEntitlement: string;
+  rttAnnualEntitlement: string;
+  leaveProrataOnArrival: boolean;
+  leaveProrataOnDeparture: boolean;
+  leaveCarryoverAllowed: boolean;
+  maximumLeaveCarryover: string;
 };
 
 const initialCompensation: HrCompensationValue = {
@@ -261,6 +270,14 @@ function createInitialFormData(): FormData {
     compensation: {
       ...initialCompensation,
     },
+
+    leaveAcquisitionStartMonth: "6",
+    paidLeaveAnnualEntitlement: "25",
+    rttAnnualEntitlement: "10",
+    leaveProrataOnArrival: true,
+    leaveProrataOnDeparture: true,
+    leaveCarryoverAllowed: true,
+    maximumLeaveCarryover: "",
   };
 }
 
@@ -756,6 +773,21 @@ function buildFormDataFromRecords(
         String(weeklyPatternSummary.weeklyHours || 35),
       annualWorkingDays: toInputString(contract?.annual_working_days) || "218",
     },
+
+    leaveAcquisitionStartMonth:
+      toInputString(contract?.leave_acquisition_start_month) || "6",
+    paidLeaveAnnualEntitlement:
+      toInputString(contract?.paid_leave_annual_entitlement) || "25",
+    rttAnnualEntitlement:
+      toInputString(contract?.rtt_annual_entitlement) || "10",
+    leaveProrataOnArrival:
+      contract?.leave_prorata_on_arrival !== false,
+    leaveProrataOnDeparture:
+      contract?.leave_prorata_on_departure !== false,
+    leaveCarryoverAllowed:
+      contract?.leave_carryover_allowed !== false,
+    maximumLeaveCarryover:
+      toInputString(contract?.maximum_leave_carryover),
   };
 }
 
@@ -1756,6 +1788,21 @@ export default function HrEmployeeEditForm({
               weekly_work_pattern:
                 formData.weeklyPattern,
 
+              leave_acquisition_start_month:
+                numberOrNull(formData.leaveAcquisitionStartMonth),
+              paid_leave_annual_entitlement:
+                numberOrNull(formData.paidLeaveAnnualEntitlement),
+              rtt_annual_entitlement:
+                numberOrNull(formData.rttAnnualEntitlement),
+              leave_prorata_on_arrival:
+                formData.leaveProrataOnArrival,
+              leave_prorata_on_departure:
+                formData.leaveProrataOnDeparture,
+              leave_carryover_allowed:
+                formData.leaveCarryoverAllowed,
+              maximum_leave_carryover:
+                numberOrNull(formData.maximumLeaveCarryover),
+
               comments:
                 emptyToNull(
                   [
@@ -2538,6 +2585,132 @@ export default function HrEmployeeEditForm({
                       }
                       onChange={handleWeeklyPatternChange}
                     />
+
+
+                    <FormSection
+                      title="Droits CP / RTT"
+                      description="Droits annuels utilisés par les soldes d’absence, les congés, les RTT, la capacité et les exports."
+                      icon={WalletCards}
+                      accent="amber"
+                    >
+                      <Field
+                        label="Début période d’acquisition"
+                        description="Par défaut : 1er juin → 31 mai de l’année suivante."
+                      >
+                        <select
+                          value={formData.leaveAcquisitionStartMonth}
+                          onChange={(event) =>
+                            updateField(
+                              "leaveAcquisitionStartMonth",
+                              event.target.value,
+                            )
+                          }
+                          className={selectClassName}
+                        >
+                          <option value="1">Janvier</option>
+                          <option value="6">Juin</option>
+                        </select>
+                      </Field>
+
+                      <Field label="Congés payés annuels">
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.5"
+                          value={formData.paidLeaveAnnualEntitlement}
+                          onChange={(event) =>
+                            updateField(
+                              "paidLeaveAnnualEntitlement",
+                              event.target.value,
+                            )
+                          }
+                          className={inputClassName}
+                        />
+                      </Field>
+
+                      <Field
+                        label="RTT annuels"
+                        description="Modifiable chaque année selon l’accord entreprise et le calendrier."
+                      >
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.5"
+                          value={formData.rttAnnualEntitlement}
+                          onChange={(event) =>
+                            updateField(
+                              "rttAnnualEntitlement",
+                              event.target.value,
+                            )
+                          }
+                          className={inputClassName}
+                        />
+                      </Field>
+
+                      <Field label="Report maximum autorisé">
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.5"
+                          value={formData.maximumLeaveCarryover}
+                          onChange={(event) =>
+                            updateField(
+                              "maximumLeaveCarryover",
+                              event.target.value,
+                            )
+                          }
+                          placeholder="Illimité si vide"
+                          className={inputClassName}
+                        />
+                      </Field>
+
+                      <div className="grid gap-3 sm:col-span-2 md:grid-cols-3">
+                        <label className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
+                          <input
+                            type="checkbox"
+                            checked={formData.leaveProrataOnArrival}
+                            onChange={(event) =>
+                              updateField(
+                                "leaveProrataOnArrival",
+                                event.target.checked,
+                              )
+                            }
+                            className="h-4 w-4 rounded border-slate-300 text-indigo-600"
+                          />
+                          Prorata entrée
+                        </label>
+
+                        <label className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
+                          <input
+                            type="checkbox"
+                            checked={formData.leaveProrataOnDeparture}
+                            onChange={(event) =>
+                              updateField(
+                                "leaveProrataOnDeparture",
+                                event.target.checked,
+                              )
+                            }
+                            className="h-4 w-4 rounded border-slate-300 text-indigo-600"
+                          />
+                          Prorata sortie
+                        </label>
+
+                        <label className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
+                          <input
+                            type="checkbox"
+                            checked={formData.leaveCarryoverAllowed}
+                            onChange={(event) =>
+                              updateField(
+                                "leaveCarryoverAllowed",
+                                event.target.checked,
+                              )
+                            }
+                            className="h-4 w-4 rounded border-slate-300 text-indigo-600"
+                          />
+                          Report autorisé
+                        </label>
+                      </div>
+                    </FormSection>
 
                     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950">
                       <div className="flex items-start gap-3 border-b border-slate-100 bg-gradient-to-r from-slate-50/80 via-white to-white px-5 py-4 dark:border-slate-800 dark:from-slate-900/70 dark:via-slate-950 dark:to-slate-950">
