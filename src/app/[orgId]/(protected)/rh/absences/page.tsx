@@ -23,7 +23,7 @@ import {
   Grid2X2,
   Eye,
   List,
-  MoreVertical,
+  MoreHorizontal,
   Pencil,
   Plus,
   Send,
@@ -342,6 +342,29 @@ function getUnitLabel(
     : labels.singular;
 }
 
+
+function isTrackedAbsenceBalanceType(
+  absenceTypeCode: string | null,
+  absenceTypeName: string | null,
+) {
+  const normalizedCode = (absenceTypeCode ?? "")
+    .trim()
+    .toUpperCase();
+
+  const normalizedName = (absenceTypeName ?? "")
+    .trim()
+    .toLowerCase();
+
+  return (
+    normalizedCode === "CP" ||
+    normalizedCode === "RTT_EMPLOYEUR" ||
+    normalizedCode === "RTT_EMPLOYE" ||
+    normalizedName === "congés payés" ||
+    normalizedName === "rtt employeur" ||
+    normalizedName === "rtt employé"
+  );
+}
+
 function getInitials(
   firstName: string | null,
   lastName: string | null,
@@ -629,7 +652,9 @@ async function loadAbsencePageData(
           last_name,
           photo_url,
           site_name,
-          department_name
+          department_name,
+          manager_id,
+          manager_name
         `,
       )
       .eq(
@@ -819,6 +844,12 @@ async function loadAbsencePageData(
             availableBalance,
         };
       },
+    )
+    .filter((balance: AbsenceBalance) =>
+      isTrackedAbsenceBalanceType(
+        balance.absence_type_code,
+        balance.absence_type_name,
+      ),
     );
 
   return {
@@ -835,7 +866,25 @@ async function loadAbsencePageData(
       (
         requestsResult.data ??
         []
-      ) as HrAbsenceRequestRow[],
+      ).map((rawRequest: HrAbsenceRequestRow) => {
+        const mutableRequest = rawRequest as any;
+        const managerId =
+          mutableRequest.manager_employee_id ??
+          mutableRequest.manager_id ??
+          null;
+
+        const manager = managerId
+          ? employeesById.get(managerId)
+          : null;
+
+        return {
+          ...rawRequest,
+          manager_name:
+            rawRequest.manager_name ??
+            manager?.full_name ??
+            null,
+        } as HrAbsenceRequestRow;
+      }),
 
     balances,
   };
@@ -1233,6 +1282,12 @@ async function copyDistributionSvg(
         await navigator.clipboard.write([
           new ClipboardItem({
             "image/png": pngBlob,
+            "image/svg+xml": new Blob([svg], {
+              type: "image/svg+xml",
+            }),
+            "text/plain": new Blob([svg], {
+              type: "text/plain",
+            }),
           }),
         ]);
 
@@ -1810,8 +1865,8 @@ function BalancesPanel({
       <PanelHeader
         icon={WalletCards}
         title="Soldes d’absence"
-        description="Droits annuels, reports, ajustements, consommations, demandes en attente et solde disponible."
-        accent="emerald"
+        description="Droits annuels CP, RTT employeur et RTT employé, reports, consommations et solde disponible."
+        accent="amber"
         countText={`${balances.length} résultat${
           balances.length > 1
             ? "s"
@@ -2136,6 +2191,21 @@ const exportColumns: ExportColumn<ExportRow>[] = [
 ];
 
 
+
+function getRequestManagerName(request: HrAbsenceRequestRow) {
+  const rawRequest = request as any;
+
+  return (
+    request.manager_name ??
+    rawRequest.manager_full_name ??
+    rawRequest.manager_employee_name ??
+    rawRequest.manager_display_name ??
+    rawRequest.n1_manager_name ??
+    rawRequest.manager?.full_name ??
+    ""
+  );
+}
+
 function ValidationActionMenu({
   request,
   onEdit,
@@ -2155,7 +2225,7 @@ function ValidationActionMenu({
       [
         `Collaborateur : ${request.employee_name ?? "—"}`,
         `Matricule : ${request.employee_number ?? "—"}`,
-        `Manager : ${request.manager_name ?? "—"}`,
+        `Manager : ${getRequestManagerName(request) || "—"}`,
         `Type : ${request.absence_type_name ?? "—"}`,
         `Période : ${formatDate(request.start_date)} → ${formatDate(request.end_date)}`,
         `Décompte : ${formatNumber(request.requested_amount)} ${getUnitLabel(
@@ -2189,18 +2259,18 @@ function ValidationActionMenu({
           compact ? "h-9 w-9" : "h-9 w-9"
         } inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-50 hover:text-slate-900 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-400 dark:hover:bg-slate-900 dark:hover:text-white`}
       >
-        <MoreVertical className="h-4 w-4" />
+        <MoreHorizontal className="h-4 w-4" />
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 top-10 z-30 w-44 overflow-hidden rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl dark:border-slate-800 dark:bg-slate-950">
+        <div className="absolute right-0 top-10 z-30 w-56 overflow-hidden rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl dark:border-slate-800 dark:bg-slate-950">
           <button
             type="button"
             onClick={showDetails}
             className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-bold text-sky-700 transition hover:bg-sky-50 dark:text-sky-300 dark:hover:bg-sky-950/30"
           >
             <Eye className="h-3.5 w-3.5" />
-            Voir
+            Voir la demande
           </button>
 
           <button
@@ -2209,7 +2279,7 @@ function ValidationActionMenu({
             className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-bold text-indigo-700 transition hover:bg-indigo-50 dark:text-indigo-300 dark:hover:bg-indigo-950/30"
           >
             <Pencil className="h-3.5 w-3.5" />
-            Modifier
+            Modifier la demande
           </button>
 
           <button
@@ -2218,7 +2288,7 @@ function ValidationActionMenu({
             className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-bold text-slate-600 transition hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-900"
           >
             <Archive className="h-3.5 w-3.5" />
-            Archiver
+            Archiver la demande
           </button>
         </div>
       )}
@@ -2300,8 +2370,8 @@ function ApprovalQueueTable({
                 </td>
 
                 <td className="px-4 py-3">
-                  <p title={request.manager_name ?? "Manager non renseigné"} className="max-w-52 truncate text-sm font-semibold text-slate-700 dark:text-slate-300">
-                    {request.manager_name ?? "Manager non renseigné"}
+                  <p title={getRequestManagerName(request) || "Manager non renseigné"} className="max-w-52 truncate text-sm font-semibold text-slate-700 dark:text-slate-300">
+                    {getRequestManagerName(request) || "Manager non renseigné"}
                   </p>
                 </td>
 
@@ -2454,7 +2524,7 @@ function ApprovalQueuePanel({
                       title={[
                         request.department_name,
                         request.site_name,
-                        request.manager_name,
+                        getRequestManagerName(request),
                       ]
                         .filter(Boolean)
                         .join(" · ")}
@@ -2464,7 +2534,7 @@ function ApprovalQueuePanel({
                       {" · "}
                       {request.site_name ?? "Site non renseigné"}
                       {" · Manager : "}
-                      {request.manager_name ?? "non renseigné"}
+                      {getRequestManagerName(request) || "non renseigné"}
                     </p>
                   </div>
 
@@ -2675,7 +2745,7 @@ export default function HrAbsencesPage({
             request.absence_type_code,
             request.site_name,
             request.department_name,
-            request.manager_name,
+            getRequestManagerName(request),
             request.contract_type_name,
             request.work_schedule_name,
             request.holiday_calendar_name,
@@ -2917,8 +2987,7 @@ export default function HrAbsencesPage({
                 ),
 
               manager:
-                request.manager_name ??
-                "",
+                getRequestManagerName(request),
 
               calendar:
                 request.holiday_calendar_name ??

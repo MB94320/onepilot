@@ -129,9 +129,13 @@ type FormData = {
   countryCode: string;
 
   siteId: string;
+  siteFreeText: string;
   departmentId: string;
+  departmentFreeText: string;
   jobId: string;
+  jobFreeText: string;
   functionId: string;
+  functionFreeText: string;
   managerId: string;
 
   arrivalDate: string;
@@ -161,7 +165,8 @@ type FormData = {
 
   leaveAcquisitionStartMonth: string;
   paidLeaveAnnualEntitlement: string;
-  rttAnnualEntitlement: string;
+  rttEmployerAnnualEntitlement: string;
+  rttEmployeeAnnualEntitlement: string;
   leaveProrataOnArrival: boolean;
   leaveProrataOnDeparture: boolean;
   leaveCarryoverAllowed: boolean;
@@ -214,9 +219,13 @@ function createInitialFormData(): FormData {
     countryCode: "FR",
 
     siteId: "",
+    siteFreeText: "",
     departmentId: "",
+    departmentFreeText: "",
     jobId: "",
+    jobFreeText: "",
     functionId: "",
+    functionFreeText: "",
     managerId: "",
 
     arrivalDate: "",
@@ -249,7 +258,8 @@ function createInitialFormData(): FormData {
 
     leaveAcquisitionStartMonth: "6",
     paidLeaveAnnualEntitlement: "25",
-    rttAnnualEntitlement: "10",
+    rttEmployerAnnualEntitlement: "10",
+    rttEmployeeAnnualEntitlement: "0",
     leaveProrataOnArrival: true,
     leaveProrataOnDeparture: true,
     leaveCarryoverAllowed: true,
@@ -1050,6 +1060,18 @@ export default function HrMemberForm({
 
       if (employeeIdToUpdate) {
         await (
+          supabase.from("hr_employees" as never) as any
+        )
+          .update({
+            site_free_text: emptyToNull(formData.siteFreeText),
+            department_free_text: emptyToNull(formData.departmentFreeText),
+            job_free_text: emptyToNull(formData.jobFreeText),
+            function_free_text: emptyToNull(formData.functionFreeText),
+          })
+          .eq("organization_id", organizationId)
+          .eq("id", employeeIdToUpdate);
+
+        await (
           supabase.from("hr_employee_contracts" as never) as any
         )
           .update({
@@ -1058,7 +1080,11 @@ export default function HrMemberForm({
             paid_leave_annual_entitlement:
               numberOrNull(formData.paidLeaveAnnualEntitlement),
             rtt_annual_entitlement:
-              numberOrNull(formData.rttAnnualEntitlement),
+              numberOrNull(formData.rttEmployerAnnualEntitlement),
+            rtt_employer_annual_entitlement:
+              numberOrNull(formData.rttEmployerAnnualEntitlement),
+            rtt_employee_annual_entitlement:
+              numberOrNull(formData.rttEmployeeAnnualEntitlement),
             leave_prorata_on_arrival:
               formData.leaveProrataOnArrival,
             leave_prorata_on_departure:
@@ -1940,6 +1966,21 @@ export default function HrMemberForm({
                       </Field>
 
                       <Field
+                        label="Site libre"
+                        description="Optionnel : utile si le site n’existe pas encore dans le référentiel."
+                      >
+                        <input
+                          type="text"
+                          value={formData.siteFreeText}
+                          onChange={(event) =>
+                            updateField("siteFreeText", event.target.value)
+                          }
+                          className={inputClassName}
+                          placeholder="Ex. Lyon Part-Dieu, Remote EU..."
+                        />
+                      </Field>
+
+                      <Field
                         label="Service"
                         description="Liste issue du référentiel Architecture RH."
                       >
@@ -1969,6 +2010,21 @@ export default function HrMemberForm({
                       </Field>
 
                       <Field
+                        label="Service libre"
+                        description="Optionnel : utile si le service n’existe pas encore dans le référentiel."
+                      >
+                        <input
+                          type="text"
+                          value={formData.departmentFreeText}
+                          onChange={(event) =>
+                            updateField("departmentFreeText", event.target.value)
+                          }
+                          className={inputClassName}
+                          placeholder="Ex. Customer Success, Delivery..."
+                        />
+                      </Field>
+
+                      <Field
                         label="Métier"
                         description="Liste issue du référentiel Architecture RH."
                       >
@@ -1995,6 +2051,21 @@ export default function HrMemberForm({
                             </option>
                           ))}
                         </select>
+                      </Field>
+
+                      <Field
+                        label="Métier libre"
+                        description="Optionnel : utile si le métier n’existe pas encore dans le référentiel."
+                      >
+                        <input
+                          type="text"
+                          value={formData.jobFreeText}
+                          onChange={(event) =>
+                            updateField("jobFreeText", event.target.value)
+                          }
+                          className={inputClassName}
+                          placeholder="Ex. Consultant staffing, PMO..."
+                        />
                       </Field>
 
                       <Field
@@ -2087,7 +2158,7 @@ export default function HrMemberForm({
                         <input
                           type="number"
                           min="0"
-                          step="0.5"
+                          step="any"
                           value={formData.experienceYears}
                           onChange={(event) =>
                             updateField(
@@ -2387,7 +2458,7 @@ export default function HrMemberForm({
                         <input
                           type="number"
                           min="0"
-                          step="0.5"
+                          step="any"
                           value={formData.paidLeaveAnnualEntitlement}
                           onChange={(event) =>
                             updateField(
@@ -2400,17 +2471,36 @@ export default function HrMemberForm({
                       </Field>
 
                       <Field
-                        label="RTT annuels"
-                        description="Modifiable chaque année selon l’accord entreprise et le calendrier."
+                        label="RTT employeur annuels"
+                        description="Compteur RTT décidé par l’entreprise, modifiable chaque année."
                       >
                         <input
                           type="number"
                           min="0"
-                          step="0.5"
-                          value={formData.rttAnnualEntitlement}
+                          step="any"
+                          value={formData.rttEmployerAnnualEntitlement}
                           onChange={(event) =>
                             updateField(
-                              "rttAnnualEntitlement",
+                              "rttEmployerAnnualEntitlement",
+                              event.target.value,
+                            )
+                          }
+                          className={inputClassName}
+                        />
+                      </Field>
+
+                      <Field
+                        label="RTT employé annuels"
+                        description="Compteur distinct si l’entreprise suit une part RTT employé séparée."
+                      >
+                        <input
+                          type="number"
+                          min="0"
+                          step="any"
+                          value={formData.rttEmployeeAnnualEntitlement}
+                          onChange={(event) =>
+                            updateField(
+                              "rttEmployeeAnnualEntitlement",
                               event.target.value,
                             )
                           }
@@ -2422,7 +2512,7 @@ export default function HrMemberForm({
                         <input
                           type="number"
                           min="0"
-                          step="0.5"
+                          step="any"
                           value={formData.maximumLeaveCarryover}
                           onChange={(event) =>
                             updateField(

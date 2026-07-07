@@ -136,9 +136,13 @@ type FormData = {
   countryCode: string;
 
   siteId: string;
+  siteFreeText: string;
   departmentId: string;
+  departmentFreeText: string;
   jobId: string;
+  jobFreeText: string;
   functionId: string;
+  functionFreeText: string;
   managerId: string;
 
   arrivalDate: string;
@@ -168,7 +172,8 @@ type FormData = {
 
   leaveAcquisitionStartMonth: string;
   paidLeaveAnnualEntitlement: string;
-  rttAnnualEntitlement: string;
+  rttEmployerAnnualEntitlement: string;
+  rttEmployeeAnnualEntitlement: string;
   leaveProrataOnArrival: boolean;
   leaveProrataOnDeparture: boolean;
   leaveCarryoverAllowed: boolean;
@@ -238,9 +243,13 @@ function createInitialFormData(): FormData {
     countryCode: "FR",
 
     siteId: "",
+    siteFreeText: "",
     departmentId: "",
+    departmentFreeText: "",
     jobId: "",
+    jobFreeText: "",
     functionId: "",
+    functionFreeText: "",
     managerId: "",
 
     arrivalDate: "",
@@ -273,7 +282,8 @@ function createInitialFormData(): FormData {
 
     leaveAcquisitionStartMonth: "6",
     paidLeaveAnnualEntitlement: "25",
-    rttAnnualEntitlement: "10",
+    rttEmployerAnnualEntitlement: "10",
+    rttEmployeeAnnualEntitlement: "0",
     leaveProrataOnArrival: true,
     leaveProrataOnDeparture: true,
     leaveCarryoverAllowed: true,
@@ -704,9 +714,13 @@ function buildFormDataFromRecords(
     countryCode: toInputString(employee.country_code) || "FR",
 
     siteId: toInputString(employee.site_id),
+    siteFreeText: toInputString(employee.site_free_text),
     departmentId: toInputString(employee.department_id),
+    departmentFreeText: toInputString(employee.department_free_text),
     jobId: toInputString(employee.job_id),
+    jobFreeText: toInputString(employee.job_free_text),
     functionId: toInputString(employee.function_id),
+    functionFreeText: toInputString(employee.function_free_text),
     managerId: toInputString(employee.manager_employee_id),
 
     arrivalDate: toInputDate(employee.arrival_date),
@@ -778,8 +792,12 @@ function buildFormDataFromRecords(
       toInputString(contract?.leave_acquisition_start_month) || "6",
     paidLeaveAnnualEntitlement:
       toInputString(contract?.paid_leave_annual_entitlement) || "25",
-    rttAnnualEntitlement:
-      toInputString(contract?.rtt_annual_entitlement) || "10",
+    rttEmployerAnnualEntitlement:
+      toInputString(contract?.rtt_employer_annual_entitlement) ||
+      toInputString(contract?.rtt_annual_entitlement) ||
+      "10",
+    rttEmployeeAnnualEntitlement:
+      toInputString(contract?.rtt_employee_annual_entitlement) || "0",
     leaveProrataOnArrival:
       contract?.leave_prorata_on_arrival !== false,
     leaveProrataOnDeparture:
@@ -1617,6 +1635,14 @@ export default function HrEmployeeEditForm({
 
         function_id:
           emptyToNull(formData.functionId),
+        site_free_text:
+          emptyToNull(formData.siteFreeText),
+        department_free_text:
+          emptyToNull(formData.departmentFreeText),
+        job_free_text:
+          emptyToNull(formData.jobFreeText),
+        function_free_text:
+          emptyToNull(formData.functionFreeText),
 
         manager_id:
           emptyToNull(formData.managerId),
@@ -1793,7 +1819,11 @@ export default function HrEmployeeEditForm({
               paid_leave_annual_entitlement:
                 numberOrNull(formData.paidLeaveAnnualEntitlement),
               rtt_annual_entitlement:
-                numberOrNull(formData.rttAnnualEntitlement),
+                numberOrNull(formData.rttEmployerAnnualEntitlement),
+              rtt_employer_annual_entitlement:
+                numberOrNull(formData.rttEmployerAnnualEntitlement),
+              rtt_employee_annual_entitlement:
+                numberOrNull(formData.rttEmployeeAnnualEntitlement),
               leave_prorata_on_arrival:
                 formData.leaveProrataOnArrival,
               leave_prorata_on_departure:
@@ -2272,6 +2302,21 @@ export default function HrEmployeeEditForm({
                       </Field>
 
                       <Field
+                        label="Site libre"
+                        description="Optionnel : utile si le site n’existe pas encore dans le référentiel."
+                      >
+                        <input
+                          type="text"
+                          value={formData.siteFreeText}
+                          onChange={(event) =>
+                            updateField("siteFreeText", event.target.value)
+                          }
+                          className={inputClassName}
+                          placeholder="Ex. Lyon Part-Dieu, Remote EU..."
+                        />
+                      </Field>
+
+                      <Field
                         label="Service"
                         description="Liste issue du référentiel Architecture RH."
                       >
@@ -2293,6 +2338,21 @@ export default function HrEmployeeEditForm({
                       </Field>
 
                       <Field
+                        label="Service libre"
+                        description="Optionnel : utile si le service n’existe pas encore dans le référentiel."
+                      >
+                        <input
+                          type="text"
+                          value={formData.departmentFreeText}
+                          onChange={(event) =>
+                            updateField("departmentFreeText", event.target.value)
+                          }
+                          className={inputClassName}
+                          placeholder="Ex. Customer Success, Delivery..."
+                        />
+                      </Field>
+
+                      <Field
                         label="Métier"
                         description="Liste issue du référentiel Architecture RH."
                       >
@@ -2311,6 +2371,21 @@ export default function HrEmployeeEditForm({
                             </option>
                           ))}
                         </select>
+                      </Field>
+
+                      <Field
+                        label="Métier libre"
+                        description="Optionnel : utile si le métier n’existe pas encore dans le référentiel."
+                      >
+                        <input
+                          type="text"
+                          value={formData.jobFreeText}
+                          onChange={(event) =>
+                            updateField("jobFreeText", event.target.value)
+                          }
+                          className={inputClassName}
+                          placeholder="Ex. Consultant staffing, PMO..."
+                        />
                       </Field>
 
                       <Field
@@ -2378,7 +2453,7 @@ export default function HrEmployeeEditForm({
                         <input
                           type="number"
                           min="0"
-                          step="0.5"
+                          step="any"
                           value={formData.experienceYears}
                           onChange={(event) =>
                             updateField("experienceYears", event.target.value)
@@ -2616,7 +2691,7 @@ export default function HrEmployeeEditForm({
                         <input
                           type="number"
                           min="0"
-                          step="0.5"
+                          step="any"
                           value={formData.paidLeaveAnnualEntitlement}
                           onChange={(event) =>
                             updateField(
@@ -2629,17 +2704,36 @@ export default function HrEmployeeEditForm({
                       </Field>
 
                       <Field
-                        label="RTT annuels"
-                        description="Modifiable chaque année selon l’accord entreprise et le calendrier."
+                        label="RTT employeur annuels"
+                        description="Compteur RTT décidé par l’entreprise, modifiable chaque année."
                       >
                         <input
                           type="number"
                           min="0"
-                          step="0.5"
-                          value={formData.rttAnnualEntitlement}
+                          step="any"
+                          value={formData.rttEmployerAnnualEntitlement}
                           onChange={(event) =>
                             updateField(
-                              "rttAnnualEntitlement",
+                              "rttEmployerAnnualEntitlement",
+                              event.target.value,
+                            )
+                          }
+                          className={inputClassName}
+                        />
+                      </Field>
+
+                      <Field
+                        label="RTT employé annuels"
+                        description="Compteur distinct si l’entreprise suit une part RTT employé séparée."
+                      >
+                        <input
+                          type="number"
+                          min="0"
+                          step="any"
+                          value={formData.rttEmployeeAnnualEntitlement}
+                          onChange={(event) =>
+                            updateField(
+                              "rttEmployeeAnnualEntitlement",
                               event.target.value,
                             )
                           }
@@ -2651,7 +2745,7 @@ export default function HrEmployeeEditForm({
                         <input
                           type="number"
                           min="0"
-                          step="0.5"
+                          step="any"
                           value={formData.maximumLeaveCarryover}
                           onChange={(event) =>
                             updateField(
