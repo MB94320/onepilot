@@ -934,11 +934,11 @@ function RequestTable({
   onRestore,
 }: HrAbsenceRequestTableProps) {
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[1420px]">
-        <thead className="bg-slate-50/80 dark:bg-slate-900/70">
+    <div className="max-h-[520px] overflow-auto">
+      <table className="w-full min-w-[1420px] border-collapse">
+        <thead className="sticky top-0 z-20 bg-slate-50/95 backdrop-blur dark:bg-slate-900/95">
           <tr className="border-b border-slate-200 dark:border-slate-800">
-            <th className="px-4 py-2.5 text-left text-[10px] font-black uppercase tracking-wide text-slate-500">
+            <th className="sticky left-0 z-30 bg-slate-50/95 px-4 py-2.5 text-left text-[10px] font-black uppercase tracking-wide text-slate-500 shadow-[1px_0_0_0_rgba(148,163,184,0.25)] dark:bg-slate-900/95">
               Collaborateur
             </th>
 
@@ -1020,7 +1020,7 @@ function RequestTable({
                       : "hover:bg-slate-50/70 dark:hover:bg-slate-900/50"
                   }`}
                 >
-                  <td className="px-4 py-3">
+                  <td className="sticky left-0 z-10 bg-white px-4 py-3 shadow-[1px_0_0_0_rgba(148,163,184,0.18)] dark:bg-slate-950">
                     <div className="flex min-w-[230px] items-center gap-2.5">
                       <EmployeeAvatar
                         request={

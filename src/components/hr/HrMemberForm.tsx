@@ -1093,6 +1093,18 @@ export default function HrMemberForm({
               formData.leaveCarryoverAllowed,
             maximum_leave_carryover:
               numberOrNull(formData.maximumLeaveCarryover),
+            weekly_hours:
+              weeklyPatternSummary.weeklyHours > 0
+                ? weeklyPatternSummary.weeklyHours
+                : numberOrNull(compensation.weeklyHours),
+            daily_working_hours:
+              weeklyPatternSummary.averageDailyHours > 0
+                ? weeklyPatternSummary.averageDailyHours
+                : numberOrNull(compensation.dailyWorkingHours),
+            weekly_pattern:
+              formData.weeklyPattern,
+            weekly_work_pattern:
+              formData.weeklyPattern,
           })
           .eq("organization_id", organizationId)
           .eq("employee_id", employeeIdToUpdate);

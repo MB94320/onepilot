@@ -102,7 +102,9 @@ type EmployeeReference = {
   last_name?: string | null;
   photo_url?: string | null;
   site_name: string | null;
+  site_free_text?: string | null;
   department_name: string | null;
+  department_free_text?: string | null;
   manager_id: string | null;
   manager_name: string | null;
 };
@@ -185,6 +187,7 @@ type ExportRow = {
 
 const initialFilters: HrAbsenceFiltersValue = {
   search: "",
+  resource: "all",
   status: "all",
   type: "all",
   site: "all",
@@ -609,6 +612,7 @@ async function loadAbsencePageData(
     requestsResult,
     balancesResult,
     employeesResult,
+    employeeFreeFieldsResult,
     absenceTypesResult,
     settingsResult,
   ] = await Promise.all([
@@ -666,6 +670,25 @@ async function loadAbsencePageData(
 
     (
       supabase.from(
+        "hr_employees" as never,
+      ) as any
+    )
+      .select(
+        `
+          id,
+          site_free_text,
+          department_free_text,
+          job_free_text,
+          function_free_text
+        `,
+      )
+      .eq(
+        "organization_id",
+        organization.id,
+      ),
+
+    (
+      supabase.from(
         "hr_absence_types" as never,
       ) as any
     )
@@ -714,6 +737,12 @@ async function loadAbsencePageData(
     );
   }
 
+  if (employeeFreeFieldsResult.error) {
+    throw new Error(
+      `Impossible de charger les rattachements libres : ${employeeFreeFieldsResult.error.message}`,
+    );
+  }
+
   if (absenceTypesResult.error) {
     throw new Error(
       `Impossible de charger les types d’absence : ${absenceTypesResult.error.message}`,
@@ -726,11 +755,21 @@ async function loadAbsencePageData(
     );
   }
 
+  const employeeFreeFieldsById = new Map(
+    ((employeeFreeFieldsResult.data ?? []) as any[]).map((employee) => [
+      employee.id,
+      employee,
+    ]),
+  );
+
   const employees =
     (
       employeesResult.data ??
       []
-    ) as EmployeeReference[];
+    ).map((employee: EmployeeReference) => ({
+      ...employee,
+      ...(employeeFreeFieldsById.get(employee.id) ?? {}),
+    })) as EmployeeReference[];
 
   const absenceTypes =
     (
@@ -819,11 +858,11 @@ async function loadAbsencePageData(
             null,
 
           site_name:
-            employee?.site_name ??
+            ((employee as any)?.site_free_text ?? employee?.site_name) ??
             null,
 
           department_name:
-            employee?.department_name ??
+            ((employee as any)?.department_free_text ?? employee?.department_name) ??
             null,
 
           absence_type_code:
@@ -883,6 +922,16 @@ async function loadAbsencePageData(
 
         return {
           ...rawRequest,
+          site_name:
+            (employee as any)?.site_free_text ??
+            rawRequest.site_name ??
+            employee?.site_name ??
+            null,
+          department_name:
+            (employee as any)?.department_free_text ??
+            rawRequest.department_name ??
+            employee?.department_name ??
+            null,
           manager_name:
             rawRequest.manager_name ??
             manager?.full_name ??
@@ -1287,12 +1336,6 @@ async function copyDistributionSvg(
         await navigator.clipboard.write([
           new ClipboardItem({
             "image/png": pngBlob,
-            "image/svg+xml": new Blob([svg], {
-              type: "image/svg+xml",
-            }),
-            "text/plain": new Blob([svg], {
-              type: "text/plain",
-            }),
           }),
         ]);
 
@@ -1911,31 +1954,21 @@ function BalanceMetricCell({
   const available = getBalanceAvailable(balance);
 
   return (
-    <div className={`rounded-xl border p-3 ${styles[accent]}`}>
-      <p className="text-[10px] font-black uppercase tracking-wide opacity-80">
-        {label}
-      </p>
+    <div className={`rounded-xl border px-3 py-2.5 ${styles[accent]}`}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-[10px] font-black uppercase tracking-wide opacity-80">
+          {label}
+        </p>
+        <p className="text-sm font-black">
+          Solde {formatNumber(available)}
+        </p>
+      </div>
 
-      <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
-        <div>
-          <p className="font-black uppercase opacity-70">Droit</p>
-          <p className="mt-1 text-sm font-black">{formatNumber(balance?.annual_entitlement ?? 0)}</p>
-        </div>
-
-        <div>
-          <p className="font-black uppercase opacity-70">Solde</p>
-          <p className="mt-1 text-sm font-black">{formatNumber(available)}</p>
-        </div>
-
-        <div>
-          <p className="font-black uppercase opacity-70">Consommé</p>
-          <p className="mt-1 text-sm font-black">{formatNumber(balance?.consumed_amount ?? 0)}</p>
-        </div>
-
-        <div>
-          <p className="font-black uppercase opacity-70">En cours</p>
-          <p className="mt-1 text-sm font-black">{formatNumber(balance?.pending_amount ?? 0)}</p>
-        </div>
+      <div className="mt-2 grid grid-cols-4 gap-2 text-[10px] font-bold">
+        <span>Droit {formatNumber(balance?.annual_entitlement ?? 0)}</span>
+        <span>Report {formatNumber(balance?.carried_over_amount ?? 0)}</span>
+        <span>Cons. {formatNumber(balance?.consumed_amount ?? 0)}</span>
+        <span>En cours {formatNumber(balance?.pending_amount ?? 0)}</span>
       </div>
     </div>
   );
@@ -2052,13 +2085,9 @@ function BalancesPanel({
       <PanelHeader
         icon={WalletCards}
         title="Soldes d’absence"
-        description="Vue consolidée par collaborateur : CP, RTT employé et RTT employeur, avec droits, consommé, en cours et solde restant."
+        description="Vue détaillée par collaborateur et type d’absence : droit, report, ajustement, consommé, en cours et solde restant."
         accent="amber"
-        countText={`${balanceGroups.length} collaborateur${
-          balanceGroups.length > 1
-            ? "s"
-            : ""
-        }`}
+        countText={`${balances.length} ligne${balances.length > 1 ? "s" : ""} de solde`}
         right={
           <ViewSwitch
             mode={displayMode}
@@ -2089,51 +2118,49 @@ function BalancesPanel({
         </div>
       ) : (
         <div className="max-h-[430px] overflow-auto">
-          <table className="w-full min-w-[1400px]">
-            <thead className="sticky top-0 z-10 bg-slate-50/95 backdrop-blur dark:bg-slate-900/95">
+          <table className="w-full min-w-[1320px] border-collapse">
+            <thead className="sticky top-0 z-20 bg-slate-50/95 backdrop-blur dark:bg-slate-900/95">
               <tr className="border-b border-slate-200 dark:border-slate-800">
-                <th className="px-4 py-2.5 text-left text-[10px] font-black uppercase tracking-wide text-slate-500">Collaborateur</th>
-                <th className="px-3 py-2.5 text-right text-[10px] font-black uppercase tracking-wide text-slate-500">CP droit</th>
-                <th className="px-3 py-2.5 text-right text-[10px] font-black uppercase tracking-wide text-slate-500">CP consommé</th>
-                <th className="px-3 py-2.5 text-right text-[10px] font-black uppercase tracking-wide text-slate-500">CP en cours</th>
-                <th className="px-3 py-2.5 text-right text-[10px] font-black uppercase tracking-wide text-slate-500">CP solde</th>
-                <th className="px-3 py-2.5 text-right text-[10px] font-black uppercase tracking-wide text-slate-500">RTT employé droit</th>
-                <th className="px-3 py-2.5 text-right text-[10px] font-black uppercase tracking-wide text-slate-500">RTT employé solde</th>
-                <th className="px-3 py-2.5 text-right text-[10px] font-black uppercase tracking-wide text-slate-500">RTT employeur droit</th>
-                <th className="px-4 py-2.5 text-right text-[10px] font-black uppercase tracking-wide text-slate-500">RTT employeur solde</th>
+                <th className="sticky left-0 z-30 bg-slate-50/95 px-4 py-2.5 text-left text-[10px] font-black uppercase tracking-wide text-slate-500 shadow-[1px_0_0_0_rgba(148,163,184,0.25)] dark:bg-slate-900/95">Collaborateur</th>
+                <th className="px-3 py-2.5 text-left text-[10px] font-black uppercase tracking-wide text-slate-500">Type d’absence</th>
+                <th className="px-3 py-2.5 text-left text-[10px] font-black uppercase tracking-wide text-slate-500">Période</th>
+                <th className="px-3 py-2.5 text-right text-[10px] font-black uppercase tracking-wide text-slate-500">Droit</th>
+                <th className="px-3 py-2.5 text-right text-[10px] font-black uppercase tracking-wide text-slate-500">Report</th>
+                <th className="px-3 py-2.5 text-right text-[10px] font-black uppercase tracking-wide text-slate-500">Ajustement</th>
+                <th className="px-3 py-2.5 text-right text-[10px] font-black uppercase tracking-wide text-slate-500">Consommé</th>
+                <th className="px-3 py-2.5 text-right text-[10px] font-black uppercase tracking-wide text-slate-500">En cours</th>
+                <th className="px-4 py-2.5 text-right text-[10px] font-black uppercase tracking-wide text-slate-500">Solde</th>
               </tr>
             </thead>
 
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {balanceGroups.map((group) => {
-                const cp = getBalanceByCode(group, "CP");
-                const rttEmployee = getBalanceByCode(group, "RTT_EMPLOYE");
-                const rttEmployer = getBalanceByCode(group, "RTT_EMPLOYEUR");
-                const avatarBalance = group.balances[0];
-
-                return (
-                  <tr key={group.employeeId} className="transition hover:bg-indigo-50/60 dark:hover:bg-indigo-950/20">
-                    <td className="px-4 py-3">
-                      <div className="flex min-w-[230px] items-center gap-2.5">
-                        {avatarBalance ? <BalanceAvatar balance={avatarBalance} /> : null}
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-black text-slate-950 dark:text-white">{group.employeeName ?? "Collaborateur non renseigné"}</p>
-                          <p className="mt-0.5 text-xs font-semibold text-indigo-600 dark:text-indigo-400">{group.employeeNumber ?? "Matricule non renseigné"}</p>
-                          <p className="mt-0.5 truncate text-[11px] text-slate-400">{group.departmentName ?? "Service non renseigné"} · {group.siteName ?? "Site non renseigné"}</p>
-                        </div>
+              {balances.map((balance) => (
+                <tr key={balance.id} className="transition hover:bg-indigo-50/60 dark:hover:bg-indigo-950/20">
+                  <td className="sticky left-0 z-10 bg-white px-4 py-3 shadow-[1px_0_0_0_rgba(148,163,184,0.18)] dark:bg-slate-950">
+                    <div className="flex min-w-[240px] items-center gap-2.5">
+                      <BalanceAvatar balance={balance} />
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-black text-slate-950 dark:text-white">{balance.employee_name ?? "Collaborateur non renseigné"}</p>
+                        <p className="mt-0.5 text-xs font-semibold text-indigo-600 dark:text-indigo-400">{balance.employee_number ?? "Matricule non renseigné"}</p>
+                        <p className="mt-0.5 truncate text-[11px] text-slate-400">{balance.department_name ?? "Service non renseigné"} · {balance.site_name ?? "Site non renseigné"}</p>
                       </div>
-                    </td>
-                    <td className="px-3 py-3 text-right text-sm font-bold text-slate-700 dark:text-slate-300">{formatNumber(cp?.annual_entitlement ?? 0)}</td>
-                    <td className="px-3 py-3 text-right text-sm font-bold text-rose-600 dark:text-rose-300">{formatNumber(cp?.consumed_amount ?? 0)}</td>
-                    <td className="px-3 py-3 text-right text-sm font-bold text-amber-600 dark:text-amber-300">{formatNumber(cp?.pending_amount ?? 0)}</td>
-                    <td className="px-3 py-3 text-right text-sm font-black text-indigo-700 dark:text-indigo-300">{formatNumber(getBalanceAvailable(cp))}</td>
-                    <td className="px-3 py-3 text-right text-sm font-bold text-slate-700 dark:text-slate-300">{formatNumber(rttEmployee?.annual_entitlement ?? 0)}</td>
-                    <td className="px-3 py-3 text-right text-sm font-black text-violet-700 dark:text-violet-300">{formatNumber(getBalanceAvailable(rttEmployee))}</td>
-                    <td className="px-3 py-3 text-right text-sm font-bold text-slate-700 dark:text-slate-300">{formatNumber(rttEmployer?.annual_entitlement ?? 0)}</td>
-                    <td className="px-4 py-3 text-right text-sm font-black text-emerald-700 dark:text-emerald-300">{formatNumber(getBalanceAvailable(rttEmployer))}</td>
-                  </tr>
-                );
-              })}
+                    </div>
+                  </td>
+                  <td className="px-3 py-3">
+                    <p className="truncate text-sm font-black text-slate-800 dark:text-slate-200">{balance.absence_type_name ?? "Type non renseigné"}</p>
+                    <p className="mt-0.5 text-[10px] font-black uppercase tracking-wide text-slate-400">{balance.absence_type_code ?? "—"}</p>
+                  </td>
+                  <td className="px-3 py-3 text-sm font-semibold text-slate-600 dark:text-slate-300">
+                    {formatDate(balance.period_start)} → {formatDate(balance.period_end)}
+                  </td>
+                  <td className="px-3 py-3 text-right text-sm font-bold text-slate-700 dark:text-slate-300">{formatNumber(balance.annual_entitlement ?? 0)}</td>
+                  <td className="px-3 py-3 text-right text-sm font-bold text-slate-700 dark:text-slate-300">{formatNumber(balance.carried_over_amount ?? 0)}</td>
+                  <td className="px-3 py-3 text-right text-sm font-bold text-slate-700 dark:text-slate-300">{formatNumber(balance.adjustment_amount ?? 0)}</td>
+                  <td className="px-3 py-3 text-right text-sm font-bold text-rose-600 dark:text-rose-300">{formatNumber(balance.consumed_amount ?? 0)}</td>
+                  <td className="px-3 py-3 text-right text-sm font-bold text-amber-600 dark:text-amber-300">{formatNumber(balance.pending_amount ?? 0)}</td>
+                  <td className="px-4 py-3 text-right text-sm font-black text-emerald-700 dark:text-emerald-300">{formatNumber(getBalanceAvailable(balance))}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -2369,9 +2396,9 @@ function ApprovalQueueTable({
   return (
     <div className="max-h-[520px] overflow-auto">
       <table className="w-full min-w-[1380px] border-collapse">
-        <thead className="sticky top-0 z-10">
+        <thead className="sticky top-0 z-20">
           <tr className="border-b border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900">
-            <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wide text-slate-500">Collaborateur</th>
+            <th className="sticky left-0 z-30 bg-slate-50 px-4 py-3 text-left text-[10px] font-black uppercase tracking-wide text-slate-500 shadow-[1px_0_0_0_rgba(148,163,184,0.25)] dark:bg-slate-900">Collaborateur</th>
             <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wide text-slate-500">Type</th>
             <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wide text-slate-500">Période</th>
             <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wide text-slate-500">Décompte</th>
@@ -2392,7 +2419,7 @@ function ApprovalQueueTable({
                 key={request.id}
                 className="border-b border-slate-100 transition last:border-0 hover:bg-indigo-50/60 dark:border-slate-800 dark:hover:bg-indigo-950/20"
               >
-                <td className="px-4 py-3">
+                <td className="sticky left-0 z-10 bg-white px-4 py-3 shadow-[1px_0_0_0_rgba(148,163,184,0.18)] dark:bg-slate-950">
                   <p title={request.employee_name ?? "Collaborateur"} className="max-w-56 truncate text-sm font-black text-slate-950 dark:text-white">
                     {request.employee_name ?? "Collaborateur non renseigné"}
                   </p>
@@ -2817,6 +2844,13 @@ export default function HrAbsencesPage({
               normalizedSearch,
             );
 
+          const matchesResource =
+            !filters.resource ||
+            filters.resource === "all" ||
+            request.employee_name === filters.resource ||
+            request.employee_id === filters.resource ||
+            request.employee_number === filters.resource;
+
           const matchesStatus =
             filters.status === "all" ||
             request.status ===
@@ -2853,6 +2887,7 @@ export default function HrAbsencesPage({
 
           return (
             matchesSearch &&
+            matchesResource &&
             matchesStatus &&
             matchesType &&
             matchesSite &&
@@ -2865,6 +2900,67 @@ export default function HrAbsencesPage({
       data,
       filters,
     ]);
+
+  const filteredBalances =
+    useMemo(() => {
+      if (!data) {
+        return [];
+      }
+
+      const employeesInFilteredRequests = new Set(
+        filteredRequests.map((request) => request.employee_id),
+      );
+
+      const normalizedSearch = filters.search.trim().toLowerCase();
+
+      return data.balances.filter((balance) => {
+        const searchableContent = [
+          balance.employee_name,
+          balance.employee_number,
+          balance.absence_type_name,
+          balance.absence_type_code,
+          balance.site_name,
+          balance.department_name,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+
+        const matchesSearch =
+          normalizedSearch.length === 0 || searchableContent.includes(normalizedSearch);
+
+        const matchesResource =
+          !filters.resource ||
+          filters.resource === "all" ||
+          balance.employee_name === filters.resource ||
+          balance.employee_id === filters.resource ||
+          balance.employee_number === filters.resource;
+
+        const matchesType =
+          filters.type === "all" ||
+          balance.absence_type_name === filters.type ||
+          balance.absence_type_code === filters.type;
+
+        const matchesSite =
+          filters.site === "all" || balance.site_name === filters.site;
+
+        const hasRequestScopedFilter =
+          filters.status !== "all" ||
+          filters.period !== "all" ||
+          filters.archive !== "active";
+
+        const matchesRequestScope =
+          !hasRequestScopedFilter || employeesInFilteredRequests.has(balance.employee_id);
+
+        return (
+          matchesSearch &&
+          matchesResource &&
+          matchesType &&
+          matchesSite &&
+          matchesRequestScope
+        );
+      });
+    }, [data, filteredRequests, filters]);
 
   const metrics = useMemo(() => {
     const activeRequests =
@@ -3763,7 +3859,7 @@ export default function HrAbsencesPage({
           "balances" && (
           <BalancesPanel
             balances={
-              data.balances
+              filteredBalances
             }
           />
         )}

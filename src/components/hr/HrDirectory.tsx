@@ -43,9 +43,13 @@ export type HrDirectoryEmployee = {
   is_active: boolean;
 
   site_name: string | null;
+  site_free_text?: string | null;
   department_name: string | null;
+  department_free_text?: string | null;
   job_name: string | null;
+  job_free_text?: string | null;
   function_name: string | null;
+  function_free_text?: string | null;
   manager_name: string | null;
 
   contract_type_name: string | null;
@@ -97,6 +101,23 @@ type ActionMenuProps = {
   onArchive?: EmployeeAction;
   onRestore?: EmployeeAction;
 };
+
+
+function getEmployeeSite(employee: HrDirectoryEmployee) {
+  return employee.site_free_text || employee.site_name;
+}
+
+function getEmployeeDepartment(employee: HrDirectoryEmployee) {
+  return employee.department_free_text || employee.department_name;
+}
+
+function getEmployeeJob(employee: HrDirectoryEmployee) {
+  return employee.job_free_text || employee.job_name;
+}
+
+function getEmployeeFunction(employee: HrDirectoryEmployee) {
+  return employee.function_free_text || employee.function_name;
+}
 
 function formatDate(
   value: string | null,
@@ -670,8 +691,8 @@ function EmployeeCard({
             <BriefcaseBusiness className="h-4 w-4 shrink-0 text-violet-500" />
 
             <span className="truncate">
-              {employee.function_name ||
-                employee.job_name ||
+              {getEmployeeFunction(employee) ||
+                getEmployeeJob(employee) ||
                 "Fonction non renseignée"}
             </span>
           </div>
@@ -680,7 +701,7 @@ function EmployeeCard({
             <Building2 className="h-4 w-4 shrink-0 text-sky-500" />
 
             <span className="truncate">
-              {employee.department_name ||
+              {getEmployeeDepartment(employee) ||
                 "Service non renseigné"}
             </span>
           </div>
@@ -689,7 +710,7 @@ function EmployeeCard({
             <MapPin className="h-4 w-4 shrink-0 text-rose-500" />
 
             <span className="truncate">
-              {employee.site_name ||
+              {getEmployeeSite(employee) ||
                 "Site non renseigné"}
             </span>
           </div>
@@ -889,20 +910,21 @@ export default function HrDirectory({
           )}
         </div>
       ) : (
-        <div className="overflow-x-auto">
+        <div className="max-h-[520px] overflow-auto">
           <table className="w-full min-w-[1480px] border-collapse">
-            <thead>
+            <thead className="sticky top-0 z-20">
               <tr className="border-b border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900">
                 {headerColumns.map(
                   (heading) => (
                     <th
                       key={heading}
-                      className={`px-4 py-3 text-left text-[10px] font-black uppercase tracking-wide text-slate-500 ${
-                        heading ===
-                        "Actions"
-                          ? "text-right"
-                          : ""
-                      }`}
+                      className={
+                        heading === "Collaborateur"
+                          ? "sticky left-0 z-30 bg-slate-50 px-4 py-3 text-left text-[10px] font-black uppercase tracking-wide text-slate-500 shadow-[1px_0_0_0_rgba(148,163,184,0.25)] dark:bg-slate-900"
+                          : `px-4 py-3 text-left text-[10px] font-black uppercase tracking-wide text-slate-500 ${
+                              heading === "Actions" ? "text-right" : ""
+                            }`
+                      }
                     >
                       {heading}
                     </th>
@@ -935,7 +957,7 @@ export default function HrDirectory({
                           : "hover:bg-slate-50 dark:hover:bg-slate-900/60"
                     }`}
                   >
-                    <td className="px-4 py-3">
+                    <td className="sticky left-0 z-10 bg-white px-4 py-3 shadow-[1px_0_0_0_rgba(148,163,184,0.18)] dark:bg-slate-950">
                       <div className="flex items-center gap-3">
                         <EmployeeAvatar
                           employee={
@@ -983,22 +1005,22 @@ export default function HrDirectory({
 
                     <td className="px-4 py-3">
                       <p className="max-w-44 truncate text-sm font-semibold text-slate-700 dark:text-slate-300">
-                        {employee.function_name ||
-                          employee.job_name ||
+                        {getEmployeeFunction(employee) ||
+                          getEmployeeJob(employee) ||
                           "—"}
                       </p>
                     </td>
 
                     <td className="px-4 py-3">
                       <p className="max-w-44 truncate text-sm text-slate-600 dark:text-slate-400">
-                        {employee.department_name ||
+                        {getEmployeeDepartment(employee) ||
                           "—"}
                       </p>
                     </td>
 
                     <td className="px-4 py-3">
                       <p className="max-w-44 truncate text-sm text-slate-600 dark:text-slate-400">
-                        {employee.site_name ||
+                        {getEmployeeSite(employee) ||
                           "—"}
                       </p>
                     </td>

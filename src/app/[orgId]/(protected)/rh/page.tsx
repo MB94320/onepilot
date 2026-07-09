@@ -90,9 +90,13 @@ type HrEmployeeOverview = {
   is_active: boolean | null;
 
   site_name: string | null;
+  site_free_text?: string | null;
   department_name: string | null;
+  department_free_text?: string | null;
   job_name: string | null;
+  job_free_text?: string | null;
   function_name: string | null;
+  function_free_text?: string | null;
   manager_name: string | null;
   contract_type_name: string | null;
   work_schedule_name: string | null;
@@ -178,6 +182,23 @@ function isUuid(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
     value,
   );
+}
+
+
+function getEmployeeSite(employee: HrEmployeeOverview) {
+  return employee.site_free_text || employee.site_name;
+}
+
+function getEmployeeDepartment(employee: HrEmployeeOverview) {
+  return employee.department_free_text || employee.department_name;
+}
+
+function getEmployeeJob(employee: HrEmployeeOverview) {
+  return employee.job_free_text || employee.job_name;
+}
+
+function getEmployeeFunction(employee: HrEmployeeOverview) {
+  return employee.function_free_text || employee.function_name;
 }
 
 function isBlank(
@@ -359,6 +380,7 @@ async function loadHrOverviewData(
 
   const [
     employeesResult,
+    employeeFreeFieldsResult,
     settingsResult,
   ] = await Promise.all([
     (
@@ -380,6 +402,17 @@ async function loadHrOverviewData(
 
     (
       supabase.from(
+        "hr_employees" as never,
+      ) as any
+    )
+      .select("id, site_free_text, department_free_text, job_free_text, function_free_text")
+      .eq(
+        "organization_id",
+        organization.id,
+      ),
+
+    (
+      supabase.from(
         "hr_settings" as never,
       ) as any
     )
@@ -394,6 +427,12 @@ async function loadHrOverviewData(
   if (employeesResult.error) {
     throw new Error(
       `Impossible de charger les données RH : ${employeesResult.error.message}`,
+    );
+  }
+
+  if (employeeFreeFieldsResult.error) {
+    throw new Error(
+      `Impossible de charger les rattachements libres : ${employeeFreeFieldsResult.error.message}`,
     );
   }
 
@@ -414,10 +453,16 @@ async function loadHrOverviewData(
       ) ?? null,
 
     employees:
-      (
-        employeesResult.data ??
-        []
-      ) as HrEmployeeOverview[],
+      ((employeesResult.data ?? []) as HrEmployeeOverview[]).map((employee) => {
+        const freeFields = ((employeeFreeFieldsResult.data ?? []) as any[]).find(
+          (item) => item.id === employee.id,
+        );
+
+        return {
+          ...employee,
+          ...(freeFields ?? {}),
+        };
+      }),
   };
 }
 
@@ -1203,10 +1248,10 @@ export default function HrOverviewPage({
             employee.employee_number,
             employee.professional_email,
             employee.professional_phone,
-            employee.site_name,
-            employee.department_name,
-            employee.job_name,
-            employee.function_name,
+            getEmployeeSite(employee),
+            getEmployeeDepartment(employee),
+            getEmployeeJob(employee),
+            getEmployeeFunction(employee),
             employee.manager_name,
             employee.contract_type_name,
             employee.work_schedule_name,
@@ -1229,13 +1274,13 @@ export default function HrOverviewPage({
 
           const matchesSite =
             filters.site === "all" ||
-            employee.site_name ===
+            getEmployeeSite(employee) ===
               filters.site;
 
           const matchesDepartment =
             filters.department ===
               "all" ||
-            employee.department_name ===
+            getEmployeeDepartment(employee) ===
               filters.department;
 
           const matchesContract =
@@ -1300,10 +1345,10 @@ export default function HrOverviewPage({
       employees.filter(
         (employee) =>
           isBlank(
-            employee.site_name,
+            getEmployeeSite(employee),
           ) ||
           isBlank(
-            employee.department_name,
+            getEmployeeDepartment(employee),
           ),
       ).length;
 
@@ -1372,11 +1417,11 @@ export default function HrOverviewPage({
             ),
 
             !isBlank(
-              employee.site_name,
+              getEmployeeSite(employee),
             ),
 
             !isBlank(
-              employee.department_name,
+              getEmployeeDepartment(employee),
             ),
 
             !isBlank(
@@ -1452,7 +1497,7 @@ export default function HrOverviewPage({
             filteredEmployees,
 
             (employee) =>
-              employee.site_name,
+              getEmployeeSite(employee),
 
             "Site non renseigné",
           ),
@@ -1462,7 +1507,7 @@ export default function HrOverviewPage({
             filteredEmployees,
 
             (employee) =>
-              employee.department_name,
+              getEmployeeDepartment(employee),
 
             "Service non renseigné",
           ),
