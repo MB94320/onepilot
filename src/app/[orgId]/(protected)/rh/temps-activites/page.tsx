@@ -74,7 +74,7 @@ async function loadPageData(slugOrId: string) {
     throw new Error(rowsResult.error.message);
   }
 
-  const rows = (rowsResult.data ?? []) as Array<{ id: string; status: string | null; archived_at: string | null }>;
+  const rows = (rowsResult.data ?? []) as Array<{ id: string; status: string | null; created_at: string | null; archived_at: string | null }>;
   return { organization, rows };
 }
 
@@ -113,7 +113,6 @@ export default function Page({ params }: { params: Promise<PageParams> }) {
     };
   }, [data]);
 
-  const Icon = Clock3;
 
   if (isLoading) {
     return <div className="p-6 text-sm font-semibold text-slate-500">Chargement du module Temps & activités…</div>;
@@ -135,7 +134,6 @@ export default function Page({ params }: { params: Promise<PageParams> }) {
       <PageHeader
         title="Temps & activités"
         subtitle="Pilotage des temps saisis, validations manager, imputation projet, alertes d’écart et capacité réelle."
-        icon={<Icon className="h-5 w-5" />}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <button type="button" className="inline-flex h-10 items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 text-sm font-bold text-emerald-700 transition hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300">
