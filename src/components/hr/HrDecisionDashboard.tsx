@@ -2,6 +2,7 @@
 
 import {
   useRef,
+  useState,
   type ComponentType,
   type ReactNode,
 } from "react";
@@ -37,6 +38,8 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import html2canvas from "html2canvas";
+
 import {
   getEmployeeDepartment,
   getEmployeeFunction,
@@ -364,218 +367,140 @@ function buildChartSvg(title: string, description: string, config: ChartExportCo
   `.trim();
 }
 
-function getRechartsSvg(chartElement: HTMLElement | null) {
-  const sourceSvg = chartElement?.querySelector<SVGSVGElement>(".recharts-wrapper svg, svg.recharts-surface, svg");
+async function copyChartSvg(title: string, description: string, config: ChartExportConfig) {
+  const svg = buildChartSvg(title, description, config);
 
-  if (!sourceSvg) {
-    return null;
-  }
-
-  const clonedSvg = sourceSvg.cloneNode(true) as SVGSVGElement;
-  const rect = sourceSvg.getBoundingClientRect();
-  const width = Math.max(900, Math.round(rect.width || 900));
-  const height = Math.max(420, Math.round(rect.height || 420));
-
-  clonedSvg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-  clonedSvg.setAttribute("width", String(width));
-  clonedSvg.setAttribute("height", String(height));
-
-  if (!clonedSvg.getAttribute("viewBox")) {
-    clonedSvg.setAttribute("viewBox", `0 0 ${width} ${height}`);
-  }
-
-  clonedSvg.querySelectorAll(".recharts-tooltip-wrapper").forEach((node) => node.remove());
-
-  return new XMLSerializer().serializeToString(clonedSvg);
-}
-
-function loadSvgAsImage(svg: string) {
-  return new Promise<HTMLImageElement>((resolve, reject) => {
-    const image = new Image();
-    const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-
-    image.onload = () => {
-      URL.revokeObjectURL(url);
-      resolve(image);
-    };
-
-    image.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error("Impossible de charger le graphique."));
-    };
-
-    image.src = url;
-  });
-}
-
-function drawRoundedRect(
-  context: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  radius: number,
-) {
-  const safeRadius = Math.min(radius, width / 2, height / 2);
-
-  context.beginPath();
-  context.moveTo(x + safeRadius, y);
-  context.arcTo(x + width, y, x + width, y + height, safeRadius);
-  context.arcTo(x + width, y + height, x, y + height, safeRadius);
-  context.arcTo(x, y + height, x, y, safeRadius);
-  context.arcTo(x, y, x + width, y, safeRadius);
-  context.closePath();
-}
-
-function buildPngBlobFromCanvas(canvas: HTMLCanvasElement) {
-  return new Promise<Blob | null>((resolve) => {
-    canvas.toBlob(resolve, "image/png", 1);
-  });
-}
-
-async function buildChartPngBlob(
-  title: string,
-  description: string,
-  config: ChartExportConfig,
-  chartElement: HTMLElement | null,
-) {
-  const width = 1400;
-  const height = 860;
-  const pixelRatio = Math.max(2, Math.min(3, window.devicePixelRatio || 2));
-  const canvas = document.createElement("canvas");
-  const context = canvas.getContext("2d");
-
-  if (!context) {
-    return null;
-  }
-
-  canvas.width = width * pixelRatio;
-  canvas.height = height * pixelRatio;
-  canvas.style.width = `${width}px`;
-  canvas.style.height = `${height}px`;
-  context.scale(pixelRatio, pixelRatio);
-
-  context.fillStyle = "#ffffff";
-  context.fillRect(0, 0, width, height);
-
-  drawRoundedRect(context, 34, 30, width - 68, height - 60, 34);
-  context.fillStyle = "#f8fafc";
-  context.fill();
-  context.strokeStyle = "#bae6fd";
-  context.lineWidth = 2;
-  context.stroke();
-
-  context.save();
-  drawRoundedRect(context, 34, 30, width - 68, 112, 34);
-  context.clip();
-  const headerGradient = context.createLinearGradient(34, 30, width - 34, 142);
-  headerGradient.addColorStop(0, "#e0f2fe");
-  headerGradient.addColorStop(0.52, "#ffffff");
-  headerGradient.addColorStop(1, "#eef2ff");
-  context.fillStyle = headerGradient;
-  context.fillRect(34, 30, width - 68, 112);
-  context.restore();
-
-  context.fillStyle = "#0f172a";
-  context.font = "800 30px Arial, sans-serif";
-  context.fillText(title, 82, 76);
-
-  context.fillStyle = "#64748b";
-  context.font = "500 16px Arial, sans-serif";
-  context.fillText(description, 82, 106);
-
-  const svg = getRechartsSvg(chartElement) ?? buildChartSvg(title, description, config);
-
-  try {
-    const image = await loadSvgAsImage(svg);
-    const chartX = 78;
-    const chartY = 168;
-    const chartWidth = width - 156;
-    const chartHeight = height - 250;
-    const scale = Math.min(chartWidth / image.width, chartHeight / image.height);
-    const drawWidth = image.width * scale;
-    const drawHeight = image.height * scale;
-    const drawX = chartX + (chartWidth - drawWidth) / 2;
-    const drawY = chartY + (chartHeight - drawHeight) / 2;
-
-    context.drawImage(image, drawX, drawY, drawWidth, drawHeight);
-  } catch {
-    const fallbackSvg = buildChartSvg(title, description, config);
-    const image = await loadSvgAsImage(fallbackSvg);
-    context.drawImage(image, 58, 148, width - 116, height - 210);
-  }
-
-  context.fillStyle = "#94a3b8";
-  context.font = "600 12px Arial, sans-serif";
-  context.fillText("ONEPILOT · Export graphique", 82, height - 58);
-
-  return buildPngBlobFromCanvas(canvas);
-}
-
-async function copyBlobToClipboard(blob: Blob) {
-  if (navigator.clipboard?.write && typeof ClipboardItem !== "undefined") {
-    await navigator.clipboard.write([
-      new ClipboardItem({
-        [blob.type]: blob,
-      }),
-    ]);
-    return true;
-  }
-
-  return false;
-}
-
-async function copyChartToClipboard(
-  title: string,
-  description: string,
-  config: ChartExportConfig,
-  chartElement: HTMLElement | null,
-) {
-  if (typeof window === "undefined" || typeof document === "undefined") {
-    return;
-  }
-
-  const blob = await buildChartPngBlob(title, description, config, chartElement);
-
-  if (!blob) {
+  if (typeof navigator === "undefined" || !navigator.clipboard) {
     return;
   }
 
   try {
-    const copied = await copyBlobToClipboard(blob);
-
-    if (copied) {
+    if (typeof ClipboardItem !== "undefined" && navigator.clipboard.write) {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          "image/svg+xml": new Blob([svg], { type: "image/svg+xml" }),
+          "text/plain": new Blob([svg], { type: "text/plain" }),
+        }),
+      ]);
       return;
     }
   } catch {
-    // Fallback HTML ci-dessous.
+    // Fallback texte identique au modèle Staffing.
   }
 
-  const dataUrl = await new Promise<string>((resolve) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.readAsDataURL(blob);
-  });
-
-  const container = document.createElement("div");
-  container.contentEditable = "true";
-  container.style.position = "fixed";
-  container.style.left = "-10000px";
-  container.style.top = "0";
-  container.innerHTML = `<img src="${dataUrl}" alt="${title.replaceAll('"', "&quot;")}" />`;
-  document.body.appendChild(container);
-
-  const range = document.createRange();
-  range.selectNode(container);
-  const selection = window.getSelection();
-  selection?.removeAllRanges();
-  selection?.addRange(range);
-  document.execCommand("copy");
-  selection?.removeAllRanges();
-  container.remove();
+  try {
+    await navigator.clipboard.writeText(svg);
+  } catch {
+    // Aucun message bloquant : certains navigateurs refusent le presse-papiers image hors HTTPS.
+  }
 }
 
+function downloadChartPng(blob: Blob, filename = "onepilot-graphique.png") {
+  if (typeof document === "undefined" || typeof URL === "undefined") {
+    return;
+  }
+
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function copyBlobToClipboard(blob: Blob) {
+  if (
+    typeof navigator === "undefined" ||
+    typeof ClipboardItem === "undefined" ||
+    !navigator.clipboard?.write
+  ) {
+    return false;
+  }
+
+  try {
+    await navigator.clipboard.write([
+      new ClipboardItem({
+        "image/png": blob,
+      }),
+    ]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function copyRenderedChartBlock(chartElement: HTMLElement | null) {
+  if (!chartElement || typeof window === "undefined" || typeof document === "undefined") {
+    return "failed" as const;
+  }
+
+  const actions = Array.from(chartElement.querySelectorAll<HTMLElement>("[data-chart-actions]"));
+  const previousDisplays = actions.map((action) => action.style.display);
+  const previousBackground = chartElement.style.backgroundColor;
+
+  try {
+    actions.forEach((action) => {
+      action.style.display = "none";
+    });
+
+    chartElement.style.backgroundColor = "#ffffff";
+
+    const canvas = await html2canvas(chartElement, {
+      background: "#ffffff",
+      scale: Math.max(2, Math.min(3, window.devicePixelRatio || 2)),
+      useCORS: true,
+      allowTaint: false,
+      foreignObjectRendering: false,
+      logging: false,
+      scrollX: 0,
+      scrollY: -window.scrollY,
+      windowWidth: document.documentElement.clientWidth,
+      windowHeight: document.documentElement.clientHeight,
+      ignoreElements: (element: Element) => element.hasAttribute("data-chart-actions"),
+      onclone: (clonedDocument: Document) => {
+        clonedDocument
+          .querySelectorAll("[data-chart-actions]")
+          .forEach((node) => {
+            (node as HTMLElement).style.display = "none";
+          });
+
+        clonedDocument
+          .querySelectorAll(".recharts-wrapper, .recharts-surface, svg")
+          .forEach((node) => {
+            const element = node as HTMLElement;
+            element.style.overflow = "visible";
+          });
+      },
+    } as any);
+
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(resolve, "image/png", 1);
+    });
+
+    if (!blob) {
+      return "failed" as const;
+    }
+
+    const copied = await copyBlobToClipboard(blob);
+
+    if (copied) {
+      return "copied" as const;
+    }
+
+    downloadChartPng(blob);
+    return "downloaded" as const;
+  } catch {
+    return "failed" as const;
+  } finally {
+    actions.forEach((action, index) => {
+      action.style.display = previousDisplays[index] ?? "";
+    });
+    chartElement.style.backgroundColor = previousBackground;
+  }
+}
 
 function getDecisionMetrics(employees: HrDirectoryEmployee[]) {
   const employeesWithoutStructure = employees.filter(
@@ -762,6 +687,17 @@ function ChartCard({
   children: ReactNode;
 }) {
   const containerRef = useRef<HTMLElement | null>(null);
+  const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "downloaded" | "failed">("idle");
+
+  async function handleCopyChart() {
+    setCopyStatus("idle");
+    const result = await copyRenderedChartBlock(containerRef.current);
+    setCopyStatus(result);
+
+    window.setTimeout(() => {
+      setCopyStatus("idle");
+    }, 2600);
+  }
 
   return (
     <article
@@ -775,9 +711,17 @@ function ChartCard({
         </div>
 
         <div data-chart-actions className="flex shrink-0 items-center gap-2">
+          {copyStatus !== "idle" && (
+            <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-black text-slate-600 shadow-sm dark:border-slate-500/70 dark:bg-slate-600/80 dark:text-slate-100">
+              {copyStatus === "copied" && "Copié"}
+              {copyStatus === "downloaded" && "PNG téléchargé"}
+              {copyStatus === "failed" && "Copie impossible"}
+            </span>
+          )}
+
           <button
             type="button"
-            onClick={() => void copyChartToClipboard(title, description, exportConfig, containerRef.current)}
+            onClick={() => void handleCopyChart()}
             title="Copier"
             aria-label={`Copier ${title}`}
             className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-indigo-100 bg-white text-indigo-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-indigo-50 dark:border-indigo-800/70 dark:bg-slate-600/65 dark:text-indigo-200 dark:hover:bg-indigo-900/35"
