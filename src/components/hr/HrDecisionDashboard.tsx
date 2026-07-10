@@ -38,8 +38,6 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import html2canvas from "html2canvas";
-
 import {
   getEmployeeDepartment,
   getEmployeeFunction,
@@ -432,75 +430,409 @@ async function copyBlobToClipboard(blob: Blob) {
   }
 }
 
-async function copyRenderedChartBlock(chartElement: HTMLElement | null) {
-  if (!chartElement || typeof window === "undefined" || typeof document === "undefined") {
-    return "failed" as const;
-  }
 
-  const actions = Array.from(chartElement.querySelectorAll<HTMLElement>("[data-chart-actions]"));
-  const previousDisplays = actions.map((action) => action.style.display);
-  const previousBackground = chartElement.style.backgroundColor;
+function drawRoundedRect(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+) {
+  const safeRadius = Math.min(radius, width / 2, height / 2);
 
-  try {
-    actions.forEach((action) => {
-      action.style.display = "none";
-    });
-
-    chartElement.style.backgroundColor = "#ffffff";
-
-    const canvas = await html2canvas(chartElement, {
-      background: "#ffffff",
-      scale: Math.max(2, Math.min(3, window.devicePixelRatio || 2)),
-      useCORS: true,
-      allowTaint: false,
-      foreignObjectRendering: false,
-      logging: false,
-      scrollX: 0,
-      scrollY: -window.scrollY,
-      windowWidth: document.documentElement.clientWidth,
-      windowHeight: document.documentElement.clientHeight,
-      ignoreElements: (element: Element) => element.hasAttribute("data-chart-actions"),
-      onclone: (clonedDocument: Document) => {
-        clonedDocument
-          .querySelectorAll("[data-chart-actions]")
-          .forEach((node) => {
-            (node as HTMLElement).style.display = "none";
-          });
-
-        clonedDocument
-          .querySelectorAll(".recharts-wrapper, .recharts-surface, svg")
-          .forEach((node) => {
-            const element = node as HTMLElement;
-            element.style.overflow = "visible";
-          });
-      },
-    } as any);
-
-    const blob = await new Promise<Blob | null>((resolve) => {
-      canvas.toBlob(resolve, "image/png", 1);
-    });
-
-    if (!blob) {
-      return "failed" as const;
-    }
-
-    const copied = await copyBlobToClipboard(blob);
-
-    if (copied) {
-      return "copied" as const;
-    }
-
-    downloadChartPng(blob);
-    return "downloaded" as const;
-  } catch {
-    return "failed" as const;
-  } finally {
-    actions.forEach((action, index) => {
-      action.style.display = previousDisplays[index] ?? "";
-    });
-    chartElement.style.backgroundColor = previousBackground;
-  }
+  context.beginPath();
+  context.moveTo(x + safeRadius, y);
+  context.lineTo(x + width - safeRadius, y);
+  context.quadraticCurveTo(x + width, y, x + width, y + safeRadius);
+  context.lineTo(x + width, y + height - safeRadius);
+  context.quadraticCurveTo(x + width, y + height, x + width - safeRadius, y + height);
+  context.lineTo(x + safeRadius, y + height);
+  context.quadraticCurveTo(x, y + height, x, y + height - safeRadius);
+  context.lineTo(x, y + safeRadius);
+  context.quadraticCurveTo(x, y, x + safeRadius, y);
+  context.closePath();
 }
+
+function truncateCanvasText(
+  context: CanvasRenderingContext2D,
+  value: string,
+  maxWidth: number,
+) {
+  if (context.measureText(value).width <= maxWidth) {
+    return value;
+  }
+
+  let nextValue = value;
+  while (nextValue.length > 4 && context.measureText(`${nextValue}…`).width > maxWidth) {
+    nextValue = nextValue.slice(0, -1);
+  }
+
+  return `${nextValue}…`;
+}
+
+function drawCanvasText(
+  context: CanvasRenderingContext2D,
+  value: string,
+  x: number,
+  y: number,
+  maxWidth: number,
+  options?: { align?: CanvasTextAlign; font?: string; fill?: string },
+) {
+  context.save();
+  context.textAlign = options?.align ?? "left";
+  context.textBaseline = "alphabetic";
+  context.font = options?.font ?? "24px Arial";
+  context.fillStyle = options?.fill ?? "#0f172a";
+  context.fillText(truncateCanvasText(context, value, maxWidth), x, y);
+  context.restore();
+}
+
+function createChartCanvas(title: string, description: string, config: ChartExportConfig) {
+  const width = 1320;
+  const height = 760;
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+
+  const context = canvas.getContext("2d");
+  if (!context) {
+    return null;
+  }
+
+  const ctx = context;
+
+  const data = config.data.length > 0
+    ? config.data.slice(0, 12)
+    : [{ name: "Aucune donnée", value: 0 }];
+  const maxValue = Math.max(1, ...data.map((item) => item.value));
+  const total = data.reduce((sum, item) => sum + item.value, 0);
+  const left = 96;
+  const right = 76;
+  const top = 154;
+  const bottom = 118;
+  const chartWidth = width - left - right;
+  const chartHeight = height - top - bottom;
+  const baseY = top + chartHeight;
+
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, width, height);
+
+  drawRoundedRect(ctx, 28, 24, width - 56, height - 48, 30);
+  ctx.fillStyle = "#ffffff";
+  ctx.fill();
+  ctx.strokeStyle = "#bae6fd";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  const headerGradient = ctx.createLinearGradient(28, 24, width - 28, 106);
+  headerGradient.addColorStop(0, "#f0f9ff");
+  headerGradient.addColorStop(0.5, "#ffffff");
+  headerGradient.addColorStop(1, "#eef2ff");
+  drawRoundedRect(ctx, 28, 24, width - 56, 94, 30);
+  ctx.fillStyle = headerGradient;
+  ctx.fill();
+
+  drawCanvasText(ctx, title, left, 68, width - left - right - 120, {
+    font: "700 30px Arial",
+    fill: "#0f172a",
+  });
+  drawCanvasText(ctx, description, left, 98, width - left - right - 120, {
+    font: "18px Arial",
+    fill: "#64748b",
+  });
+
+  function drawAxes() {
+    ctx.strokeStyle = "#cbd5e1";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(left, top);
+    ctx.lineTo(left, baseY);
+    ctx.lineTo(width - right, baseY);
+    ctx.stroke();
+
+    ctx.strokeStyle = "#e2e8f0";
+    ctx.lineWidth = 1;
+    for (let index = 1; index <= 4; index += 1) {
+      const y = top + (chartHeight / 4) * index;
+      ctx.beginPath();
+      ctx.moveTo(left, y);
+      ctx.lineTo(width - right, y);
+      ctx.stroke();
+    }
+  }
+
+  function drawLegend(y = height - 58) {
+    ctx.font = "14px Arial";
+    data.slice(0, 8).forEach((item, index) => {
+      const column = index % 4;
+      const row = Math.floor(index / 4);
+      const x = left + column * 286;
+      const itemY = y + row * 24;
+
+      ctx.beginPath();
+      ctx.arc(x, itemY - 4, 7, 0, Math.PI * 2);
+      ctx.fillStyle = chartColors[index % chartColors.length];
+      ctx.fill();
+
+      ctx.fillStyle = "#475569";
+      ctx.fillText(
+        truncateCanvasText(ctx, `${item.name} · ${formatChartValue(item.value, config.unit)}`, 240),
+        x + 16,
+        itemY,
+      );
+    });
+  }
+
+  if (config.kind === "donut") {
+    const cx = width / 2;
+    const cy = top + chartHeight / 2 - 12;
+    const radius = 134;
+    let startAngle = -Math.PI / 2;
+
+    data.forEach((item, index) => {
+      const ratio = total > 0 ? item.value / total : 1 / data.length;
+      const endAngle = startAngle + ratio * Math.PI * 2;
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, startAngle, endAngle);
+      ctx.lineWidth = 58;
+      ctx.strokeStyle = chartColors[index % chartColors.length];
+      ctx.lineCap = "round";
+      ctx.stroke();
+      startAngle = endAngle;
+    });
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, 82, 0, Math.PI * 2);
+    ctx.fillStyle = "#ffffff";
+    ctx.fill();
+
+    drawCanvasText(ctx, String(total), cx, cy - 5, 200, {
+      align: "center",
+      font: "800 42px Arial",
+      fill: "#0f172a",
+    });
+    drawCanvasText(ctx, config.valueLabel, cx, cy + 28, 220, {
+      align: "center",
+      font: "16px Arial",
+      fill: "#64748b",
+    });
+    drawLegend();
+  } else if (config.kind === "line") {
+    drawAxes();
+
+    const points = data.map((item, index) => {
+      const x = left + (data.length === 1 ? chartWidth / 2 : (chartWidth / (data.length - 1)) * index);
+      const y = baseY - (item.value / maxValue) * chartHeight;
+      return { ...item, x, y };
+    });
+
+    ctx.beginPath();
+    points.forEach((point, index) => {
+      if (index === 0) {
+        ctx.moveTo(point.x, point.y);
+      } else {
+        ctx.lineTo(point.x, point.y);
+      }
+    });
+    ctx.strokeStyle = chartColors[0];
+    ctx.lineWidth = 5;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.stroke();
+
+    points.forEach((point) => {
+      ctx.beginPath();
+      ctx.arc(point.x, point.y, 6, 0, Math.PI * 2);
+      ctx.fillStyle = chartColors[1];
+      ctx.fill();
+      drawCanvasText(ctx, formatChartValue(point.value, config.unit), point.x, point.y - 14, 90, {
+        align: "center",
+        font: "700 14px Arial",
+        fill: "#334155",
+      });
+      drawCanvasText(ctx, point.name, point.x, height - 92, 78, {
+        align: "center",
+        font: "13px Arial",
+        fill: "#64748b",
+      });
+    });
+    drawLegend(height - 46);
+  } else if (config.kind === "verticalBar") {
+    drawAxes();
+    const groupWidth = chartWidth / Math.max(data.length, 1);
+    const barWidth = Math.max(34, Math.min(66, groupWidth * 0.52));
+
+    data.forEach((item, index) => {
+      const x = left + groupWidth * index + groupWidth / 2 - barWidth / 2;
+      const barHeight = (item.value / maxValue) * chartHeight;
+      const y = baseY - barHeight;
+
+      drawRoundedRect(ctx, x, y, barWidth, barHeight, 11);
+      ctx.fillStyle = chartColors[index % chartColors.length];
+      ctx.fill();
+
+      drawCanvasText(ctx, formatChartValue(item.value, config.unit), x + barWidth / 2, y - 12, 120, {
+        align: "center",
+        font: "700 14px Arial",
+        fill: "#334155",
+      });
+      drawCanvasText(ctx, item.name, x + barWidth / 2, height - 92, groupWidth - 8, {
+        align: "center",
+        font: "12px Arial",
+        fill: "#64748b",
+      });
+    });
+    drawLegend(height - 46);
+  } else if (config.kind === "horizontalBar") {
+    const labelWidth = 210;
+    const rowHeight = chartHeight / Math.max(data.length, 1);
+    const barHeight = Math.max(20, Math.min(38, rowHeight * 0.58));
+    const barStart = left + labelWidth;
+    const maxBarWidth = chartWidth - labelWidth - 28;
+
+    ctx.strokeStyle = "#cbd5e1";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(barStart, top);
+    ctx.lineTo(barStart, baseY);
+    ctx.stroke();
+
+    data.forEach((item, index) => {
+      const y = top + rowHeight * index + rowHeight / 2 - barHeight / 2;
+      const barWidth = (item.value / maxValue) * maxBarWidth;
+
+      drawCanvasText(ctx, item.name, left, y + barHeight / 2 + 5, labelWidth - 14, {
+        font: "14px Arial",
+        fill: "#475569",
+      });
+      drawRoundedRect(ctx, barStart, y, barWidth, barHeight, 10);
+      ctx.fillStyle = chartColors[index % chartColors.length];
+      ctx.fill();
+      drawCanvasText(ctx, formatChartValue(item.value, config.unit), barStart + barWidth + 12, y + barHeight / 2 + 5, 130, {
+        font: "700 14px Arial",
+        fill: "#334155",
+      });
+    });
+    drawLegend(height - 46);
+  } else {
+    const cx = width / 2;
+    const cy = top + chartHeight / 2 - 8;
+    const radius = Math.min(chartWidth, chartHeight) / 2 - 48;
+    const axes = data.map((item, index) => {
+      const angle = -Math.PI / 2 + (index / data.length) * Math.PI * 2;
+      return {
+        ...item,
+        angle,
+        x: cx + Math.cos(angle) * radius,
+        y: cy + Math.sin(angle) * radius,
+        vx: cx + Math.cos(angle) * radius * (item.value / 100),
+        vy: cy + Math.sin(angle) * radius * (item.value / 100),
+      };
+    });
+
+    ctx.strokeStyle = "#cbd5e1";
+    ctx.lineWidth = 1.5;
+    [0.25, 0.5, 0.75, 1].forEach((ratio) => {
+      ctx.beginPath();
+      axes.forEach((axis, index) => {
+        const x = cx + Math.cos(axis.angle) * radius * ratio;
+        const y = cy + Math.sin(axis.angle) * radius * ratio;
+        if (index === 0) {
+          ctx.moveTo(x, y);
+        } else {
+          ctx.lineTo(x, y);
+        }
+      });
+      ctx.closePath();
+      ctx.stroke();
+    });
+
+    axes.forEach((axis) => {
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(axis.x, axis.y);
+      ctx.stroke();
+      drawCanvasText(ctx, axis.name, axis.x, axis.y, 150, {
+        align: "center",
+        font: "14px Arial",
+        fill: "#475569",
+      });
+    });
+
+    ctx.beginPath();
+    axes.forEach((axis, index) => {
+      if (index === 0) {
+        ctx.moveTo(axis.vx, axis.vy);
+      } else {
+        ctx.lineTo(axis.vx, axis.vy);
+      }
+    });
+    ctx.closePath();
+    ctx.fillStyle = "rgba(110, 231, 183, 0.28)";
+    ctx.strokeStyle = chartColors[0];
+    ctx.lineWidth = 4;
+    ctx.fill();
+    ctx.stroke();
+    drawLegend();
+  }
+
+  return canvas;
+}
+
+function downloadCanvasPng(canvas: HTMLCanvasElement, filename = "onepilot-graphique.png") {
+  if (typeof document === "undefined" || typeof URL === "undefined") {
+    return;
+  }
+
+  const url = canvas.toDataURL("image/png", 1);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
+async function copyChartToClipboard(title: string, description: string, config: ChartExportConfig) {
+  if (typeof window === "undefined" || typeof document === "undefined") {
+    return "failed" as const;
+  }
+
+  const canvas = createChartCanvas(title, description, config);
+  if (!canvas) {
+    return "failed" as const;
+  }
+
+  const blob = await new Promise<Blob | null>((resolve) => {
+    canvas.toBlob(resolve, "image/png", 1);
+  });
+
+  if (!blob) {
+    return "failed" as const;
+  }
+
+  if (
+    typeof navigator !== "undefined" &&
+    typeof ClipboardItem !== "undefined" &&
+    navigator.clipboard?.write
+  ) {
+    try {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          "image/png": blob,
+        }),
+      ]);
+      return "copied" as const;
+    } catch {
+      // Fallback téléchargement ci-dessous.
+    }
+  }
+
+  downloadCanvasPng(canvas);
+  return "downloaded" as const;
+}
+
 
 function getDecisionMetrics(employees: HrDirectoryEmployee[]) {
   const employeesWithoutStructure = employees.filter(
@@ -691,7 +1023,7 @@ function ChartCard({
 
   async function handleCopyChart() {
     setCopyStatus("idle");
-    const result = await copyRenderedChartBlock(containerRef.current);
+    const result = await copyChartToClipboard(title, description, exportConfig);
     setCopyStatus(result);
 
     window.setTimeout(() => {
