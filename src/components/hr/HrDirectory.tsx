@@ -27,6 +27,7 @@ import {
 
 export type HrDirectoryEmployee = {
   id: string;
+  organization_id?: string;
   employee_number: string;
 
   first_name: string;
@@ -38,6 +39,7 @@ export type HrDirectoryEmployee = {
   photo_url: string | null;
 
   arrival_date: string | null;
+  departure_date?: string | null;
 
   employment_status: string;
   is_active: boolean;
@@ -211,7 +213,7 @@ function getStatusDefinition(
     draft: {
       label: "Brouillon",
       classes:
-        "bg-slate-100 text-slate-700 ring-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700",
+        "bg-slate-100 text-slate-700 ring-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:ring-slate-600",
     },
 
     preboarding: {
@@ -247,13 +249,13 @@ function getStatusDefinition(
     departed: {
       label: "Sorti",
       classes:
-        "bg-slate-100 text-slate-600 ring-slate-200 dark:bg-slate-900 dark:text-slate-400 dark:ring-slate-700",
+        "bg-slate-100 text-slate-600 ring-slate-200 dark:bg-slate-700/70 dark:text-slate-300 dark:ring-slate-600",
     },
 
     archived: {
       label: "Archivé",
       classes:
-        "bg-slate-200 text-slate-700 ring-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700",
+        "bg-slate-200 text-slate-700 ring-slate-300 dark:bg-slate-700 dark:text-slate-300 dark:ring-slate-600",
     },
   };
 
@@ -261,7 +263,7 @@ function getStatusDefinition(
     definitions[status] ?? {
       label: status,
       classes:
-        "bg-slate-100 text-slate-700 ring-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700",
+        "bg-slate-100 text-slate-700 ring-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:ring-slate-600",
     }
   );
 }
@@ -349,7 +351,7 @@ function ArchivedBadge({
 }) {
   return (
     <span
-      className={`inline-flex items-center rounded-full bg-slate-200 font-black text-slate-700 ring-1 ring-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700 ${
+      className={`inline-flex items-center rounded-full bg-slate-200 font-black text-slate-700 ring-1 ring-slate-300 dark:bg-slate-700 dark:text-slate-300 dark:ring-slate-600 ${
         compact
           ? "px-2 py-0.5 text-[10px] uppercase tracking-wide"
           : "px-2.5 py-1 text-[11px]"
@@ -377,14 +379,14 @@ function EmployeeAvatar({
       <img
         src={employee.photo_url}
         alt={employee.full_name}
-        className={`${sizeClass} shrink-0 rounded-2xl object-cover ring-2 ring-white dark:ring-slate-900`}
+        className={`${sizeClass} shrink-0 rounded-2xl object-cover ring-2 ring-white dark:ring-slate-800`}
       />
     );
   }
 
   return (
     <div
-      className={`${sizeClass} flex shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 font-black text-white shadow-sm`}
+      className={`${sizeClass} flex shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-sky-500 font-black text-white shadow-sm`}
     >
       {getInitials(employee)}
     </div>
@@ -494,7 +496,7 @@ function ActionMenu({
             (current) => !current,
           );
         }}
-        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-400 dark:hover:border-indigo-900 dark:hover:bg-indigo-950/30 dark:hover:text-indigo-300"
+        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600/60 dark:bg-slate-700/70 dark:text-slate-300 dark:hover:border-indigo-900 dark:hover:bg-indigo-700/35 dark:hover:text-indigo-300"
       >
         {isProcessing ? (
           <Archive className="h-3.5 w-3.5 animate-pulse" />
@@ -508,7 +510,7 @@ function ActionMenu({
           onClick={(event) =>
             event.stopPropagation()
           }
-          className={`absolute top-10 z-30 w-56 overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl dark:border-slate-800 dark:bg-slate-950 ${
+          className={`absolute top-10 z-30 w-56 overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl dark:border-slate-600/60 dark:bg-slate-700/70 ${
             align === "right"
               ? "right-0"
               : "left-0"
@@ -533,7 +535,7 @@ function ActionMenu({
                 <button
                   type="button"
                   onClick={executeView}
-                  className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-xs font-bold text-sky-700 transition hover:bg-sky-50 dark:text-sky-300 dark:hover:bg-sky-950/30"
+                  className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-xs font-bold text-sky-700 transition hover:bg-sky-50 dark:text-sky-300 dark:hover:bg-sky-700/35"
                 >
                   <Eye className="h-4 w-4" />
                   Voir la fiche
@@ -547,7 +549,7 @@ function ActionMenu({
                     onEdit,
                   )
                 }
-                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-xs font-bold text-indigo-700 transition hover:bg-indigo-50 dark:text-indigo-300 dark:hover:bg-indigo-950/30"
+                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-xs font-bold text-indigo-700 transition hover:bg-indigo-50 dark:text-indigo-300 dark:hover:bg-indigo-700/35"
               >
                 <Edit3 className="h-4 w-4" />
                 Modifier la fiche
@@ -555,7 +557,7 @@ function ActionMenu({
 
               {canArchive && (
                 <>
-                  <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
+                  <div className="my-1 border-t border-slate-100 dark:border-slate-600/60" />
 
                   <button
                     type="button"
@@ -564,7 +566,7 @@ function ActionMenu({
                         onArchive,
                       )
                     }
-                    className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-xs font-bold text-slate-600 transition hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-900"
+                    className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-xs font-bold text-slate-600 transition hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-600/70"
                   >
                     <Archive className="h-4 w-4" />
                     Archiver la fiche
@@ -589,7 +591,7 @@ function ViewSwitch({
   ) => void;
 }) {
   return (
-    <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm dark:border-slate-800 dark:bg-slate-950">
+    <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm dark:border-slate-600/60 dark:bg-slate-700/70">
       <button
         type="button"
         onClick={() =>
@@ -598,7 +600,7 @@ function ViewSwitch({
         className={`inline-flex h-9 items-center gap-2 rounded-lg px-4 text-xs font-bold transition ${
           view === "cards"
             ? "bg-indigo-600 text-white shadow-sm"
-            : "text-slate-500 hover:bg-indigo-50 hover:text-indigo-700 dark:hover:bg-indigo-950/30 dark:hover:text-indigo-300"
+            : "text-slate-500 hover:bg-indigo-50 hover:text-indigo-700 dark:hover:bg-indigo-700/35 dark:hover:text-indigo-300"
         }`}
       >
         <Grid2X2 className="h-4 w-4" />
@@ -613,7 +615,7 @@ function ViewSwitch({
         className={`inline-flex h-9 items-center gap-2 rounded-lg px-4 text-xs font-bold transition ${
           view === "table"
             ? "bg-indigo-600 text-white shadow-sm"
-            : "text-slate-500 hover:bg-indigo-50 hover:text-indigo-700 dark:hover:bg-indigo-950/30 dark:hover:text-indigo-300"
+            : "text-slate-500 hover:bg-indigo-50 hover:text-indigo-700 dark:hover:bg-indigo-700/35 dark:hover:text-indigo-300"
         }`}
       >
         <List className="h-4 w-4" />
@@ -655,8 +657,8 @@ function EmployeeCard({
       }
       className={`group relative overflow-visible rounded-2xl border shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
         archived
-          ? "border-slate-200 bg-slate-50 opacity-80 hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900/70 dark:hover:border-slate-700"
-          : "border-slate-200 bg-white hover:border-slate-300 dark:border-slate-800 dark:bg-slate-950 dark:hover:border-slate-700"
+          ? "border-slate-200 bg-slate-50 opacity-80 hover:border-slate-300 dark:border-slate-600/60 dark:bg-slate-700/70 dark:hover:border-slate-600"
+          : "border-slate-200 bg-white hover:border-slate-300 dark:border-slate-600/60 dark:bg-slate-700/70 dark:hover:border-slate-600"
       } ${
         onView
           ? "cursor-pointer"
@@ -672,7 +674,7 @@ function EmployeeCard({
           <div className="min-w-0 flex-1">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <h3 className="truncate text-base font-black text-slate-950 dark:text-white">
+                <h3 className="truncate text-base font-black text-slate-950 dark:text-slate-100">
                   {employee.full_name}
                 </h3>
 
@@ -753,8 +755,8 @@ function EmployeeCard({
           </div>
         </div>
 
-        <div className="mt-5 grid grid-cols-2 gap-3 border-t border-slate-100 pt-4 dark:border-slate-800">
-          <div className="rounded-xl bg-white/70 p-3 dark:bg-slate-950/50">
+        <div className="mt-5 grid grid-cols-2 gap-3 border-t border-slate-100 pt-4 dark:border-slate-600/60">
+          <div className="rounded-xl bg-white/70 p-3 dark:bg-slate-700/70">
             <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
               Contrat
             </p>
@@ -765,7 +767,7 @@ function EmployeeCard({
             </p>
           </div>
 
-          <div className="rounded-xl bg-white/70 p-3 dark:bg-slate-950/50">
+          <div className="rounded-xl bg-white/70 p-3 dark:bg-slate-700/70">
             <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
               Rythme
             </p>
@@ -776,7 +778,7 @@ function EmployeeCard({
             </p>
           </div>
 
-          <div className="rounded-xl bg-white/70 p-3 dark:bg-slate-950/50">
+          <div className="rounded-xl bg-white/70 p-3 dark:bg-slate-700/70">
             <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
               {compensation.label}
             </p>
@@ -786,7 +788,7 @@ function EmployeeCard({
             </p>
           </div>
 
-          <div className="rounded-xl bg-white/70 p-3 dark:bg-slate-950/50">
+          <div className="rounded-xl bg-white/70 p-3 dark:bg-slate-700/70">
             <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
               Arrivée
             </p>
@@ -851,22 +853,22 @@ export default function HrDirectory({
     }, [hasActions]);
 
   return (
-    <section className="overflow-visible rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950">
-      <div className="flex flex-col gap-4 border-b border-slate-100 bg-gradient-to-r from-sky-50/70 via-white to-indigo-50/60 px-5 py-4 sm:flex-row sm:items-start sm:justify-between dark:border-slate-800 dark:from-sky-950/20 dark:via-slate-950 dark:to-indigo-950/20">
+    <section className="overflow-visible rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-600/70 dark:bg-slate-600/65">
+      <div className="flex flex-col gap-4 border-b border-slate-100 bg-gradient-to-r from-sky-50/70 via-white to-indigo-50/60 px-5 py-4 sm:flex-row sm:items-center sm:justify-between dark:border-slate-600/55 dark:from-sky-900/20 dark:via-slate-700/85 dark:to-indigo-900/20">
         <div className="flex items-start gap-3">
-          <div className="rounded-xl bg-indigo-100 p-2.5 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">
+          <div className="rounded-xl bg-indigo-100 p-2.5 text-indigo-700 dark:bg-indigo-900/45 dark:text-indigo-200">
             <Users
               className="h-4 w-4"
               strokeWidth={1.9}
             />
           </div>
 
-          <div>
-            <h2 className="text-sm font-bold text-slate-950 dark:text-white">
+          <div className="min-w-0">
+            <h2 className="truncate text-sm font-bold text-slate-950 dark:text-slate-100">
               Collaborateurs
             </h2>
 
-            <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
+            <p className="mt-1 truncate whitespace-nowrap text-xs text-slate-500 dark:text-slate-300">
               Cartes opérationnelles ou tableau dense avec rattachements, contrat, rythme, coûts et actions rapides.
             </p>
           </div>
@@ -882,11 +884,11 @@ export default function HrDirectory({
         <div className="px-6 py-16 text-center">
           <Search className="mx-auto h-8 w-8 text-indigo-400" />
 
-          <h3 className="mt-4 text-base font-black text-slate-950 dark:text-white">
+          <h3 className="mt-4 text-base font-black text-slate-950 dark:text-slate-100">
             Aucun collaborateur trouvé
           </h3>
 
-          <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-slate-500 dark:text-slate-400">
+          <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-slate-500 dark:text-slate-300">
             Modifie ou réinitialise les filtres du périmètre d’analyse.
           </p>
         </div>
@@ -911,16 +913,16 @@ export default function HrDirectory({
         <div className="max-h-[520px] overflow-auto">
           <table className="w-full min-w-[1480px] border-collapse">
             <thead className="sticky top-0 z-20">
-              <tr className="border-b border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900">
+              <tr className="border-b border-slate-200 bg-slate-50 dark:border-slate-600/60 dark:bg-slate-700/70">
                 {headerColumns.map(
                   (heading) => (
                     <th
                       key={heading}
                       className={
                         heading === "Collaborateur"
-                          ? "sticky left-0 z-30 bg-slate-50 px-4 py-3 text-left text-[10px] font-black uppercase tracking-wide text-slate-500 shadow-[1px_0_0_0_rgba(148,163,184,0.25)] dark:bg-slate-900"
+                          ? "sticky left-0 z-30 bg-sky-50 px-4 py-3 text-left text-[10px] font-black uppercase tracking-wide text-slate-500 shadow-[1px_0_0_0_rgba(148,163,184,0.25)] dark:bg-slate-700/70"
                           : heading === "Actions"
-                            ? "sticky right-0 z-30 bg-slate-50 px-4 py-3 text-right text-[10px] font-black uppercase tracking-wide text-slate-500 shadow-[-1px_0_0_0_rgba(148,163,184,0.25)] dark:bg-slate-900"
+                            ? "sticky right-0 z-30 bg-sky-50 px-4 py-3 text-right text-[10px] font-black uppercase tracking-wide text-slate-500 shadow-[-1px_0_0_0_rgba(148,163,184,0.25)] dark:bg-slate-700/70"
                             : "px-4 py-3 text-left text-[10px] font-black uppercase tracking-wide text-slate-500"
                       }
                     >
@@ -947,15 +949,15 @@ export default function HrDirectory({
                             )
                         : undefined
                     }
-                    className={`border-b border-slate-100 transition last:border-0 dark:border-slate-800 ${
+                    className={`border-b border-slate-100 transition last:border-0 dark:border-slate-600/60 ${
                       archived
-                        ? "bg-slate-50 text-slate-500 opacity-80 hover:bg-slate-100 dark:bg-slate-900/60 dark:text-slate-400 dark:hover:bg-slate-900"
+                        ? "bg-slate-50 text-slate-500 opacity-80 hover:bg-slate-100 dark:bg-slate-700/70 dark:text-slate-300 dark:hover:bg-slate-600/70"
                         : onEmployeeClick
-                          ? "cursor-pointer hover:bg-indigo-50/60 dark:hover:bg-indigo-950/20"
-                          : "hover:bg-slate-50 dark:hover:bg-slate-900/60"
+                          ? "cursor-pointer hover:bg-indigo-50/60 dark:hover:bg-indigo-900/30"
+                          : "hover:bg-sky-50/60 dark:hover:bg-slate-800/80"
                     }`}
                   >
-                    <td className="sticky left-0 z-10 bg-white px-4 py-3 shadow-[1px_0_0_0_rgba(148,163,184,0.18)] dark:bg-slate-950">
+                    <td className="sticky left-0 z-10 bg-white px-4 py-3 shadow-[1px_0_0_0_rgba(148,163,184,0.18)] dark:bg-slate-700/70">
                       <div className="flex items-center gap-3">
                         <EmployeeAvatar
                           employee={
@@ -965,7 +967,7 @@ export default function HrDirectory({
                         />
 
                         <div className="min-w-0">
-                          <p className="max-w-56 truncate text-sm font-black text-slate-950 dark:text-white">
+                          <p className="max-w-56 truncate text-sm font-black text-slate-950 dark:text-slate-100">
                             {
                               employee.full_name
                             }
@@ -1010,35 +1012,35 @@ export default function HrDirectory({
                     </td>
 
                     <td className="px-4 py-3">
-                      <p className="max-w-44 truncate text-sm text-slate-600 dark:text-slate-400">
+                      <p className="max-w-44 truncate text-sm text-slate-600 dark:text-slate-300">
                         {getEmployeeDepartment(employee) ||
                           "—"}
                       </p>
                     </td>
 
                     <td className="px-4 py-3">
-                      <p className="max-w-44 truncate text-sm text-slate-600 dark:text-slate-400">
+                      <p className="max-w-44 truncate text-sm text-slate-600 dark:text-slate-300">
                         {getEmployeeSite(employee) ||
                           "—"}
                       </p>
                     </td>
 
                     <td className="px-4 py-3">
-                      <p className="max-w-44 truncate text-sm text-slate-600 dark:text-slate-400">
+                      <p className="max-w-44 truncate text-sm text-slate-600 dark:text-slate-300">
                         {employee.contract_type_name ||
                           "—"}
                       </p>
                     </td>
 
                     <td className="px-4 py-3">
-                      <p className="max-w-44 truncate text-sm text-slate-600 dark:text-slate-400">
+                      <p className="max-w-44 truncate text-sm text-slate-600 dark:text-slate-300">
                         {employee.work_schedule_name ||
                           "—"}
                       </p>
                     </td>
 
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                      <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
                         <CalendarDays className="h-4 w-4 shrink-0 text-indigo-400" />
                         {formatDate(
                           employee.arrival_date,
@@ -1073,7 +1075,7 @@ export default function HrDirectory({
 
                     {hasActions && (
                       <td
-                        className="sticky right-0 z-10 bg-white px-4 py-3 text-right shadow-[-1px_0_0_0_rgba(148,163,184,0.18)] dark:bg-slate-950"
+                        className="sticky right-0 z-10 bg-white px-4 py-3 text-right shadow-[-1px_0_0_0_rgba(148,163,184,0.18)] dark:bg-slate-700/70"
                         onClick={(event) =>
                           event.stopPropagation()
                         }

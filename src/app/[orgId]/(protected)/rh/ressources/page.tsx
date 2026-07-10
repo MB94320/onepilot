@@ -180,6 +180,29 @@ function getAuditStorageKey(organizationId: string) {
   return `onepilot:hr-audit-history:${organizationId}`;
 }
 
+function getAuditSeenStorageKey(organizationId: string) {
+  return `onepilot:hr-audit-history-seen:${organizationId}`;
+}
+
+function loadSeenAuditCount(organizationId: string) {
+  if (typeof window === "undefined") {
+    return 0;
+  }
+
+  const rawValue = window.localStorage.getItem(getAuditSeenStorageKey(organizationId));
+  const parsedValue = rawValue ? Number.parseInt(rawValue, 10) : 0;
+
+  return Number.isFinite(parsedValue) ? parsedValue : 0;
+}
+
+function saveSeenAuditCount(organizationId: string, count: number) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(getAuditSeenStorageKey(organizationId), String(count));
+}
+
 function isTodayIsoDate(value: string | null | undefined) {
   if (!value) {
     return false;
@@ -247,14 +270,14 @@ function getAuditActionClasses(action: string | null | undefined) {
   }
 
   if (action === "archived" || action === "ARCHIVE") {
-    return "bg-slate-100 text-slate-700 dark:bg-slate-900 dark:text-slate-300";
+    return "bg-slate-100 text-slate-700 dark:bg-slate-700/70 dark:text-slate-300";
   }
 
   if (action === "restored" || action === "RESTORE") {
     return "bg-sky-50 text-sky-700 dark:bg-sky-950/30 dark:text-sky-300";
   }
 
-  return "bg-slate-100 text-slate-700 dark:bg-slate-900 dark:text-slate-300";
+  return "bg-slate-100 text-slate-700 dark:bg-slate-700/70 dark:text-slate-300";
 }
 
 async function resolveOrganization(slugOrId: string): Promise<Organization> {
@@ -386,6 +409,16 @@ function getEmployeeFunction(employee: HrDirectoryEmployee) {
 
 const employeeExportColumns: ExportColumn<HrDirectoryEmployee>[] = [
   {
+    key: "id",
+    label: "ID collaborateur",
+    value: (employee) => employee.id,
+  },
+  {
+    key: "organization_id",
+    label: "ID organisation",
+    value: (employee) => employee.organization_id,
+  },
+  {
     key: "employee_number",
     label: "Matricule",
     value: (employee) => employee.employee_number,
@@ -441,6 +474,46 @@ const employeeExportColumns: ExportColumn<HrDirectoryEmployee>[] = [
     value: (employee) => getEmployeeFunction(employee),
   },
   {
+    key: "site_reference",
+    label: "Site référentiel",
+    value: (employee) => employee.site_name,
+  },
+  {
+    key: "site_free_text",
+    label: "Site libre",
+    value: (employee) => employee.site_free_text,
+  },
+  {
+    key: "department_reference",
+    label: "Service référentiel",
+    value: (employee) => employee.department_name,
+  },
+  {
+    key: "department_free_text",
+    label: "Service libre",
+    value: (employee) => employee.department_free_text,
+  },
+  {
+    key: "job_reference",
+    label: "Métier référentiel",
+    value: (employee) => employee.job_name,
+  },
+  {
+    key: "job_free_text",
+    label: "Métier libre",
+    value: (employee) => employee.job_free_text,
+  },
+  {
+    key: "function_reference",
+    label: "Fonction référentiel",
+    value: (employee) => employee.function_name,
+  },
+  {
+    key: "function_free_text",
+    label: "Fonction libre",
+    value: (employee) => employee.function_free_text,
+  },
+  {
     key: "manager_name",
     label: "Manager N+1",
     value: (employee) => employee.manager_name,
@@ -459,6 +532,11 @@ const employeeExportColumns: ExportColumn<HrDirectoryEmployee>[] = [
     key: "arrival_date",
     label: "Date d’arrivée",
     value: (employee) => formatExportDate(employee.arrival_date),
+  },
+  {
+    key: "departure_date",
+    label: "Date de sortie",
+    value: (employee) => formatExportDate(employee.departure_date ?? null),
   },
   {
     key: "compensation_mode",
@@ -511,42 +589,42 @@ function MetricCard({
     className?: string;
     strokeWidth?: number;
   }>;
-  accent: "indigo" | "violet" | "emerald" | "amber" | "rose";
+  accent: "indigo" | "emerald" | "amber" | "rose" | "sky";
 }) {
   const accentClasses = {
     indigo: {
       panel:
-        "border-indigo-100 from-indigo-50/85 via-white to-violet-50/65 dark:border-indigo-900/50 dark:from-indigo-950/30 dark:via-slate-950 dark:to-violet-950/20",
+        "border-indigo-100 from-indigo-50/85 via-white to-sky-50/65 dark:border-indigo-900/50 dark:from-indigo-800/25 dark:via-slate-700/85 dark:to-emerald-700/20",
       icon:
-        "bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300",
+        "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/45 dark:text-indigo-200",
       value: "text-indigo-700 dark:text-indigo-300",
     },
-    violet: {
+    sky: {
       panel:
-        "border-violet-100 from-violet-50/85 via-white to-fuchsia-50/65 dark:border-violet-900/50 dark:from-violet-950/30 dark:via-slate-950 dark:to-fuchsia-950/20",
+        "border-sky-100 from-sky-50/85 via-white to-cyan-50/65 dark:border-sky-900/50 dark:from-sky-800/25 dark:via-slate-700/85 dark:to-cyan-700/20",
       icon:
-        "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300",
-      value: "text-violet-700 dark:text-violet-300",
+        "bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-200",
+      value: "text-sky-700 dark:text-sky-300",
     },
     emerald: {
       panel:
-        "border-emerald-100 from-emerald-50/85 via-white to-teal-50/65 dark:border-emerald-900/50 dark:from-emerald-950/30 dark:via-slate-950 dark:to-teal-950/20",
+        "border-emerald-100 from-emerald-50/85 via-white to-teal-50/65 dark:border-emerald-900/50 dark:from-emerald-800/25 dark:via-slate-700/85 dark:to-teal-700/20",
       icon:
-        "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+        "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200",
       value: "text-emerald-700 dark:text-emerald-300",
     },
     amber: {
       panel:
-        "border-amber-100 from-amber-50/85 via-white to-orange-50/65 dark:border-amber-900/50 dark:from-amber-950/30 dark:via-slate-950 dark:to-orange-950/20",
+        "border-amber-100 from-amber-50/85 via-white to-orange-50/65 dark:border-amber-900/50 dark:from-amber-800/25 dark:via-slate-700/85 dark:to-orange-700/20",
       icon:
-        "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+        "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200",
       value: "text-amber-700 dark:text-amber-300",
     },
     rose: {
       panel:
-        "border-rose-100 from-rose-50/85 via-white to-pink-50/65 dark:border-rose-900/50 dark:from-rose-950/30 dark:via-slate-950 dark:to-pink-950/20",
+        "border-rose-100 from-rose-50/85 via-white to-pink-50/65 dark:border-rose-900/50 dark:from-rose-800/25 dark:via-slate-700/85 dark:to-pink-700/20",
       icon:
-        "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300",
+        "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-200",
       value: "text-rose-700 dark:text-rose-300",
     },
   };
@@ -580,7 +658,7 @@ function MetricCard({
             </p>
           </div>
 
-          <p className="mt-2 line-clamp-2 text-[11px] leading-4 text-slate-500 dark:text-slate-400">
+          <p className="mt-2 line-clamp-2 text-[11px] leading-4 text-slate-500 dark:text-slate-300">
             {description}
           </p>
         </div>
@@ -603,53 +681,53 @@ function AlertCard({
   title: string;
   value: number;
   description: string;
-  accent: "indigo" | "violet" | "emerald" | "amber" | "rose";
+  accent: "indigo" | "emerald" | "amber" | "rose" | "sky";
 }) {
   const classes = {
     indigo: {
       panel:
-        "border-indigo-100 bg-indigo-50/60 dark:border-indigo-900/50 dark:bg-indigo-950/20",
+        "border-slate-200 bg-gradient-to-r from-sky-50/70 via-white to-indigo-50/60 dark:border-slate-600/70 dark:from-sky-900/20 dark:via-slate-700/85 dark:to-indigo-900/20",
       icon:
-        "bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300",
+        "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/45 dark:text-indigo-200",
       value: "text-indigo-700 dark:text-indigo-300",
       badge:
-        "bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300",
+        "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/45 dark:text-indigo-200",
     },
-    violet: {
+    sky: {
       panel:
-        "border-violet-100 bg-violet-50/60 dark:border-violet-900/50 dark:bg-violet-950/20",
+        "border-slate-200 bg-gradient-to-r from-sky-50/70 via-white to-indigo-50/60 dark:border-slate-600/70 dark:from-sky-900/20 dark:via-slate-700/85 dark:to-indigo-900/20",
       icon:
-        "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300",
-      value: "text-violet-700 dark:text-violet-300",
+        "bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-200",
+      value: "text-sky-700 dark:text-sky-300",
       badge:
-        "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300",
+        "bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-200",
     },
     emerald: {
       panel:
-        "border-emerald-100 bg-emerald-50/60 dark:border-emerald-900/50 dark:bg-emerald-950/20",
+        "border-slate-200 bg-gradient-to-r from-sky-50/70 via-white to-indigo-50/60 dark:border-slate-600/70 dark:from-sky-900/20 dark:via-slate-700/85 dark:to-indigo-900/20",
       icon:
-        "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+        "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200",
       value: "text-emerald-700 dark:text-emerald-300",
       badge:
-        "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+        "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200",
     },
     amber: {
       panel:
-        "border-amber-100 bg-amber-50/60 dark:border-amber-900/50 dark:bg-amber-950/20",
+        "border-slate-200 bg-gradient-to-r from-sky-50/70 via-white to-indigo-50/60 dark:border-slate-600/70 dark:from-sky-900/20 dark:via-slate-700/85 dark:to-indigo-900/20",
       icon:
-        "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+        "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200",
       value: "text-amber-700 dark:text-amber-300",
       badge:
-        "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+        "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200",
     },
     rose: {
       panel:
-        "border-rose-100 bg-rose-50/60 dark:border-rose-900/50 dark:bg-rose-950/20",
+        "border-slate-200 bg-gradient-to-r from-sky-50/70 via-white to-indigo-50/60 dark:border-slate-600/70 dark:from-sky-900/20 dark:via-slate-700/85 dark:to-indigo-900/20",
       icon:
-        "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300",
+        "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-200",
       value: "text-rose-700 dark:text-rose-300",
       badge:
-        "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300",
+        "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-200",
     },
   };
 
@@ -659,6 +737,7 @@ function AlertCard({
   return (
     <article
       className={`rounded-2xl border px-3.5 py-3 shadow-sm ${selectedClasses.panel}`}
+      title={`${title} — ${description}`}
     >
       <div className="flex items-start gap-3">
         <div
@@ -672,7 +751,10 @@ function AlertCard({
 
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-3">
-            <h3 className="text-xs font-black text-slate-950 dark:text-white">
+            <h3
+              className="min-h-[2rem] overflow-hidden text-xs font-black leading-4 text-slate-950 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] dark:text-slate-100"
+              title={title}
+            >
               {title}
             </h3>
 
@@ -683,8 +765,11 @@ function AlertCard({
             </span>
           </div>
 
-          <div className="mt-1.5 flex items-end justify-between gap-3">
-            <p className="line-clamp-2 text-[11px] leading-5 text-slate-600 dark:text-slate-400">
+          <div className="mt-1.5 flex items-start justify-between gap-3">
+            <p
+              className="min-h-[2rem] overflow-hidden text-[11px] leading-4 text-slate-600 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] dark:text-slate-200"
+              title={description}
+            >
               {description}
             </p>
 
@@ -708,22 +793,22 @@ function AuditHistoryPanel({
   onClose: () => void;
 }) {
   return (
-    <section className="overflow-hidden rounded-2xl border border-sky-200 bg-white shadow-sm dark:border-sky-900/60 dark:bg-slate-950">
-      <div className="flex items-start justify-between gap-4 border-b border-sky-100 bg-gradient-to-r from-sky-50/90 via-white to-white px-5 py-4 dark:border-sky-900/60 dark:from-sky-950/20 dark:via-slate-950 dark:to-slate-950">
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-600/70 dark:bg-slate-600/65">
+      <div className="flex items-center justify-between gap-4 border-b border-slate-100 bg-gradient-to-r from-sky-50/70 via-white to-indigo-50/60 px-5 py-4 dark:border-slate-600/55 dark:from-sky-900/20 dark:via-slate-700/85 dark:to-indigo-900/20">
         <div className="flex items-start gap-3">
-          <div className="rounded-xl bg-sky-100 p-2.5 text-sky-700 dark:bg-sky-950 dark:text-sky-300">
+          <div className="rounded-xl bg-sky-100 p-2.5 text-sky-700 dark:bg-sky-900/40 dark:text-sky-200">
             <Bell
               className="h-4 w-4"
               strokeWidth={1.9}
             />
           </div>
 
-          <div>
-            <h2 className="text-sm font-black text-slate-950 dark:text-white">
+          <div className="min-w-0">
+            <h2 className="truncate text-sm font-black text-slate-950 dark:text-slate-100">
               Historique RH
             </h2>
 
-            <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
+            <p className="mt-1 truncate whitespace-nowrap text-xs text-slate-500 dark:text-slate-300">
               Créations, modifications, archivages et réactivations des fiches collaborateurs.
             </p>
           </div>
@@ -732,15 +817,15 @@ function AuditHistoryPanel({
         <button
           type="button"
           onClick={onClose}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-sky-200 bg-white text-sky-600 transition hover:bg-sky-50 dark:border-sky-900/60 dark:bg-slate-950 dark:text-sky-300 dark:hover:bg-sky-950/20"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-sky-200 bg-white text-sky-600 transition hover:bg-sky-50 dark:border-sky-900/60 dark:bg-slate-700/70 dark:text-sky-300 dark:hover:bg-sky-900/30"
         >
           <X className="h-4 w-4" />
         </button>
       </div>
 
-      <div className="divide-y divide-slate-100 dark:divide-slate-800">
+      <div className="divide-y divide-slate-100 dark:divide-slate-600/60">
         {events.length === 0 ? (
-          <div className="p-5 text-sm text-slate-500 dark:text-slate-400">
+          <div className="p-5 text-sm text-slate-500 dark:text-slate-300">
             Aucun événement d’historique disponible pour le moment.
           </div>
         ) : (
@@ -751,11 +836,11 @@ function AuditHistoryPanel({
             >
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <p className="text-sm font-black text-slate-950 dark:text-white">
+                  <p className="text-sm font-black text-slate-950 dark:text-slate-100">
                     {event.title || getAuditActionLabel(event.action)}
                   </p>
 
-                  <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
+                  <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-300">
                     {event.description || "Action RH historisée."}
                   </p>
 
@@ -823,21 +908,21 @@ function AlertsPanel({
   ).length;
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950">
-      <div className="flex items-start gap-3 border-b border-slate-100 bg-gradient-to-r from-sky-50/70 via-white to-indigo-50/60 px-5 py-4 dark:border-slate-800 dark:from-sky-950/20 dark:via-slate-950 dark:to-indigo-950/20">
-        <div className="rounded-xl bg-emerald-100 p-2.5 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-600/70 dark:bg-slate-600/65">
+      <div className="flex items-center gap-3 border-b border-slate-100 bg-gradient-to-r from-sky-50/70 via-white to-indigo-50/60 px-5 py-4 dark:border-slate-600/55 dark:from-sky-900/20 dark:via-slate-700/85 dark:to-indigo-900/20">
+        <div className="rounded-xl bg-emerald-100 p-2.5 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200">
           <Bell
             className="h-4 w-4"
             strokeWidth={1.9}
           />
         </div>
 
-        <div>
-          <h2 className="text-sm font-bold text-slate-950 dark:text-white">
+        <div className="min-w-0">
+          <h2 className="truncate text-sm font-bold text-slate-950 dark:text-slate-100">
             Alertes qualité
           </h2>
 
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+          <p className="mt-1 truncate whitespace-nowrap text-xs text-slate-500 dark:text-slate-300">
             Contrôle des fiches incomplètes, contrats, coûts et rattachements.
           </p>
         </div>
@@ -952,6 +1037,7 @@ export default function HrResourcesPage({
     }
 
     setLocalAuditEvents(loadLocalAuditEvents(data.organization.id));
+    setSeenAuditCount(loadSeenAuditCount(data.organization.id));
   }, [data?.organization.id]);
 
   const auditEvents = useMemo(() => {
@@ -987,12 +1073,16 @@ export default function HrResourcesPage({
   ]);
 
   useEffect(() => {
-    if (isHistoryOpen) {
-      setSeenAuditCount(auditEvents.length);
+    if (!isHistoryOpen || !data?.organization.id) {
+      return;
     }
+
+    setSeenAuditCount(auditEvents.length);
+    saveSeenAuditCount(data.organization.id, auditEvents.length);
   }, [
     isHistoryOpen,
     auditEvents.length,
+    data?.organization.id,
   ]);
 
   async function refreshMembers() {
@@ -1299,7 +1389,7 @@ export default function HrResourcesPage({
           {Array.from({ length: 4 }).map((_, index) => (
             <div
               key={index}
-              className="h-[106px] animate-pulse rounded-2xl border border-slate-200 bg-slate-100 dark:border-slate-800 dark:bg-slate-900"
+              className="h-[106px] animate-pulse rounded-2xl border border-slate-200 bg-slate-100 dark:border-slate-600/60 dark:bg-slate-700/70"
             />
           ))}
         </div>
@@ -1365,6 +1455,24 @@ export default function HrResourcesPage({
           flush
           actions={
             <>
+              <button
+                type="button"
+                onClick={() =>
+                  setIsHistoryOpen((current) => !current)
+                }
+                className="relative inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-sky-200 bg-white px-3.5 text-xs font-bold text-sky-700 shadow-md shadow-sky-100 transition hover:-translate-y-0.5 hover:bg-sky-50 hover:shadow-lg dark:border-sky-900/60 dark:bg-slate-700/70 dark:text-sky-300 dark:shadow-none dark:hover:bg-sky-700/35"
+                title="Consulter l’historique RH"
+              >
+                <Bell className="h-3.5 w-3.5" />
+                Historique RH
+
+                {!isHistoryOpen && unseenAuditCount > 0 && (
+                  <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-black text-white ring-2 ring-white dark:ring-slate-700">
+                    {unseenAuditCount}
+                  </span>
+                )}
+              </button>
+
               <DataExportMenu
                 data={filteredEmployees}
                 columns={employeeExportColumns}
@@ -1374,29 +1482,11 @@ export default function HrResourcesPage({
 
               <button
                 type="button"
-                onClick={() =>
-                  setIsHistoryOpen((current) => !current)
-                }
-                className="relative inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-sky-200 bg-sky-50 px-3.5 text-xs font-bold text-sky-700 transition hover:-translate-y-0.5 hover:bg-sky-100 dark:border-sky-900/60 dark:bg-sky-950/30 dark:text-sky-300 dark:hover:bg-sky-950/50"
-                title="Consulter l’historique RH"
-              >
-                <Bell className="h-3.5 w-3.5" />
-                Historique RH
-
-                {!isHistoryOpen && unseenAuditCount > 0 && (
-                  <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-black text-white ring-2 ring-white dark:ring-slate-950">
-                    {unseenAuditCount}
-                  </span>
-                )}
-              </button>
-
-              <button
-                type="button"
                 onClick={() => setIsMemberFormOpen(true)}
-                className="inline-flex h-9 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-3.5 text-xs font-bold text-white shadow-md shadow-indigo-100 transition hover:-translate-y-0.5 hover:shadow-lg dark:shadow-none"
+                className="inline-flex h-9 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 px-3.5 text-xs font-bold text-white shadow-md shadow-indigo-100 transition hover:-translate-y-0.5 hover:shadow-lg dark:shadow-none"
               >
                 <UserPlus className="h-3.5 w-3.5" />
-                Ajouter un membre
+                Nouveau collaborateur
               </button>
             </>
           }
@@ -1489,7 +1579,7 @@ export default function HrResourcesPage({
             value={activeEmployees}
             description="Actifs, pré-intégrations et périodes d’essai."
             icon={UserCheck}
-            accent="violet"
+            accent="emerald"
           />
 
           <MetricCard
@@ -1497,7 +1587,7 @@ export default function HrResourcesPage({
             value={probationEmployees}
             description="Suivis et échéances à anticiper."
             icon={CalendarClock}
-            accent="emerald"
+            accent="amber"
           />
 
           <MetricCard
@@ -1505,7 +1595,7 @@ export default function HrResourcesPage({
             value={departures}
             description="Préavis, fiches sorties ou archivées."
             icon={UserX}
-            accent="amber"
+            accent="rose"
           />
         </section>
 
@@ -1519,14 +1609,14 @@ export default function HrResourcesPage({
             />
 
             <div className="flex justify-center">
-              <div className="inline-flex max-w-full gap-1 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm dark:border-slate-800 dark:bg-slate-950">
+              <div className="inline-flex max-w-full gap-1 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm dark:border-slate-600/60 dark:bg-slate-700/70">
                 <button
                   type="button"
                   onClick={() => setActiveTab("directory")}
                   className={`inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl px-5 text-sm font-bold transition ${
                     activeTab === "directory"
                       ? "bg-indigo-600 text-white shadow-md shadow-indigo-100 dark:shadow-none"
-                      : "text-slate-500 hover:bg-indigo-50 hover:text-indigo-700 dark:hover:bg-indigo-950/30 dark:hover:text-indigo-300"
+                      : "text-slate-500 hover:bg-indigo-50 hover:text-indigo-700 dark:hover:bg-indigo-900/35 dark:hover:text-indigo-300"
                   }`}
                 >
                   <ContactRound className="h-4 w-4" />
@@ -1538,8 +1628,8 @@ export default function HrResourcesPage({
                   onClick={() => setActiveTab("graphs")}
                   className={`inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl px-5 text-sm font-bold transition ${
                     activeTab === "graphs"
-                      ? "bg-violet-600 text-white shadow-md shadow-violet-100 dark:shadow-none"
-                      : "text-slate-500 hover:bg-violet-50 hover:text-violet-700 dark:hover:bg-violet-950/30 dark:hover:text-violet-300"
+                      ? "bg-emerald-600 text-white shadow-md shadow-emerald-100 dark:shadow-none"
+                      : "text-slate-500 hover:bg-emerald-50 hover:text-emerald-700 dark:hover:bg-emerald-900/35 dark:hover:text-emerald-300"
                   }`}
                 >
                   <BarChart3 className="h-4 w-4" />
@@ -1551,8 +1641,8 @@ export default function HrResourcesPage({
                   onClick={() => setActiveTab("alerts")}
                   className={`inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl px-5 text-sm font-bold transition ${
                     activeTab === "alerts"
-                      ? "bg-emerald-600 text-white shadow-md shadow-emerald-100 dark:shadow-none"
-                      : "text-slate-500 hover:bg-emerald-50 hover:text-emerald-700 dark:hover:bg-emerald-950/30 dark:hover:text-emerald-300"
+                      ? "bg-amber-500 text-white shadow-md shadow-amber-100 dark:shadow-none"
+                      : "text-slate-500 hover:bg-amber-50 hover:text-amber-700 dark:hover:bg-amber-900/35 dark:hover:text-amber-300"
                   }`}
                 >
                   <Bell className="h-4 w-4" />
@@ -1580,14 +1670,14 @@ export default function HrResourcesPage({
             )}
           </>
         ) : (
-          <section className="rounded-2xl border border-dashed border-indigo-300 bg-gradient-to-br from-indigo-50 via-white to-violet-50 px-6 py-16 text-center dark:border-indigo-900 dark:from-indigo-950/30 dark:via-slate-950 dark:to-violet-950/20">
+          <section className="rounded-2xl border border-dashed border-indigo-300 bg-gradient-to-br from-indigo-50 via-white to-emerald-50 px-6 py-16 text-center dark:border-indigo-900 dark:from-indigo-800/25 dark:via-slate-700/85 dark:to-emerald-700/20">
             <Users className="mx-auto h-8 w-8 text-indigo-500" />
 
-            <h2 className="mt-4 text-lg font-bold text-slate-950 dark:text-white">
+            <h2 className="mt-4 text-lg font-bold text-slate-950 dark:text-slate-100">
               Aucun membre enregistré
             </h2>
 
-            <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-slate-500 dark:text-slate-400">
+            <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-slate-500 dark:text-slate-300">
               Ajoute la première fiche collaborateur pour constituer l’annuaire de cette organisation.
             </p>
 
@@ -1596,7 +1686,7 @@ export default function HrResourcesPage({
               onClick={() => setIsMemberFormOpen(true)}
               className="mt-6 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700"
             >
-              Ajouter le premier membre
+              Nouveau collaborateur
             </button>
           </section>
         )}

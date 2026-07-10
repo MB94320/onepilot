@@ -40,7 +40,8 @@ type Accent =
   | "indigo"
   | "emerald"
   | "amber"
-  | "violet";
+  | "rose"
+  | "sky";
 
 function InformationBlock({
   title,
@@ -66,38 +67,47 @@ function InformationBlock({
   > = {
     indigo: {
       container:
-        "border-indigo-100 bg-gradient-to-br from-indigo-50/80 to-white dark:border-indigo-900/50 dark:from-indigo-950/25 dark:to-slate-950",
+        "border-indigo-100 bg-gradient-to-br from-indigo-50/80 to-white dark:border-indigo-900/50 dark:from-indigo-800/25 dark:to-slate-700/85",
       icon:
-        "bg-indigo-100 text-indigo-700 ring-4 ring-indigo-50 dark:bg-indigo-950 dark:text-indigo-300 dark:ring-indigo-950/40",
+        "bg-indigo-100 text-indigo-700 ring-4 ring-indigo-50 dark:bg-indigo-900/45 dark:text-indigo-300 dark:ring-indigo-950/40",
       title:
         "text-indigo-900 dark:text-indigo-200",
     },
 
     emerald: {
       container:
-        "border-emerald-100 bg-gradient-to-br from-emerald-50/80 to-white dark:border-emerald-900/50 dark:from-emerald-950/25 dark:to-slate-950",
+        "border-emerald-100 bg-gradient-to-br from-emerald-50/80 to-white dark:border-emerald-900/50 dark:from-emerald-800/25 dark:to-slate-700/85",
       icon:
-        "bg-emerald-100 text-emerald-700 ring-4 ring-emerald-50 dark:bg-emerald-950 dark:text-emerald-300 dark:ring-emerald-950/40",
+        "bg-emerald-100 text-emerald-700 ring-4 ring-emerald-50 dark:bg-emerald-900/40 dark:text-emerald-300 dark:ring-emerald-950/40",
       title:
         "text-emerald-900 dark:text-emerald-200",
     },
 
     amber: {
       container:
-        "border-amber-100 bg-gradient-to-br from-amber-50/80 to-white dark:border-amber-900/50 dark:from-amber-950/25 dark:to-slate-950",
+        "border-amber-100 bg-gradient-to-br from-amber-50/80 to-white dark:border-amber-900/50 dark:from-amber-800/25 dark:to-slate-700/85",
       icon:
-        "bg-amber-100 text-amber-700 ring-4 ring-amber-50 dark:bg-amber-950 dark:text-amber-300 dark:ring-amber-950/40",
+        "bg-amber-100 text-amber-700 ring-4 ring-amber-50 dark:bg-amber-900/40 dark:text-amber-300 dark:ring-amber-950/40",
       title:
         "text-amber-900 dark:text-amber-200",
     },
 
-    violet: {
+    rose: {
       container:
-        "border-violet-100 bg-gradient-to-br from-violet-50/80 to-white dark:border-violet-900/50 dark:from-violet-950/25 dark:to-slate-950",
+        "border-rose-100 bg-gradient-to-br from-rose-50/80 to-white dark:border-rose-900/50 dark:from-rose-800/25 dark:to-slate-700/85",
       icon:
-        "bg-violet-100 text-violet-700 ring-4 ring-violet-50 dark:bg-violet-950 dark:text-violet-300 dark:ring-violet-950/40",
+        "bg-rose-100 text-rose-700 ring-4 ring-rose-50 dark:bg-rose-900/40 dark:text-rose-300 dark:ring-rose-950/40",
       title:
-        "text-violet-900 dark:text-violet-200",
+        "text-rose-900 dark:text-rose-200",
+    },
+
+    sky: {
+      container:
+        "border-sky-100 bg-gradient-to-br from-sky-50/80 to-white dark:border-sky-900/50 dark:from-sky-800/25 dark:to-slate-700/85",
+      icon:
+        "bg-sky-100 text-sky-700 ring-4 ring-sky-50 dark:bg-sky-900/40 dark:text-sky-300 dark:ring-sky-950/40",
+      title:
+        "text-sky-900 dark:text-sky-200",
     },
   };
 
@@ -151,7 +161,7 @@ export default function PageTutorial({
       <button
         type="button"
         onClick={() => setIsDismissed(false)}
-        className="inline-flex h-10 items-center gap-2 rounded-xl border border-indigo-200 bg-white px-4 text-sm font-semibold text-indigo-700 shadow-sm transition hover:border-indigo-300 hover:bg-indigo-50 dark:border-indigo-900 dark:bg-slate-950 dark:text-indigo-300 dark:hover:bg-indigo-950/30"
+        className="inline-flex h-10 items-center gap-2 rounded-xl border border-indigo-200 bg-white px-4 text-sm font-semibold text-indigo-700 shadow-sm transition hover:border-indigo-300 hover:bg-indigo-50 dark:border-indigo-900 dark:bg-slate-700/70 dark:text-indigo-300 dark:hover:bg-indigo-700/35"
       >
         <HelpCircle className="h-4 w-4" />
         Afficher le tutoriel
@@ -160,9 +170,9 @@ export default function PageTutorial({
   }
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950">
-      <div className="relative overflow-hidden border-b border-slate-100 bg-gradient-to-r from-indigo-50 via-white to-violet-50 px-5 py-4 dark:border-slate-800 dark:from-indigo-950/25 dark:via-slate-950 dark:to-violet-950/20">
-        <div className="pointer-events-none absolute -right-8 -top-10 h-32 w-32 rounded-full bg-violet-200/30 blur-3xl dark:bg-violet-700/10" />
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-600/70 dark:bg-slate-600/65">
+      <div className="relative overflow-hidden border-b border-slate-100 bg-gradient-to-r from-sky-50/70 via-white to-indigo-50/60 px-5 py-4 dark:border-slate-600/55 dark:from-sky-900/20 dark:via-slate-700/85 dark:to-indigo-900/20">
+        <div className="pointer-events-none absolute -right-8 -top-10 h-32 w-32 rounded-full bg-emerald-200/30 blur-3xl dark:bg-emerald-700/10" />
 
         <div className="pointer-events-none absolute -left-8 bottom-0 h-24 w-24 rounded-full bg-cyan-200/30 blur-3xl dark:bg-cyan-700/10" />
 
@@ -174,7 +184,7 @@ export default function PageTutorial({
             }
             className="flex min-w-0 flex-1 items-start gap-3 text-left"
           >
-            <div className="rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 p-2.5 text-white shadow-md shadow-indigo-200 dark:shadow-none">
+            <div className="rounded-xl bg-gradient-to-br from-indigo-500 to-emerald-500 p-2.5 text-white shadow-md shadow-indigo-200 dark:shadow-none">
               <BookOpen
                 className="h-5 w-5"
                 strokeWidth={1.9}
@@ -186,16 +196,16 @@ export default function PageTutorial({
                 Guide de la page
               </p>
 
-              <h2 className="mt-1 text-base font-bold text-slate-950 dark:text-white">
+              <h2 className="mt-1 text-base font-bold text-slate-950 dark:text-slate-100">
                 {title}
               </h2>
 
-              <p className="mt-1 max-w-4xl whitespace-pre-line text-sm leading-6 text-slate-600 dark:text-slate-400">
+              <p className="mt-1 max-w-4xl whitespace-pre-line text-sm leading-6 text-slate-600 dark:text-slate-300">
                 {description}
               </p>
             </div>
 
-            <div className="ml-auto mt-1 shrink-0 rounded-lg border border-slate-200 bg-white p-2 text-slate-500 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
+            <div className="ml-auto mt-1 shrink-0 rounded-lg border border-slate-200 bg-white p-2 text-slate-500 shadow-sm dark:border-slate-600/60 dark:bg-slate-700/70 dark:text-slate-300">
               {isOpen ? (
                 <ChevronUp className="h-4 w-4" />
               ) : (
@@ -207,7 +217,7 @@ export default function PageTutorial({
           <button
             type="button"
             onClick={() => setIsDismissed(true)}
-            className="rounded-lg p-2 text-slate-400 transition hover:bg-white hover:text-slate-700 dark:hover:bg-slate-900 dark:hover:text-white"
+            className="rounded-lg p-2 text-slate-400 transition hover:bg-white hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-100"
             aria-label="Masquer le tutoriel"
           >
             <X className="h-4 w-4" />
@@ -216,7 +226,7 @@ export default function PageTutorial({
       </div>
 
       {isOpen && (
-        <div className="grid gap-4 bg-slate-50/60 p-5 dark:bg-slate-950 xl:grid-cols-2">
+        <div className="grid gap-4 bg-sky-50/35 p-5 dark:bg-slate-600/65 xl:grid-cols-2">
           {objectives.length > 0 && (
             <InformationBlock
               title="Objectifs de la page"
@@ -241,7 +251,7 @@ export default function PageTutorial({
             <InformationBlock
               title="Comment utiliser la page"
               icon={ListChecks}
-              accent="violet"
+              accent="emerald"
             >
               <ol className="space-y-3">
                 {steps.map((step, index) => (
@@ -249,16 +259,16 @@ export default function PageTutorial({
                     key={`${step.title}-${index}`}
                     className="flex items-start gap-3"
                   >
-                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 text-[11px] font-bold text-white shadow-sm">
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-teal-500 text-[11px] font-bold text-white shadow-sm">
                       {index + 1}
                     </span>
 
                     <div>
-                      <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                      <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
                         {step.title}
                       </p>
 
-                      <p className="mt-1 text-xs leading-5 text-slate-600 dark:text-slate-400">
+                      <p className="mt-1 text-xs leading-5 text-slate-600 dark:text-slate-300">
                         {step.description}
                       </p>
                     </div>
@@ -272,19 +282,19 @@ export default function PageTutorial({
             <InformationBlock
               title="Analyses possibles"
               icon={BarChart3}
-              accent="emerald"
+              accent="amber"
             >
               <div className="space-y-3">
                 {analyses.map((analysis) => (
                   <div
                     key={analysis.title}
-                    className="rounded-xl border border-emerald-100 bg-white p-3 shadow-sm dark:border-emerald-900/50 dark:bg-slate-950"
+                    className="rounded-xl border border-sky-100 bg-white p-3 shadow-sm dark:border-sky-800/40 dark:bg-slate-700/70"
                   >
-                    <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                    <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
                       {analysis.title}
                     </p>
 
-                    <p className="mt-1 text-xs leading-5 text-slate-600 dark:text-slate-400">
+                    <p className="mt-1 text-xs leading-5 text-slate-600 dark:text-slate-300">
                       {analysis.description}
                     </p>
                   </div>
@@ -297,7 +307,7 @@ export default function PageTutorial({
             <InformationBlock
               title="Bonnes pratiques"
               icon={Lightbulb}
-              accent="amber"
+              accent="rose"
             >
               <ul className="space-y-2.5">
                 {recommendations.map(
@@ -306,7 +316,7 @@ export default function PageTutorial({
                       key={recommendation}
                       className="flex items-start gap-2.5 text-sm leading-6 text-slate-700 dark:text-slate-300"
                     >
-                      <Lightbulb className="mt-1 h-4 w-4 shrink-0 text-amber-500 dark:text-amber-400" />
+                      <Lightbulb className="mt-1 h-4 w-4 shrink-0 text-rose-500 dark:text-rose-400" />
                       <span>{recommendation}</span>
                     </li>
                   ),

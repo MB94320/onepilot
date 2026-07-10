@@ -2,7 +2,6 @@
 
 import {
   useRef,
-  useState,
   type ComponentType,
   type ReactNode,
 } from "react";
@@ -24,6 +23,8 @@ import {
   CartesianGrid,
   Cell,
   Legend,
+  Line,
+  LineChart,
   Pie,
   PieChart,
   PolarAngleAxis,
@@ -36,6 +37,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import html2canvas from "html2canvas";
 
 import {
   getEmployeeDepartment,
@@ -55,6 +57,31 @@ type ChartItem = {
   value: number;
 };
 
+type SalaryChartItem = {
+  name: string;
+  value: number;
+  count: number;
+};
+
+type ChartExportKind =
+  | "donut"
+  | "line"
+  | "verticalBar"
+  | "horizontalBar"
+  | "radar";
+
+type ChartExportItem = {
+  name: string;
+  value: number;
+};
+
+type ChartExportConfig = {
+  kind: ChartExportKind;
+  data: ChartExportItem[];
+  valueLabel: string;
+  unit?: "count" | "currency" | "percent";
+};
+
 type InsightCardProps = {
   title: string;
   description: string;
@@ -62,27 +89,22 @@ type InsightCardProps = {
 };
 
 const chartColors = [
-  "#6366f1",
-  "#8b5cf6",
-  "#06b6d4",
-  "#10b981",
-  "#f59e0b",
-  "#f97316",
-  "#f43f5e",
-  "#64748b",
+  "#a5b4fc", // indigo doux
+  "#6ee7b7", // emerald doux
+  "#fcd34d", // amber doux
+  "#fda4af", // rose doux
+  "#7dd3fc", // sky doux
+  "#c4b5fd",
+  "#99f6e4",
+  "#fecdd3",
 ];
 
-function percentage(
-  completeItems: number,
-  totalItems: number,
-) {
+function percentage(completeItems: number, totalItems: number) {
   if (totalItems === 0) {
     return 0;
   }
 
-  return Math.round(
-    (completeItems / totalItems) * 100,
-  );
+  return Math.round((completeItems / totalItems) * 100);
 }
 
 function getStatusLabel(status: string) {
@@ -102,9 +124,7 @@ function getStatusLabel(status: string) {
 
 function groupByValue(
   employees: HrDirectoryEmployee[],
-  selector: (
-    employee: HrDirectoryEmployee,
-  ) => string | null | undefined,
+  selector: (employee: HrDirectoryEmployee) => string | null | undefined,
   fallbackLabel: string,
 ): ChartItem[] {
   const values = new Map<string, number>();
@@ -113,21 +133,12 @@ function groupByValue(
     const rawValue = selector(employee)?.trim();
     const label = rawValue || fallbackLabel;
 
-    values.set(
-      label,
-      (values.get(label) ?? 0) + 1,
-    );
+    values.set(label, (values.get(label) ?? 0) + 1);
   });
 
   return Array.from(values.entries())
-    .map(([name, value]) => ({
-      name,
-      value,
-    }))
-    .sort(
-      (firstItem, secondItem) =>
-        secondItem.value - firstItem.value,
-    );
+    .map(([name, value]) => ({ name, value }))
+    .sort((firstItem, secondItem) => secondItem.value - firstItem.value);
 }
 
 function formatCurrency(value: number) {
@@ -139,136 +150,388 @@ function formatCurrency(value: number) {
   }).format(value);
 }
 
-function getDecisionMetrics(
+function formatMonthLabel(date: Date) {
+  return new Intl.DateTimeFormat("fr-FR", { month: "short", year: "2-digit" })
+    .format(date)
+    .replace(".", "");
+}
+
+function getMonthKey(value: string | null | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function getMonthlySeries(
   employees: HrDirectoryEmployee[],
+  selector: (employee: HrDirectoryEmployee) => string | null | undefined,
 ) {
-  const employeesWithoutStructure =
-    employees.filter(
-      (employee) =>
-        !getEmployeeSite(employee) ||
-        !getEmployeeDepartment(employee) ||
-        (!getEmployeeJob(employee) &&
-          !getEmployeeFunction(employee)),
-    ).length;
+  const now = new Date();
+  const months = Array.from({ length: 12 }).map((_, index) => {
+    const date = new Date(now.getFullYear(), now.getMonth() - (11 - index), 1);
 
-  const employeesWithoutManager =
-    employees.filter(
-      (employee) =>
-        !employee.manager_name,
-    ).length;
+    return {
+      key: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`,
+      name: formatMonthLabel(date),
+      value: 0,
+    };
+  });
 
-  const employeesWithoutCost =
-    employees.filter(
-      (employee) =>
-        employee.loaded_hourly_cost === null ||
-        employee.loaded_hourly_cost ===
-          undefined,
-    ).length;
+  const monthMap = new Map(months.map((month) => [month.key, month]));
+
+  employees.forEach((employee) => {
+    const key = getMonthKey(selector(employee));
+    const currentMonth = key ? monthMap.get(key) : null;
+
+    if (currentMonth) {
+      currentMonth.value += 1;
+    }
+  });
+
+  return months;
+}
+
+function getAverageByGroup(
+  employees: HrDirectoryEmployee[],
+  groupSelector: (employee: HrDirectoryEmployee) => string | null | undefined,
+  valueSelector: (employee: HrDirectoryEmployee) => number | null | undefined,
+  fallbackLabel: string,
+): SalaryChartItem[] {
+  const groups = new Map<string, { total: number; count: number }>();
+
+  employees.forEach((employee) => {
+    const value = valueSelector(employee);
+
+    if (typeof value !== "number" || value <= 0) {
+      return;
+    }
+
+    const label = groupSelector(employee)?.trim() || fallbackLabel;
+    const currentValue = groups.get(label) ?? { total: 0, count: 0 };
+
+    currentValue.total += value;
+    currentValue.count += 1;
+    groups.set(label, currentValue);
+  });
+
+  return Array.from(groups.entries())
+    .map(([name, item]) => ({
+      name,
+      value: Math.round(item.total / item.count),
+      count: item.count,
+    }))
+    .sort((firstItem, secondItem) => secondItem.value - firstItem.value)
+    .slice(0, 10);
+}
+
+function escapeSvgText(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function formatChartValue(value: number, unit: ChartExportConfig["unit"]) {
+  if (unit === "currency") {
+    return formatCurrency(value);
+  }
+
+  if (unit === "percent") {
+    return `${Math.round(value)} %`;
+  }
+
+  return String(Math.round(value));
+}
+
+function buildChartSvg(title: string, description: string, config: ChartExportConfig) {
+  const width = 1200;
+  const height = 680;
+  const left = 92;
+  const right = 72;
+  const top = 138;
+  const bottom = 112;
+  const chartWidth = width - left - right;
+  const chartHeight = height - top - bottom;
+  const data = config.data.length > 0 ? config.data.slice(0, 12) : [{ name: "Aucune donnée", value: 0 }];
+  const maxValue = Math.max(1, ...data.map((item) => item.value));
+  const total = data.reduce((sum, item) => sum + item.value, 0);
+
+  const legend = data
+    .slice(0, 8)
+    .map((item, index) => {
+      const x = left + (index % 4) * 245;
+      const y = height - 58 + Math.floor(index / 4) * 22;
+      return `<circle cx="${x}" cy="${y}" r="6" fill="${chartColors[index % chartColors.length]}" /><text x="${x + 14}" y="${y + 4}" font-size="12" font-family="Arial" fill="#475569">${escapeSvgText(item.name)} · ${escapeSvgText(formatChartValue(item.value, config.unit))}</text>`;
+    })
+    .join("");
+
+  let body = "";
+
+  if (config.kind === "donut") {
+    const cx = width / 2;
+    const cy = top + chartHeight / 2 - 8;
+    const radius = 138;
+    const strokeWidth = 54;
+    let offset = 0;
+
+    body = data
+      .map((item, index) => {
+        const ratio = total > 0 ? item.value / total : 1 / data.length;
+        const circumference = 2 * Math.PI * radius;
+        const dash = Math.max(0.01, ratio * circumference);
+        const gap = Math.max(0, circumference - dash);
+        const segment = `<circle cx="${cx}" cy="${cy}" r="${radius}" fill="none" stroke="${chartColors[index % chartColors.length]}" stroke-width="${strokeWidth}" stroke-dasharray="${dash} ${gap}" stroke-dashoffset="${-offset}" transform="rotate(-90 ${cx} ${cy})" stroke-linecap="round" />`;
+        offset += dash;
+        return segment;
+      })
+      .join("");
+
+    body += `<circle cx="${cx}" cy="${cy}" r="${radius - strokeWidth / 2}" fill="#FFFFFF" />`;
+    body += `<text x="${cx}" y="${cy - 8}" text-anchor="middle" font-size="34" font-family="Arial" font-weight="800" fill="#0F172A">${total}</text>`;
+    body += `<text x="${cx}" y="${cy + 22}" text-anchor="middle" font-size="13" font-family="Arial" fill="#64748B">${escapeSvgText(config.valueLabel)}</text>`;
+  } else if (config.kind === "line") {
+    const points = data
+      .map((item, index) => {
+        const x = left + (data.length === 1 ? chartWidth / 2 : (chartWidth / (data.length - 1)) * index);
+        const y = top + chartHeight - (item.value / maxValue) * chartHeight;
+        return { ...item, x, y };
+      });
+
+    body += `<line x1="${left}" y1="${top + chartHeight}" x2="${width - right}" y2="${top + chartHeight}" stroke="#CBD5E1" />`;
+    body += `<line x1="${left}" y1="${top}" x2="${left}" y2="${top + chartHeight}" stroke="#CBD5E1" />`;
+    body += `<polyline points="${points.map((point) => `${point.x},${point.y}`).join(" ")}" fill="none" stroke="${chartColors[0]}" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />`;
+    body += points
+      .map((point) => `<circle cx="${point.x}" cy="${point.y}" r="6" fill="${chartColors[1]}" /><text x="${point.x}" y="${point.y - 14}" text-anchor="middle" font-size="12" font-family="Arial" font-weight="700" fill="#334155">${formatChartValue(point.value, config.unit)}</text><text x="${point.x}" y="${height - 92}" text-anchor="middle" font-size="11" font-family="Arial" fill="#64748B">${escapeSvgText(point.name)}</text>`)
+      .join("");
+  } else if (config.kind === "verticalBar") {
+    const groupWidth = chartWidth / Math.max(data.length, 1);
+    const barWidth = Math.max(22, Math.min(54, groupWidth * 0.5));
+    body += `<line x1="${left}" y1="${top + chartHeight}" x2="${width - right}" y2="${top + chartHeight}" stroke="#CBD5E1" />`;
+    body += `<line x1="${left}" y1="${top}" x2="${left}" y2="${top + chartHeight}" stroke="#CBD5E1" />`;
+    body += data
+      .map((item, index) => {
+        const x = left + groupWidth * index + groupWidth / 2 - barWidth / 2;
+        const barHeight = (item.value / maxValue) * chartHeight;
+        const y = top + chartHeight - barHeight;
+        return `<rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" rx="10" fill="${chartColors[index % chartColors.length]}" /><text x="${x + barWidth / 2}" y="${y - 10}" text-anchor="middle" font-size="12" font-family="Arial" font-weight="700" fill="#334155">${escapeSvgText(formatChartValue(item.value, config.unit))}</text><text x="${x + barWidth / 2}" y="${height - 92}" text-anchor="middle" font-size="10" font-family="Arial" fill="#64748B">${escapeSvgText(item.name.slice(0, 16))}</text>`;
+      })
+      .join("");
+  } else if (config.kind === "horizontalBar") {
+    const rowHeight = chartHeight / Math.max(data.length, 1);
+    const barHeight = Math.max(18, Math.min(34, rowHeight * 0.55));
+    body += `<line x1="${left + 180}" y1="${top}" x2="${left + 180}" y2="${top + chartHeight}" stroke="#CBD5E1" />`;
+    body += data
+      .map((item, index) => {
+        const y = top + rowHeight * index + rowHeight / 2 - barHeight / 2;
+        const barWidth = ((item.value / maxValue) * (chartWidth - 190));
+        return `<text x="${left}" y="${y + barHeight / 2 + 4}" font-size="12" font-family="Arial" fill="#475569">${escapeSvgText(item.name.slice(0, 24))}</text><rect x="${left + 190}" y="${y}" width="${barWidth}" height="${barHeight}" rx="9" fill="${chartColors[index % chartColors.length]}" /><text x="${left + 202 + barWidth}" y="${y + barHeight / 2 + 4}" font-size="12" font-family="Arial" font-weight="700" fill="#334155">${escapeSvgText(formatChartValue(item.value, config.unit))}</text>`;
+      })
+      .join("");
+  } else {
+    const cx = width / 2;
+    const cy = top + chartHeight / 2 - 6;
+    const radius = Math.min(chartWidth, chartHeight) / 2 - 36;
+    const axes = data.map((item, index) => {
+      const angle = (-Math.PI / 2) + (index / data.length) * 2 * Math.PI;
+      const x = cx + Math.cos(angle) * radius;
+      const y = cy + Math.sin(angle) * radius;
+      const valueRadius = radius * (item.value / 100);
+      const vx = cx + Math.cos(angle) * valueRadius;
+      const vy = cy + Math.sin(angle) * valueRadius;
+      return { ...item, x, y, vx, vy };
+    });
+    body += axes.map((axis) => `<line x1="${cx}" y1="${cy}" x2="${axis.x}" y2="${axis.y}" stroke="#CBD5E1" /><text x="${axis.x}" y="${axis.y}" text-anchor="middle" font-size="12" font-family="Arial" fill="#475569">${escapeSvgText(axis.name)}</text>`).join("");
+    body += `<polygon points="${axes.map((axis) => `${axis.vx},${axis.vy}`).join(" ")}" fill="${chartColors[1]}" fill-opacity="0.28" stroke="${chartColors[0]}" stroke-width="4" />`;
+  }
+
+  return `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+      <rect width="100%" height="100%" fill="#FFFFFF" />
+      <rect x="28" y="24" width="${width - 56}" height="${height - 48}" rx="28" fill="#F8FAFC" stroke="#BAE6FD" />
+      <rect x="28" y="24" width="${width - 56}" height="82" rx="28" fill="#EFF6FF" />
+      <text x="${left}" y="60" font-size="25" font-family="Arial" font-weight="800" fill="#0F172A">${escapeSvgText(title)}</text>
+      <text x="${left}" y="86" font-size="13" font-family="Arial" fill="#64748B">${escapeSvgText(description)}</text>
+      ${body}
+      ${legend}
+    </svg>
+  `.trim();
+}
+
+async function copyChartSvg(title: string, description: string, config: ChartExportConfig) {
+  const svg = buildChartSvg(title, description, config);
+
+  if (typeof navigator === "undefined" || !navigator.clipboard) {
+    return;
+  }
+
+  try {
+    if (typeof ClipboardItem !== "undefined" && navigator.clipboard.write) {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          "image/svg+xml": new Blob([svg], { type: "image/svg+xml" }),
+          "text/plain": new Blob([svg], { type: "text/plain" }),
+        }),
+      ]);
+      return;
+    }
+  } catch {
+    // Fallback texte identique au modèle Staffing.
+  }
+
+  try {
+    await navigator.clipboard.writeText(svg);
+  } catch {
+    // Aucun message bloquant : certains navigateurs refusent le presse-papiers image hors HTTPS.
+  }
+}
+
+async function copyRenderedChartBlock(chartElement: HTMLElement | null) {
+  if (!chartElement || typeof window === "undefined" || typeof document === "undefined") {
+    return;
+  }
+
+  const actions = Array.from(chartElement.querySelectorAll<HTMLElement>("[data-chart-actions]"));
+  const previousDisplays = actions.map((action) => action.style.display);
+
+  try {
+    actions.forEach((action) => {
+      action.style.display = "none";
+    });
+
+    const canvas = await html2canvas(chartElement, {
+      backgroundColor: "#ffffff",
+      background: "#ffffff",
+      scale: Math.max(2, window.devicePixelRatio || 2),
+      useCORS: true,
+      allowTaint: true,
+      foreignObjectRendering: false,
+      logging: false,
+      scrollX: 0,
+      scrollY: -window.scrollY,
+      windowWidth: document.documentElement.clientWidth,
+      windowHeight: document.documentElement.clientHeight,
+      ignoreElements: (element: Element) => element.hasAttribute("data-chart-actions"),
+      onclone: (clonedDocument: Document) => {
+        clonedDocument
+          .querySelectorAll("[data-chart-actions]")
+          .forEach((node) => {
+            (node as HTMLElement).style.display = "none";
+          });
+
+        clonedDocument
+          .querySelectorAll(".recharts-wrapper, .recharts-surface")
+          .forEach((node) => {
+            (node as HTMLElement).style.overflow = "visible";
+          });
+      },
+    } as any);
+
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(resolve, "image/png", 1);
+    });
+
+    if (!blob) {
+      return;
+    }
+
+    if (typeof navigator !== "undefined" && navigator.clipboard?.write && typeof ClipboardItem !== "undefined") {
+      try {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            "image/png": blob,
+          }),
+        ]);
+        return;
+      } catch {
+        // Fallback HTML ci-dessous.
+      }
+    }
+
+    const dataUrl = canvas.toDataURL("image/png", 1);
+
+    if (document.queryCommandSupported?.("copy")) {
+      const container = document.createElement("div");
+      container.contentEditable = "true";
+      container.style.position = "fixed";
+      container.style.left = "-9999px";
+      container.style.top = "0";
+      container.innerHTML = `<img src="${dataUrl}" alt="Graphique ONEPILOT" />`;
+      document.body.appendChild(container);
+
+      const range = document.createRange();
+      range.selectNodeContents(container);
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      document.execCommand("copy");
+      selection?.removeAllRanges();
+      container.remove();
+    }
+  } catch {
+    // Action silencieuse : l’interface garde uniquement l’icône Copier, sans message parasite.
+  } finally {
+    actions.forEach((action, index) => {
+      action.style.display = previousDisplays[index] ?? "";
+    });
+  }
+}
+
+function getDecisionMetrics(employees: HrDirectoryEmployee[]) {
+  const employeesWithoutStructure = employees.filter(
+    (employee) =>
+      !getEmployeeSite(employee) ||
+      !getEmployeeDepartment(employee) ||
+      (!getEmployeeJob(employee) && !getEmployeeFunction(employee)),
+  ).length;
+
+  const employeesWithoutManager = employees.filter((employee) => !employee.manager_name).length;
+  const employeesWithoutCost = employees.filter(
+    (employee) => employee.loaded_hourly_cost === null || employee.loaded_hourly_cost === undefined,
+  ).length;
 
   const loadedCosts = employees
-    .map(
-      (employee) =>
-        employee.loaded_hourly_cost,
-    )
-    .filter(
-      (value): value is number =>
-        typeof value === "number",
-    );
+    .map((employee) => employee.loaded_hourly_cost)
+    .filter((value): value is number => typeof value === "number");
 
   const averageLoadedHourlyCost =
     loadedCosts.length > 0
-      ? loadedCosts.reduce(
-          (total, value) => total + value,
-          0,
-        ) / loadedCosts.length
+      ? loadedCosts.reduce((total, value) => total + value, 0) / loadedCosts.length
       : 0;
 
-  const structureComplete =
-    employees.filter(
-      (employee) =>
-        Boolean(getEmployeeSite(employee)) &&
-        Boolean(getEmployeeDepartment(employee)) &&
-        Boolean(
-          getEmployeeJob(employee) ||
-            getEmployeeFunction(employee),
-        ),
-    ).length;
+  const structureComplete = employees.filter(
+    (employee) =>
+      Boolean(getEmployeeSite(employee)) &&
+      Boolean(getEmployeeDepartment(employee)) &&
+      Boolean(getEmployeeJob(employee) || getEmployeeFunction(employee)),
+  ).length;
 
-  const managementComplete =
-    employees.filter(
-      (employee) =>
-        Boolean(employee.manager_name),
-    ).length;
-
-  const costComplete =
-    employees.filter(
-      (employee) =>
-        typeof employee.loaded_hourly_cost ===
-        "number",
-    ).length;
-
-  const contractComplete =
-    employees.filter(
-      (employee) =>
-        Boolean(employee.contract_type_name),
-    ).length;
-
-  const contactComplete =
-    employees.filter(
-      (employee) =>
-        Boolean(
-          employee.professional_email,
-        ) &&
-        Boolean(
-          employee.professional_phone,
-        ),
-    ).length;
+  const managementComplete = employees.filter((employee) => Boolean(employee.manager_name)).length;
+  const costComplete = employees.filter(
+    (employee) => typeof employee.loaded_hourly_cost === "number",
+  ).length;
+  const contractComplete = employees.filter((employee) => Boolean(employee.contract_type_name)).length;
+  const contactComplete = employees.filter(
+    (employee) => Boolean(employee.professional_email) && Boolean(employee.professional_phone),
+  ).length;
 
   const radarData = [
-    {
-      subject: "Structure",
-      value: percentage(
-        structureComplete,
-        employees.length,
-      ),
-    },
-    {
-      subject: "Management",
-      value: percentage(
-        managementComplete,
-        employees.length,
-      ),
-    },
-    {
-      subject: "Coûts",
-      value: percentage(
-        costComplete,
-        employees.length,
-      ),
-    },
-    {
-      subject: "Contrats",
-      value: percentage(
-        contractComplete,
-        employees.length,
-      ),
-    },
-    {
-      subject: "Contacts",
-      value: percentage(
-        contactComplete,
-        employees.length,
-      ),
-    },
+    { subject: "Structure", value: percentage(structureComplete, employees.length) },
+    { subject: "Management", value: percentage(managementComplete, employees.length) },
+    { subject: "Coûts", value: percentage(costComplete, employees.length) },
+    { subject: "Contrats", value: percentage(contractComplete, employees.length) },
+    { subject: "Contacts", value: percentage(contactComplete, employees.length) },
   ];
 
-  const qualityScore =
-    radarData.reduce(
-      (total, item) =>
-        total + item.value,
-      0,
-    ) / radarData.length;
-
+  const qualityScore = radarData.reduce((total, item) => total + item.value, 0) / radarData.length;
   const alerts: InsightCardProps[] = [];
 
   if (employeesWithoutStructure > 0) {
@@ -298,90 +561,58 @@ function getDecisionMetrics(
   if (alerts.length === 0) {
     alerts.push({
       title: "Données RH complètes",
-      description:
-        "Les principaux champs nécessaires au pilotage sont renseignés.",
+      description: "Les principaux champs nécessaires au pilotage sont renseignés.",
       level: "success",
     });
   }
 
-  return {
-    radarData,
-    qualityScore,
-    alerts,
-    averageLoadedHourlyCost,
-  };
+  return { radarData, qualityScore, alerts, averageLoadedHourlyCost };
 }
 
-function InsightCard({
-  title,
-  description,
-  level,
-}: InsightCardProps) {
+function InsightCard({ title, description, level }: InsightCardProps) {
   const styles = {
     info: {
-      container:
-        "border-sky-100 bg-sky-50/60 dark:border-sky-900/50 dark:bg-sky-950/20",
-      icon:
-        "bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300",
-      badge:
-        "bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300",
+      container: "border-sky-100 bg-sky-50/60 dark:border-sky-900/50 dark:bg-sky-950/20",
+      icon: "bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300",
+      badge: "bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300",
       label: "À suivre",
       Icon: CircleAlert,
     },
-
     warning: {
-      container:
-        "border-amber-100 bg-amber-50/60 dark:border-amber-900/50 dark:bg-amber-950/20",
-      icon:
-        "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
-      badge:
-        "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+      container: "border-amber-100 bg-amber-50/60 dark:border-amber-900/50 dark:bg-amber-950/20",
+      icon: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+      badge: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
       label: "Risque",
       Icon: AlertTriangle,
     },
-
     success: {
-      container:
-        "border-emerald-100 bg-emerald-50/60 dark:border-emerald-900/50 dark:bg-emerald-950/20",
-      icon:
-        "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
-      badge:
-        "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+      container: "border-emerald-100 bg-emerald-50/60 dark:border-emerald-900/50 dark:bg-emerald-950/20",
+      icon: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+      badge: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
       label: "OK",
       Icon: CheckCircle2,
     },
-  };
+  } as const;
 
   const selectedStyle = styles[level];
   const Icon = selectedStyle.Icon;
 
   return (
-    <article
-      className={`rounded-xl border px-3.5 py-3 ${selectedStyle.container}`}
-    >
+    <article className={`rounded-xl border px-3.5 py-3 ${selectedStyle.container}`} title={`${title} — ${description}`}>
       <div className="flex items-start gap-3">
-        <div
-          className={`rounded-lg p-1.5 ${selectedStyle.icon}`}
-        >
+        <div className={`rounded-lg p-1.5 ${selectedStyle.icon}`}>
           <Icon className="h-3.5 w-3.5" />
         </div>
 
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
-            <h4 className="text-xs font-black text-slate-950 dark:text-white">
-              {title}
-            </h4>
-
-            <span
-              className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wide ${selectedStyle.badge}`}
-            >
+            <h4 className="overflow-hidden text-xs font-black leading-snug text-slate-950 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] dark:text-slate-100" title={title}>{title}</h4>
+            <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wide ${selectedStyle.badge}`}>
               {selectedStyle.label}
             </span>
           </div>
 
-          <p className="mt-1 text-[11px] leading-5 text-slate-600 dark:text-slate-400">
-            {description}
-          </p>
+          <p className="mt-1 overflow-hidden text-[11px] leading-snug text-slate-600 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] dark:text-slate-300" title={description}>{description}</p>
         </div>
       </div>
     </article>
@@ -395,274 +626,124 @@ function DecisionPanel({
   accent,
   children,
 }: {
-  icon: ComponentType<{
-    className?: string;
-  }>;
+  icon: ComponentType<{ className?: string }>;
   title: string;
   description: string;
-  accent:
-    | "emerald"
-    | "amber"
-    | "violet";
+  accent: "indigo" | "emerald" | "amber";
   children: ReactNode;
 }) {
   const accents = {
-    emerald: {
-      header:
-        "from-emerald-50/80 via-white to-white dark:from-emerald-950/20 dark:via-slate-950 dark:to-slate-950",
-      icon:
-        "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
-      border:
-        "border-emerald-100 dark:border-emerald-900/50",
-    },
-
-    amber: {
-      header:
-        "from-amber-50/80 via-white to-white dark:from-amber-950/20 dark:via-slate-950 dark:to-slate-950",
-      icon:
-        "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
-      border:
-        "border-amber-100 dark:border-amber-900/50",
-    },
-
-    violet: {
-      header:
-        "from-violet-50/80 via-white to-white dark:from-violet-950/20 dark:via-slate-950 dark:to-slate-950",
-      icon:
-        "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300",
-      border:
-        "border-violet-100 dark:border-violet-900/50",
-    },
-  };
-
-  const selectedAccent = accents[accent];
+    indigo: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/45 dark:text-indigo-200",
+    emerald: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200",
+    amber: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200",
+  } as const;
 
   return (
-    <section
-      className={`overflow-hidden rounded-2xl border bg-white shadow-sm dark:bg-slate-950 ${selectedAccent.border}`}
-    >
-      <div
-        className={`border-b border-slate-100 bg-gradient-to-r px-5 py-4 dark:border-slate-800 ${selectedAccent.header}`}
-      >
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-600/60 dark:bg-slate-600/65">
+      <div className="border-b border-slate-100 bg-gradient-to-r from-sky-50/70 via-white to-indigo-50/60 px-5 py-4 dark:border-slate-600/55 dark:from-sky-900/25 dark:via-slate-700/85 dark:to-indigo-900/25">
         <div className="flex items-start gap-3">
-          <div
-            className={`rounded-xl p-2.5 ${selectedAccent.icon}`}
-          >
+          <div className={`rounded-xl p-2.5 ${accents[accent]}`}>
             <Icon className="h-4 w-4" />
           </div>
 
-          <div>
-            <h3 className="text-sm font-black text-slate-950 dark:text-white">
-              {title}
-            </h3>
-
-            <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
-              {description}
-            </p>
+          <div className="min-w-0">
+            <h3 className="truncate text-sm font-black text-slate-950 dark:text-slate-100" title={title}>{title}</h3>
+            <p className="mt-1 truncate whitespace-nowrap text-xs text-slate-500 dark:text-slate-300" title={description}>{description}</p>
           </div>
         </div>
       </div>
 
-      <div className="space-y-3 p-4">
-        {children}
-      </div>
+      <div className="space-y-3 p-4">{children}</div>
     </section>
   );
-}
-
-function escapeSvgText(value: string) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
 }
 
 function ChartCard({
   title,
   description,
+  exportConfig,
   children,
 }: {
   title: string;
   description: string;
+  exportConfig: ChartExportConfig;
   children: ReactNode;
 }) {
   const containerRef = useRef<HTMLElement | null>(null);
-  const [copyState, setCopyState] = useState<"idle" | "copied" | "error">("idle");
-
-  async function copyChart() {
-    const chartSvg = containerRef.current?.querySelector("svg");
-
-    if (!chartSvg) {
-      setCopyState("error");
-      window.setTimeout(() => setCopyState("idle"), 1600);
-      return;
-    }
-
-    const serializedSvg = new XMLSerializer().serializeToString(chartSvg);
-    const svgWithContext = `
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760">
-  <rect width="1200" height="760" fill="white"/>
-  <text x="48" y="56" font-family="Arial, sans-serif" font-size="28" font-weight="700" fill="#0f172a">${escapeSvgText(title)}</text>
-  <text x="48" y="90" font-family="Arial, sans-serif" font-size="16" fill="#475569">${escapeSvgText(description)}</text>
-  <g transform="translate(32 116) scale(1)">${serializedSvg}</g>
-</svg>`.trim();
-
-    try {
-      if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
-        await navigator.clipboard.write([
-          new ClipboardItem({
-            "image/svg+xml": new Blob([svgWithContext], { type: "image/svg+xml" }),
-            "text/plain": new Blob([svgWithContext], { type: "text/plain" }),
-          }),
-        ]);
-      } else {
-        await navigator.clipboard.writeText(svgWithContext);
-      }
-
-      setCopyState("copied");
-    } catch {
-      await navigator.clipboard.writeText(svgWithContext);
-      setCopyState("copied");
-    } finally {
-      window.setTimeout(() => setCopyState("idle"), 1600);
-    }
-  }
-
-  function expandChart() {
-    containerRef.current?.requestFullscreen?.();
-  }
 
   return (
     <article
       ref={containerRef}
-      className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950"
+      className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-600/60 dark:bg-slate-600/65"
     >
-      <div className="flex items-start justify-between gap-4 border-b border-slate-100 bg-gradient-to-r from-indigo-50/60 via-white to-violet-50/50 px-5 py-4 dark:border-slate-800 dark:from-indigo-950/20 dark:via-slate-950 dark:to-violet-950/20">
-        <div>
-          <h3 className="text-sm font-bold text-slate-950 dark:text-white">
-            {title}
-          </h3>
-
-          <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
-            {description}
-          </p>
+      <div className="flex items-center justify-between gap-4 border-b border-slate-100 bg-gradient-to-r from-sky-50/70 via-white to-indigo-50/60 px-5 py-4 dark:border-slate-600/55 dark:from-sky-900/25 dark:via-slate-700/85 dark:to-indigo-900/25">
+        <div className="min-w-0 flex-1">
+          <h3 className="truncate text-sm font-bold text-slate-950 dark:text-slate-100" title={title}>{title}</h3>
+          <p className="mt-1 truncate whitespace-nowrap text-xs text-slate-500 dark:text-slate-300" title={description}>{description}</p>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
+        <div data-chart-actions className="flex shrink-0 items-center gap-2">
           <button
             type="button"
-            onClick={() => void copyChart()}
-            title="Copier le graphique pour PowerPoint"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-indigo-100 bg-white text-indigo-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-indigo-50 dark:border-indigo-900 dark:bg-slate-950 dark:text-indigo-300 dark:hover:bg-indigo-950/30"
+            onClick={() => void copyRenderedChartBlock(containerRef.current)}
+            title="Copier"
+            aria-label={`Copier ${title}`}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-indigo-100 bg-white text-indigo-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-indigo-50 dark:border-indigo-800/70 dark:bg-slate-600/65 dark:text-indigo-200 dark:hover:bg-indigo-900/35"
           >
             <Copy className="h-4 w-4" />
           </button>
 
           <button
             type="button"
-            onClick={expandChart}
-            title="Agrandir le graphique"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-indigo-100 bg-white text-indigo-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-indigo-50 dark:border-indigo-900 dark:bg-slate-950 dark:text-indigo-300 dark:hover:bg-indigo-950/30"
+            onClick={() => containerRef.current?.requestFullscreen?.()}
+            title="Agrandir"
+            aria-label={`Agrandir ${title}`}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-indigo-100 bg-white text-indigo-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-indigo-50 dark:border-indigo-800/70 dark:bg-slate-600/65 dark:text-indigo-200 dark:hover:bg-indigo-900/35"
           >
             <Expand className="h-4 w-4" />
           </button>
         </div>
       </div>
 
-      {copyState !== "idle" && (
-        <div className="border-b border-indigo-100 bg-indigo-50 px-5 py-2 text-xs font-bold text-indigo-700 dark:border-indigo-900/60 dark:bg-indigo-950/30 dark:text-indigo-300">
-          {copyState === "copied"
-            ? "Graphique copié pour PowerPoint."
-            : "Graphique indisponible pour la copie."}
-        </div>
-      )}
-
-      <div className="h-80 p-4">
-        {children}
-      </div>
+      <div className="h-80 p-4">{children}</div>
     </article>
   );
 }
 
-export function HrDecisionInsightPanels({
-  employees,
-}: {
-  employees: HrDirectoryEmployee[];
-}) {
-  const {
-    qualityScore,
-    alerts,
-    averageLoadedHourlyCost,
-  } = getDecisionMetrics(employees);
+export function HrDecisionInsightPanels({ employees }: { employees: HrDirectoryEmployee[] }) {
+  const { qualityScore, alerts, averageLoadedHourlyCost } = getDecisionMetrics(employees);
 
   return (
     <div className="grid gap-4 xl:grid-cols-3">
-      <DecisionPanel
-        icon={Gauge}
-        title="Synthèse"
-        description="Lecture rapide de la qualité et du coût"
-        accent="emerald"
-      >
-        <div className="rounded-xl border border-slate-100 bg-slate-50 px-3.5 py-3 dark:border-slate-800 dark:bg-slate-900">
-          <p className="text-[9px] font-black uppercase tracking-wide text-slate-400">
-            Coût horaire moyen
-          </p>
-
-          <p className="mt-1.5 text-xl font-black text-indigo-700 dark:text-indigo-300">
-            {formatCurrency(
-              averageLoadedHourlyCost,
-            )}
-          </p>
+      <DecisionPanel icon={Gauge} title="Synthèse" description="Lecture rapide de la qualité et du coût" accent="indigo">
+        <div className="rounded-xl border border-slate-100 bg-slate-50 px-3.5 py-3 dark:border-slate-600/60 dark:bg-slate-600/55">
+          <p className="text-[9px] font-black uppercase tracking-wide text-slate-400">Coût horaire moyen</p>
+          <p className="mt-1.5 text-xl font-black text-indigo-700 dark:text-indigo-300">{formatCurrency(averageLoadedHourlyCost)}</p>
         </div>
 
-        <div className="rounded-xl border border-slate-100 bg-slate-50 px-3.5 py-3 dark:border-slate-800 dark:bg-slate-900">
-          <p className="text-[9px] font-black uppercase tracking-wide text-slate-400">
-            Qualité globale
-          </p>
-
-          <p className="mt-1.5 text-xl font-black text-emerald-700 dark:text-emerald-300">
-            {Math.round(qualityScore)} %
-          </p>
+        <div className="rounded-xl border border-slate-100 bg-slate-50 px-3.5 py-3 dark:border-slate-600/60 dark:bg-slate-600/55">
+          <p className="text-[9px] font-black uppercase tracking-wide text-slate-400">Qualité globale</p>
+          <p className="mt-1.5 text-xl font-black text-emerald-700 dark:text-emerald-300">{Math.round(qualityScore)} %</p>
         </div>
       </DecisionPanel>
 
-      <DecisionPanel
-        icon={AlertTriangle}
-        title="Alertes"
-        description="Points nécessitant une vérification ou une action."
-        accent="amber"
-      >
+      <DecisionPanel icon={AlertTriangle} title="Alertes" description="Points nécessitant une vérification ou une action." accent="emerald">
         {alerts.map((alert) => (
-          <InsightCard
-            key={alert.title}
-            {...alert}
-          />
+          <InsightCard key={alert.title} {...alert} />
         ))}
       </DecisionPanel>
 
-      <DecisionPanel
-        icon={Lightbulb}
-        title="Recommandations"
-        description="Actions suggérées pour améliorer le pilotage."
-        accent="violet"
-      >
+      <DecisionPanel icon={Lightbulb} title="Recommandations" description="Actions suggérées pour améliorer le pilotage." accent="amber">
         <InsightCard
           title="Améliorer les données les plus faibles"
           description="Le radar identifie immédiatement les dimensions nécessitant une campagne de complétion."
-          level={
-            qualityScore >= 80
-              ? "success"
-              : "info"
-          }
+          level={qualityScore >= 80 ? "success" : "info"}
         />
 
         {averageLoadedHourlyCost > 0 && (
           <InsightCard
             title="Comparer coût et facturation"
-            description={`Le coût horaire moyen est de ${formatCurrency(
-              averageLoadedHourlyCost,
-            )}. Il devra être comparé aux taux de vente des projets.`}
+            description={`Le coût horaire moyen est de ${formatCurrency(averageLoadedHourlyCost)}. Il devra être comparé aux taux de vente des projets.`}
             level="success"
           />
         )}
@@ -671,217 +752,202 @@ export function HrDecisionInsightPanels({
   );
 }
 
-export default function HrDecisionDashboard({
-  employees,
-  totalEmployees,
-}: HrDecisionDashboardProps) {
+export default function HrDecisionDashboard({ employees, totalEmployees }: HrDecisionDashboardProps) {
   const statusData = groupByValue(
     employees,
-    (employee) =>
-      getStatusLabel(employee.employment_status),
+    (employee) => getStatusLabel(employee.employment_status),
     "Non renseigné",
   );
 
-  const contractData = groupByValue(
+  const contractData = groupByValue(employees, (employee) => employee.contract_type_name, "Sans contrat").slice(0, 8);
+  const departmentData = groupByValue(employees, (employee) => getEmployeeDepartment(employee), "Sans service").slice(0, 8);
+  const jobData = groupByValue(employees, (employee) => getEmployeeJob(employee), "Métier non renseigné").slice(0, 10);
+  const functionData = groupByValue(employees, (employee) => getEmployeeFunction(employee), "Fonction non renseignée").slice(0, 10);
+  const managerData = groupByValue(employees, (employee) => employee.manager_name, "Manager non renseigné").slice(0, 10);
+  const arrivalsByMonth = getMonthlySeries(employees, (employee) => employee.arrival_date);
+  const departuresByMonth = getMonthlySeries(employees, (employee) => employee.departure_date);
+  const salaryByJobData = getAverageByGroup(
     employees,
-    (employee) =>
-      employee.contract_type_name,
-    "Sans contrat",
-  ).slice(0, 8);
-
-  const departmentData = groupByValue(
+    (employee) => getEmployeeJob(employee),
+    (employee) => employee.annual_gross_salary,
+    "Métier non renseigné",
+  );
+  const loadedCostByJobData = getAverageByGroup(
     employees,
-    (employee) =>
-      getEmployeeDepartment(employee),
-    "Sans service",
-  ).slice(0, 8);
+    (employee) => getEmployeeJob(employee),
+    (employee) => employee.loaded_hourly_cost,
+    "Métier non renseigné",
+  );
+  const { radarData } = getDecisionMetrics(employees);
 
-  const { radarData } =
-    getDecisionMetrics(employees);
-
-  const filteredRatio =
-    totalEmployees > 0
-      ? Math.round(
-          (employees.length /
-            totalEmployees) *
-            100,
-        )
-      : 0;
+  const filteredRatio = totalEmployees > 0 ? Math.round((employees.length / totalEmployees) * 100) : 0;
 
   return (
     <section className="space-y-6">
-      <div className="flex flex-col gap-3 rounded-2xl border border-indigo-100 bg-gradient-to-r from-indigo-50/70 via-white to-violet-50/60 p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between dark:border-indigo-900/60 dark:from-indigo-950/20 dark:via-slate-950 dark:to-violet-950/20">
+      <div className="flex flex-col gap-3 rounded-2xl border border-sky-100 bg-gradient-to-r from-sky-50/90 via-white to-indigo-50/75 p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between dark:border-sky-800/50 dark:from-sky-900/25 dark:via-slate-700/85 dark:to-indigo-900/25">
         <div>
           <div className="flex items-center gap-2">
             <TrendingUp className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
-
-            <h2 className="text-lg font-black text-slate-950 dark:text-white">
-              Analyse décisionnelle
-            </h2>
+            <h2 className="text-lg font-black text-slate-950 dark:text-slate-100">Analyse décisionnelle</h2>
           </div>
 
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            Les résultats suivent le périmètre filtré.
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-300">
+            Les résultats suivent le périmètre filtré et donnent au responsable RH/recrutement une lecture complète des effectifs, mouvements, métiers, fonctions, coûts et qualité des données.
           </p>
         </div>
 
-        <div className="inline-flex items-center gap-2 rounded-xl border border-indigo-100 bg-white px-3 py-2 text-xs font-semibold text-indigo-700 shadow-sm dark:border-indigo-900 dark:bg-slate-950 dark:text-indigo-300">
+        <div className="inline-flex items-center gap-2 rounded-xl border border-indigo-100 bg-white px-3 py-2 text-xs font-semibold text-indigo-700 shadow-sm dark:border-indigo-900 dark:bg-slate-600/55 dark:text-indigo-300">
           <Users className="h-4 w-4" />
-
-          {employees.length} collaborateur
-          {employees.length > 1 ? "s" : ""} —{" "}
-          {filteredRatio}% de l’effectif
+          {employees.length} collaborateur{employees.length > 1 ? "s" : ""} — {filteredRatio}% de l’effectif
         </div>
       </div>
 
-        <div className="grid gap-5 xl:grid-cols-2">
-          <ChartCard
-            title="Répartition par statut"
-            description="Composition du cycle de vie des collaborateurs."
-          >
-            <ResponsiveContainer
-              width="100%"
-              height="100%"
-            >
-              <PieChart>
-                <Pie
-                  data={statusData}
-                  dataKey="value"
-                  nameKey="name"
-                  cx="50%"
-                  cy="45%"
-                  innerRadius={65}
-                  outerRadius={100}
-                  paddingAngle={3}
-                >
-                  {statusData.map(
-                    (item, index) => (
-                      <Cell
-                        key={item.name}
-                        fill={
-                          chartColors[
-                            index %
-                              chartColors.length
-                          ]
-                        }
-                      />
-                    ),
-                  )}
-                </Pie>
+      <div className="grid gap-5 xl:grid-cols-2">
+        <ChartCard title="Répartition par statut" description="Composition du cycle de vie des collaborateurs." exportConfig={{ kind: "donut", data: statusData, valueLabel: "Collaborateurs", unit: "count" }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie data={statusData} dataKey="value" nameKey="name" cx="50%" cy="45%" innerRadius={65} outerRadius={100} paddingAngle={3}>
+                {statusData.map((item, index) => (
+                  <Cell key={item.name} fill={chartColors[index % chartColors.length]} />
+                ))}
+              </Pie>
+              <Tooltip />
+              <Legend verticalAlign="bottom" />
+            </PieChart>
+          </ResponsiveContainer>
+        </ChartCard>
 
-                <Tooltip />
-                <Legend verticalAlign="bottom" />
-              </PieChart>
-            </ResponsiveContainer>
-          </ChartCard>
+        <ChartCard title="Répartition par contrat" description="Volumes par mode de collaboration." exportConfig={{ kind: "donut", data: contractData, valueLabel: "Collaborateurs", unit: "count" }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie data={contractData} dataKey="value" nameKey="name" cx="50%" cy="45%" innerRadius={65} outerRadius={100} paddingAngle={3}>
+                {contractData.map((item, index) => (
+                  <Cell key={item.name} fill={chartColors[index % chartColors.length]} />
+                ))}
+              </Pie>
+              <Tooltip />
+              <Legend verticalAlign="bottom" />
+            </PieChart>
+          </ResponsiveContainer>
+        </ChartCard>
 
-          <ChartCard
-            title="Répartition par contrat"
-            description="Volumes par mode de collaboration."
-          >
-            <ResponsiveContainer
-              width="100%"
-              height="100%"
-            >
-              <BarChart data={contractData}>
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  vertical={false}
-                />
+        <ChartCard title="Arrivées par mois" description="Suivi des intégrations sur les 12 derniers mois." exportConfig={{ kind: "line", data: arrivalsByMonth, valueLabel: "Arrivées", unit: "count" }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={arrivalsByMonth}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#cbd5e1" />
+              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+              <YAxis allowDecimals={false} />
+              <Tooltip />
+              <Legend />
+              <Line type="monotone" dataKey="value" name="Arrivées" stroke={chartColors[1]} strokeWidth={3} dot={{ r: 3 }} />
+            </LineChart>
+          </ResponsiveContainer>
+        </ChartCard>
 
-                <XAxis
-                  dataKey="name"
-                  tick={{ fontSize: 11 }}
-                />
+        <ChartCard title="Sorties par mois" description="Suivi des départs sur les 12 derniers mois." exportConfig={{ kind: "line", data: departuresByMonth, valueLabel: "Sorties", unit: "count" }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={departuresByMonth}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#cbd5e1" />
+              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+              <YAxis allowDecimals={false} />
+              <Tooltip />
+              <Legend />
+              <Line type="monotone" dataKey="value" name="Sorties" stroke={chartColors[3]} strokeWidth={3} dot={{ r: 3 }} />
+            </LineChart>
+          </ResponsiveContainer>
+        </ChartCard>
 
-                <YAxis allowDecimals={false} />
-                <Tooltip />
+        <ChartCard title="Coût chargé par métier" description="Taux horaire chargé moyen exploitable par staffing et finance." exportConfig={{ kind: "verticalBar", data: loadedCostByJobData, valueLabel: "Coût horaire moyen", unit: "currency" }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={loadedCostByJobData}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#cbd5e1" />
+              <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-20} textAnchor="end" height={70} />
+              <YAxis tickFormatter={(value) => `${value} €`} />
+              <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+              <Legend />
+              <Bar dataKey="value" name="Coût horaire moyen" radius={[8, 8, 0, 0]} fill={chartColors[4]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </ChartCard>
 
-                <Bar
-                  dataKey="value"
-                  name="Collaborateurs"
-                  radius={[8, 8, 0, 0]}
-                  fill="#8b5cf6"
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </ChartCard>
+        <ChartCard title="Collaborateurs par manager" description="Vision charge managériale et span of control." exportConfig={{ kind: "verticalBar", data: managerData, valueLabel: "Collaborateurs", unit: "count" }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={managerData}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#cbd5e1" />
+              <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-20} textAnchor="end" height={70} />
+              <YAxis allowDecimals={false} />
+              <Tooltip />
+              <Legend />
+              <Bar dataKey="value" name="Collaborateurs" radius={[8, 8, 0, 0]} fill={chartColors[0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </ChartCard>
 
-          <ChartCard
-            title="Effectif par service"
-            description="Concentrations organisationnelles."
-          >
-            <ResponsiveContainer
-              width="100%"
-              height="100%"
-            >
-              <BarChart
-                data={departmentData}
-                layout="vertical"
-              >
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  horizontal={false}
-                />
+        <ChartCard title="Répartition par service" description="Concentrations organisationnelles." exportConfig={{ kind: "horizontalBar", data: departmentData, valueLabel: "Collaborateurs", unit: "count" }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={departmentData} layout="vertical">
+              <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#cbd5e1" />
+              <XAxis type="number" allowDecimals={false} />
+              <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 11 }} />
+              <Tooltip />
+              <Legend />
+              <Bar dataKey="value" name="Collaborateurs" radius={[0, 8, 8, 0]} fill={chartColors[4]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </ChartCard>
 
-                <XAxis
-                  type="number"
-                  allowDecimals={false}
-                />
+        <ChartCard title="Répartition par métier" description="Lecture recrutement des métiers les plus représentés." exportConfig={{ kind: "horizontalBar", data: jobData, valueLabel: "Collaborateurs", unit: "count" }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={jobData} layout="vertical">
+              <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#cbd5e1" />
+              <XAxis type="number" allowDecimals={false} />
+              <YAxis type="category" dataKey="name" width={140} tick={{ fontSize: 11 }} />
+              <Tooltip />
+              <Legend />
+              <Bar dataKey="value" name="Collaborateurs" radius={[0, 8, 8, 0]} fill={chartColors[0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </ChartCard>
 
-                <YAxis
-                  type="category"
-                  dataKey="name"
-                  width={120}
-                  tick={{ fontSize: 11 }}
-                />
+        <ChartCard title="Répartition par fonction" description="Lecture opérationnelle des fonctions occupées." exportConfig={{ kind: "horizontalBar", data: functionData, valueLabel: "Collaborateurs", unit: "count" }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={functionData} layout="vertical">
+              <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#cbd5e1" />
+              <XAxis type="number" allowDecimals={false} />
+              <YAxis type="category" dataKey="name" width={140} tick={{ fontSize: 11 }} />
+              <Tooltip />
+              <Legend />
+              <Bar dataKey="value" name="Collaborateurs" radius={[0, 8, 8, 0]} fill={chartColors[1]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </ChartCard>
 
-                <Tooltip />
+        <ChartCard title="Répartition salaire moyen par métier" description="Comparaison des rémunérations brutes annuelles par métier." exportConfig={{ kind: "horizontalBar", data: salaryByJobData, valueLabel: "Salaire moyen", unit: "currency" }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={salaryByJobData} layout="vertical">
+              <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#cbd5e1" />
+              <XAxis type="number" tickFormatter={(value) => `${Math.round(Number(value) / 1000)} k€`} />
+              <YAxis type="category" dataKey="name" width={140} tick={{ fontSize: 11 }} />
+              <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+              <Legend />
+              <Bar dataKey="value" name="Salaire moyen" radius={[0, 8, 8, 0]} fill={chartColors[2]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </ChartCard>
 
-                <Bar
-                  dataKey="value"
-                  radius={[0, 8, 8, 0]}
-                  fill="#06b6d4"
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </ChartCard>
-
-          <ChartCard
-            title="Qualité des données RH"
-            description="Complétude des informations nécessaires au pilotage."
-          >
-            <ResponsiveContainer
-              width="100%"
-              height="100%"
-            >
-              <RadarChart data={radarData}>
-                <PolarGrid />
-
-                <PolarAngleAxis
-                  dataKey="subject"
-                  tick={{ fontSize: 11 }}
-                />
-
-                <PolarRadiusAxis
-                  angle={30}
-                  domain={[0, 100]}
-                  tick={{ fontSize: 10 }}
-                />
-
-                <Radar
-                  name="Complétude"
-                  dataKey="value"
-                  stroke="#6366f1"
-                  fill="#8b5cf6"
-                  fillOpacity={0.35}
-                />
-
-                <Tooltip />
-              </RadarChart>
-            </ResponsiveContainer>
-          </ChartCard>
-        </div>
+        <ChartCard title="Qualité des données RH" description="Complétude des informations nécessaires au pilotage." exportConfig={{ kind: "radar", data: radarData.map((item) => ({ name: item.subject, value: item.value })), valueLabel: "Complétude", unit: "percent" }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <RadarChart data={radarData}>
+              <PolarGrid />
+              <PolarAngleAxis dataKey="subject" tick={{ fontSize: 11 }} />
+              <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fontSize: 10 }} />
+              <Radar name="Complétude" dataKey="value" stroke={chartColors[0]} fill={chartColors[1]} fillOpacity={0.22} />
+              <Tooltip />
+              <Legend />
+            </RadarChart>
+          </ResponsiveContainer>
+        </ChartCard>
+      </div>
     </section>
   );
 }
