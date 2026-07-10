@@ -367,6 +367,23 @@ async function recordHrAuditEvent({
   }
 }
 
+
+function getEmployeeSite(employee: HrDirectoryEmployee) {
+  return employee.site_free_text || employee.site_name;
+}
+
+function getEmployeeDepartment(employee: HrDirectoryEmployee) {
+  return employee.department_free_text || employee.department_name;
+}
+
+function getEmployeeJob(employee: HrDirectoryEmployee) {
+  return employee.job_free_text || employee.job_name;
+}
+
+function getEmployeeFunction(employee: HrDirectoryEmployee) {
+  return employee.function_free_text || employee.function_name;
+}
+
 const employeeExportColumns: ExportColumn<HrDirectoryEmployee>[] = [
   {
     key: "employee_number",
@@ -406,22 +423,22 @@ const employeeExportColumns: ExportColumn<HrDirectoryEmployee>[] = [
   {
     key: "site_name",
     label: "Site",
-    value: (employee) => employee.site_name,
+    value: (employee) => getEmployeeSite(employee),
   },
   {
     key: "department_name",
     label: "Service",
-    value: (employee) => employee.department_name,
+    value: (employee) => getEmployeeDepartment(employee),
   },
   {
     key: "job_name",
     label: "Métier",
-    value: (employee) => employee.job_name,
+    value: (employee) => getEmployeeJob(employee),
   },
   {
     key: "function_name",
     label: "Fonction",
-    value: (employee) => employee.function_name,
+    value: (employee) => getEmployeeFunction(employee),
   },
   {
     key: "manager_name",
@@ -705,11 +722,11 @@ function AlertsPanel({
 }: {
   employees: HrDirectoryEmployee[];
 }) {
-  const missingSite = employees.filter((employee) => !employee.site_name)
+  const missingSite = employees.filter((employee) => !getEmployeeSite(employee))
     .length;
 
   const missingDepartment = employees.filter(
-    (employee) => !employee.department_name,
+    (employee) => !getEmployeeDepartment(employee),
   ).length;
 
   const missingContact = employees.filter(
@@ -1151,10 +1168,10 @@ export default function HrResourcesPage({
         employee.employee_number,
         employee.professional_email,
         employee.professional_phone,
-        employee.site_name,
-        employee.department_name,
-        employee.job_name,
-        employee.function_name,
+        getEmployeeSite(employee),
+        getEmployeeDepartment(employee),
+        getEmployeeJob(employee),
+        getEmployeeFunction(employee),
         employee.manager_name,
         employee.contract_type_name,
         employee.work_schedule_name,
@@ -1171,12 +1188,15 @@ export default function HrResourcesPage({
         filters.status === "all" ||
         employee.employment_status === filters.status;
 
+      const employeeSite = getEmployeeSite(employee);
+      const employeeDepartment = getEmployeeDepartment(employee);
+
       const matchesSite =
-        filters.site === "all" || employee.site_name === filters.site;
+        filters.site === "all" || employeeSite === filters.site;
 
       const matchesDepartment =
         filters.department === "all" ||
-        employee.department_name === filters.department;
+        employeeDepartment === filters.department;
 
       const matchesContract =
         filters.contract === "all" ||

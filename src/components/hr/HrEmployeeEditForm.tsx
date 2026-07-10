@@ -5,6 +5,7 @@ import {
   type ReactNode,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import {
@@ -470,6 +471,17 @@ function buildWeeklyPatternFromWorkSchedule(
   };
 }
 
+function isWeeklyWorkPatternValue(
+  value: unknown,
+): value is WeeklyWorkPatternValue {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      "days" in value &&
+      typeof (value as { days?: unknown }).days === "object",
+  );
+}
+
 function buildWeeklyPatternFromContract(
   contract: ContractRecord | null,
 ): WeeklyWorkPatternValue {
@@ -478,12 +490,20 @@ function buildWeeklyPatternFromContract(
     contract?.weekly_work_pattern ??
     null;
 
-  if (
-    rawPattern &&
-    typeof rawPattern === "object" &&
-    "days" in rawPattern
-  ) {
-    return rawPattern as WeeklyWorkPatternValue;
+  if (isWeeklyWorkPatternValue(rawPattern)) {
+    return rawPattern;
+  }
+
+  if (typeof rawPattern === "string") {
+    try {
+      const parsedPattern = JSON.parse(rawPattern) as unknown;
+
+      if (isWeeklyWorkPatternValue(parsedPattern)) {
+        return parsedPattern;
+      }
+    } catch {
+      // Le champ historique peut contenir un commentaire libre : on retombe alors sur le rythme standard.
+    }
   }
 
   return createDefaultWeeklyWorkPattern();
@@ -1086,6 +1106,8 @@ export default function HrEmployeeEditForm({
     setIsAddressLoading,
   ] = useState(false);
 
+  const hydratedWorkScheduleIdRef = useRef<string | null>(null);
+
   const selectedContractType = useMemo(
     () =>
       references?.contractTypes.find(
@@ -1136,15 +1158,18 @@ export default function HrEmployeeEditForm({
         ),
       ]);
 
+      const nextFormData = buildFormDataFromRecords(
+        employeeData.employee,
+        employeeData.contract,
+      );
+
+      hydratedWorkScheduleIdRef.current =
+        nextFormData.workScheduleId || null;
+
       setReferences(referenceData);
       setLoadedEmployee(employeeData.employee);
       setLoadedContract(employeeData.contract);
-      setFormData(
-        buildFormDataFromRecords(
-          employeeData.employee,
-          employeeData.contract,
-        ),
-      );
+      setFormData(nextFormData);
       setAddressSuggestions([]);
       setActiveTab("identity");
     } catch (error: unknown) {
@@ -1232,6 +1257,14 @@ export default function HrEmployeeEditForm({
 
   useEffect(() => {
     if (!selectedWorkSchedule) {
+      hydratedWorkScheduleIdRef.current = null;
+      return;
+    }
+
+    if (
+      hydratedWorkScheduleIdRef.current === selectedWorkSchedule.id
+    ) {
+      hydratedWorkScheduleIdRef.current = null;
       return;
     }
 

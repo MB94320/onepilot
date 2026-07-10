@@ -127,6 +127,23 @@ function getInitials(
   );
 }
 
+
+function getEmployeeSite(employee: HrDirectoryEmployee) {
+  return employee.site_free_text || employee.site_name;
+}
+
+function getEmployeeDepartment(employee: HrDirectoryEmployee) {
+  return employee.department_free_text || employee.department_name;
+}
+
+function getEmployeeJob(employee: HrDirectoryEmployee) {
+  return employee.job_free_text || employee.job_name;
+}
+
+function getEmployeeFunction(employee: HrDirectoryEmployee) {
+  return employee.function_free_text || employee.function_name;
+}
+
 function getStatusLabel(
   status: string,
 ) {
@@ -592,7 +609,7 @@ export default function HrEmployeeDrawer({
                       <span className="inline-flex items-center gap-2">
                         <MapPin className="h-4 w-4 text-rose-500" />
                         {formatText(
-                          employee.site_name,
+                          getEmployeeSite(employee),
                         )}
                       </span>
                     }
@@ -601,21 +618,21 @@ export default function HrEmployeeDrawer({
                   <InfoItem
                     label="Service"
                     value={formatText(
-                      employee.department_name,
+                      getEmployeeDepartment(employee),
                     )}
                   />
 
                   <InfoItem
                     label="Métier"
                     value={formatText(
-                      employee.job_name,
+                      getEmployeeJob(employee),
                     )}
                   />
 
                   <InfoItem
                     label="Fonction"
                     value={formatText(
-                      employee.function_name,
+                      getEmployeeFunction(employee),
                     )}
                   />
 

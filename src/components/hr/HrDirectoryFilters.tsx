@@ -22,17 +22,22 @@ type HrDirectoryFiltersProps = {
 const selectClassName =
   "h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300 dark:focus:border-indigo-600 dark:focus:ring-indigo-950";
 
+function getEmployeeSite(employee: HrDirectoryEmployee) {
+  return employee.site_free_text || employee.site_name;
+}
+
+function getEmployeeDepartment(employee: HrDirectoryEmployee) {
+  return employee.department_free_text || employee.department_name;
+}
+
 function uniqueValues(
   employees: HrDirectoryEmployee[],
-  field:
-    | "site_name"
-    | "department_name"
-    | "contract_type_name",
+  resolver: (employee: HrDirectoryEmployee) => string | null | undefined,
 ) {
   return Array.from(
     new Set(
       employees
-        .map((employee) => employee[field])
+        .map((employee) => resolver(employee))
         .filter(
           (value): value is string =>
             Boolean(value?.trim()),
@@ -51,16 +56,16 @@ export default function HrDirectoryFilters({
   onChange,
   resultCount,
 }: HrDirectoryFiltersProps) {
-  const sites = uniqueValues(employees, "site_name");
+  const sites = uniqueValues(employees, getEmployeeSite);
 
   const departments = uniqueValues(
     employees,
-    "department_name",
+    getEmployeeDepartment,
   );
 
   const contractTypes = uniqueValues(
     employees,
-    "contract_type_name",
+    (employee) => employee.contract_type_name,
   );
 
   const hasActiveFilters =
