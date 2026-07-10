@@ -190,7 +190,7 @@ export default function PageTutorial({
                 {title}
               </h2>
 
-              <p className="mt-1 max-w-4xl text-sm leading-6 text-slate-600 dark:text-slate-400">
+              <p className="mt-1 max-w-4xl whitespace-pre-line text-sm leading-6 text-slate-600 dark:text-slate-400">
                 {description}
               </p>
             </div>
@@ -241,7 +241,7 @@ export default function PageTutorial({
             <InformationBlock
               title="Comment utiliser la page"
               icon={ListChecks}
-              accent="emerald"
+              accent="violet"
             >
               <ol className="space-y-3">
                 {steps.map((step, index) => (
@@ -249,7 +249,7 @@ export default function PageTutorial({
                     key={`${step.title}-${index}`}
                     className="flex items-start gap-3"
                   >
-                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 text-[11px] font-bold text-white shadow-sm">
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 text-[11px] font-bold text-white shadow-sm">
                       {index + 1}
                     </span>
 
@@ -272,13 +272,13 @@ export default function PageTutorial({
             <InformationBlock
               title="Analyses possibles"
               icon={BarChart3}
-              accent="violet"
+              accent="emerald"
             >
               <div className="space-y-3">
                 {analyses.map((analysis) => (
                   <div
                     key={analysis.title}
-                    className="rounded-xl border border-violet-100 bg-white p-3 shadow-sm dark:border-violet-900/50 dark:bg-slate-950"
+                    className="rounded-xl border border-emerald-100 bg-white p-3 shadow-sm dark:border-emerald-900/50 dark:bg-slate-950"
                   >
                     <p className="text-sm font-semibold text-slate-900 dark:text-white">
                       {analysis.title}

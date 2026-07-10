@@ -819,23 +819,6 @@ export default function HrDirectory({
       "cards",
     );
 
-  const countText =
-    totalCount !== undefined
-      ? `${employees.length} résultat${
-          employees.length > 1
-            ? "s"
-            : ""
-        } sur ${totalCount}`
-      : `${employees.length} collaborateur${
-          employees.length > 1
-            ? "s"
-            : ""
-        } affiché${
-          employees.length > 1
-            ? "s"
-            : ""
-        }`;
-
   const hasActions =
     Boolean(
       onEmployeeClick ||
@@ -883,12 +866,8 @@ export default function HrDirectory({
               Collaborateurs
             </h2>
 
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              {countText}
-            </p>
-
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              Cartes opérationnelles ou tableau dense avec actions rapides.
+            <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
+              Cartes opérationnelles ou tableau dense avec rattachements, contrat, rythme, coûts et actions rapides.
             </p>
           </div>
         </div>
@@ -940,9 +919,9 @@ export default function HrDirectory({
                       className={
                         heading === "Collaborateur"
                           ? "sticky left-0 z-30 bg-slate-50 px-4 py-3 text-left text-[10px] font-black uppercase tracking-wide text-slate-500 shadow-[1px_0_0_0_rgba(148,163,184,0.25)] dark:bg-slate-900"
-                          : `px-4 py-3 text-left text-[10px] font-black uppercase tracking-wide text-slate-500 ${
-                              heading === "Actions" ? "text-right" : ""
-                            }`
+                          : heading === "Actions"
+                            ? "sticky right-0 z-30 bg-slate-50 px-4 py-3 text-right text-[10px] font-black uppercase tracking-wide text-slate-500 shadow-[-1px_0_0_0_rgba(148,163,184,0.25)] dark:bg-slate-900"
+                            : "px-4 py-3 text-left text-[10px] font-black uppercase tracking-wide text-slate-500"
                       }
                     >
                       {heading}
@@ -1094,7 +1073,7 @@ export default function HrDirectory({
 
                     {hasActions && (
                       <td
-                        className="px-4 py-3 text-right"
+                        className="sticky right-0 z-10 bg-white px-4 py-3 text-right shadow-[-1px_0_0_0_rgba(148,163,184,0.18)] dark:bg-slate-950"
                         onClick={(event) =>
                           event.stopPropagation()
                         }

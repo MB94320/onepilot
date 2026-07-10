@@ -511,7 +511,7 @@ function MetricCard({
     className?: string;
     strokeWidth?: number;
   }>;
-  accent: "indigo" | "emerald" | "amber" | "rose";
+  accent: "indigo" | "violet" | "emerald" | "amber" | "rose";
 }) {
   const accentClasses = {
     indigo: {
@@ -520,6 +520,13 @@ function MetricCard({
       icon:
         "bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300",
       value: "text-indigo-700 dark:text-indigo-300",
+    },
+    violet: {
+      panel:
+        "border-violet-100 from-violet-50/85 via-white to-fuchsia-50/65 dark:border-violet-900/50 dark:from-violet-950/30 dark:via-slate-950 dark:to-fuchsia-950/20",
+      icon:
+        "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300",
+      value: "text-violet-700 dark:text-violet-300",
     },
     emerald: {
       panel:
@@ -596,7 +603,7 @@ function AlertCard({
   title: string;
   value: number;
   description: string;
-  accent: "indigo" | "emerald" | "amber" | "rose";
+  accent: "indigo" | "violet" | "emerald" | "amber" | "rose";
 }) {
   const classes = {
     indigo: {
@@ -607,6 +614,15 @@ function AlertCard({
       value: "text-indigo-700 dark:text-indigo-300",
       badge:
         "bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300",
+    },
+    violet: {
+      panel:
+        "border-violet-100 bg-violet-50/60 dark:border-violet-900/50 dark:bg-violet-950/20",
+      icon:
+        "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300",
+      value: "text-violet-700 dark:text-violet-300",
+      badge:
+        "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300",
     },
     emerald: {
       panel:
@@ -1388,7 +1404,7 @@ export default function HrResourcesPage({
 
         <PageTutorial
           title="Gérer et piloter les ressources"
-          description="Cette page centralise les fiches collaborateurs, les rattachements, les contrats, les rythmes de travail, les coûts et les alertes qualité."
+          description={"Centraliser les fiches collaborateurs, les rattachements, les contrats, les rythmes de travail et les coûts.\nPiloter la qualité des données RH, les alertes, les exports et les analyses du périmètre filtré."}
           objectives={[
             "Centraliser les salariés, freelances, alternants et prestataires.",
             "Garantir la cohérence entre la fiche, le contrat et l’architecture RH.",
@@ -1473,7 +1489,7 @@ export default function HrResourcesPage({
             value={activeEmployees}
             description="Actifs, pré-intégrations et périodes d’essai."
             icon={UserCheck}
-            accent="emerald"
+            accent="violet"
           />
 
           <MetricCard
@@ -1481,7 +1497,7 @@ export default function HrResourcesPage({
             value={probationEmployees}
             description="Suivis et échéances à anticiper."
             icon={CalendarClock}
-            accent="amber"
+            accent="emerald"
           />
 
           <MetricCard
@@ -1489,7 +1505,7 @@ export default function HrResourcesPage({
             value={departures}
             description="Préavis, fiches sorties ou archivées."
             icon={UserX}
-            accent="rose"
+            accent="amber"
           />
         </section>
 

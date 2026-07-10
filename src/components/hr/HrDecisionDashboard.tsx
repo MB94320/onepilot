@@ -1,6 +1,8 @@
 "use client";
 
 import {
+  useRef,
+  useState,
   type ComponentType,
   type ReactNode,
 } from "react";
@@ -9,6 +11,8 @@ import {
   BarChart3,
   CheckCircle2,
   CircleAlert,
+  Copy,
+  Expand,
   Gauge,
   Lightbulb,
   TrendingUp,
@@ -466,6 +470,14 @@ function DecisionPanel({
   );
 }
 
+function escapeSvgText(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
 function ChartCard({
   title,
   description,
@@ -475,17 +487,96 @@ function ChartCard({
   description: string;
   children: ReactNode;
 }) {
-  return (
-    <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950">
-      <div className="border-b border-slate-100 bg-gradient-to-r from-indigo-50/60 via-white to-violet-50/50 px-5 py-4 dark:border-slate-800 dark:from-indigo-950/20 dark:via-slate-950 dark:to-violet-950/20">
-        <h3 className="text-sm font-bold text-slate-950 dark:text-white">
-          {title}
-        </h3>
+  const containerRef = useRef<HTMLElement | null>(null);
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "error">("idle");
 
-        <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
-          {description}
-        </p>
+  async function copyChart() {
+    const chartSvg = containerRef.current?.querySelector("svg");
+
+    if (!chartSvg) {
+      setCopyState("error");
+      window.setTimeout(() => setCopyState("idle"), 1600);
+      return;
+    }
+
+    const serializedSvg = new XMLSerializer().serializeToString(chartSvg);
+    const svgWithContext = `
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760">
+  <rect width="1200" height="760" fill="white"/>
+  <text x="48" y="56" font-family="Arial, sans-serif" font-size="28" font-weight="700" fill="#0f172a">${escapeSvgText(title)}</text>
+  <text x="48" y="90" font-family="Arial, sans-serif" font-size="16" fill="#475569">${escapeSvgText(description)}</text>
+  <g transform="translate(32 116) scale(1)">${serializedSvg}</g>
+</svg>`.trim();
+
+    try {
+      if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            "image/svg+xml": new Blob([svgWithContext], { type: "image/svg+xml" }),
+            "text/plain": new Blob([svgWithContext], { type: "text/plain" }),
+          }),
+        ]);
+      } else {
+        await navigator.clipboard.writeText(svgWithContext);
+      }
+
+      setCopyState("copied");
+    } catch {
+      await navigator.clipboard.writeText(svgWithContext);
+      setCopyState("copied");
+    } finally {
+      window.setTimeout(() => setCopyState("idle"), 1600);
+    }
+  }
+
+  function expandChart() {
+    containerRef.current?.requestFullscreen?.();
+  }
+
+  return (
+    <article
+      ref={containerRef}
+      className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950"
+    >
+      <div className="flex items-start justify-between gap-4 border-b border-slate-100 bg-gradient-to-r from-indigo-50/60 via-white to-violet-50/50 px-5 py-4 dark:border-slate-800 dark:from-indigo-950/20 dark:via-slate-950 dark:to-violet-950/20">
+        <div>
+          <h3 className="text-sm font-bold text-slate-950 dark:text-white">
+            {title}
+          </h3>
+
+          <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
+            {description}
+          </p>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void copyChart()}
+            title="Copier le graphique pour PowerPoint"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-indigo-100 bg-white text-indigo-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-indigo-50 dark:border-indigo-900 dark:bg-slate-950 dark:text-indigo-300 dark:hover:bg-indigo-950/30"
+          >
+            <Copy className="h-4 w-4" />
+          </button>
+
+          <button
+            type="button"
+            onClick={expandChart}
+            title="Agrandir le graphique"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-indigo-100 bg-white text-indigo-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-indigo-50 dark:border-indigo-900 dark:bg-slate-950 dark:text-indigo-300 dark:hover:bg-indigo-950/30"
+          >
+            <Expand className="h-4 w-4" />
+          </button>
+        </div>
       </div>
+
+      {copyState !== "idle" && (
+        <div className="border-b border-indigo-100 bg-indigo-50 px-5 py-2 text-xs font-bold text-indigo-700 dark:border-indigo-900/60 dark:bg-indigo-950/30 dark:text-indigo-300">
+          {copyState === "copied"
+            ? "Graphique copié pour PowerPoint."
+            : "Graphique indisponible pour la copie."}
+        </div>
+      )}
 
       <div className="h-80 p-4">
         {children}
