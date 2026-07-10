@@ -1059,7 +1059,7 @@ export default function HrMemberForm({
       }
 
       if (employeeIdToUpdate) {
-        await (
+        const { error: employeeUpdateError } = await (
           supabase.from("hr_employees" as never) as any
         )
           .update({
@@ -1071,7 +1071,11 @@ export default function HrMemberForm({
           .eq("organization_id", organizationId)
           .eq("id", employeeIdToUpdate);
 
-        await (
+        if (employeeUpdateError) {
+          throw new Error(employeeUpdateError.message);
+        }
+
+        const { error: contractUpdateError } = await (
           supabase.from("hr_employee_contracts" as never) as any
         )
           .update({
@@ -1108,6 +1112,10 @@ export default function HrMemberForm({
           })
           .eq("organization_id", organizationId)
           .eq("employee_id", employeeIdToUpdate);
+
+        if (contractUpdateError) {
+          throw new Error(contractUpdateError.message);
+        }
       }
 
       return data;

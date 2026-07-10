@@ -1575,6 +1575,14 @@ export default function HrEmployeeEditForm({
               emptyToNull(formData.jobId),
             function_id:
               emptyToNull(formData.functionId),
+            site_free_text:
+              emptyToNull(formData.siteFreeText),
+            department_free_text:
+              emptyToNull(formData.departmentFreeText),
+            job_free_text:
+              emptyToNull(formData.jobFreeText),
+            function_free_text:
+              emptyToNull(formData.functionFreeText),
             manager_employee_id:
               emptyToNull(formData.managerId),
 

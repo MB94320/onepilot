@@ -165,9 +165,12 @@ type DistributionItem = {
 };
 
 type ExportRow = {
+  requestId: string;
   employee: string;
   employeeNumber: string;
+  professionalEmail: string;
   absenceType: string;
+  absenceCode: string;
   site: string;
   department: string;
   startDate: string;
@@ -175,6 +178,7 @@ type ExportRow = {
   requestedAmount: number;
   unit: string;
   calendarDays: number;
+  workingDays: number;
   holidayDays: number;
   nonWorkingDays: number;
   availableBalance: number;
@@ -183,6 +187,8 @@ type ExportRow = {
   calendar: string;
   workSchedule: string;
   archived: string;
+  createdAt: string;
+  updatedAt: string;
 };
 
 const initialFilters: HrAbsenceFiltersValue = {
@@ -1271,51 +1277,6 @@ function buildDistributionSvg(
   `.trim();
 }
 
-async function svgToPngBlob(svg: string) {
-  return new Promise<Blob | null>((resolve) => {
-    if (typeof window === "undefined") {
-      resolve(null);
-      return;
-    }
-
-    const image = new Image();
-    const svgBlob = new Blob([svg], {
-      type: "image/svg+xml;charset=utf-8",
-    });
-    const objectUrl = URL.createObjectURL(svgBlob);
-
-    image.onload = () => {
-      const canvas = document.createElement("canvas");
-      canvas.width = image.width || 960;
-      canvas.height = image.height || 520;
-
-      const context = canvas.getContext("2d");
-
-      if (!context) {
-        URL.revokeObjectURL(objectUrl);
-        resolve(null);
-        return;
-      }
-
-      context.fillStyle = "#FFFFFF";
-      context.fillRect(0, 0, canvas.width, canvas.height);
-      context.drawImage(image, 0, 0);
-
-      canvas.toBlob((blob) => {
-        URL.revokeObjectURL(objectUrl);
-        resolve(blob);
-      }, "image/png");
-    };
-
-    image.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      resolve(null);
-    };
-
-    image.src = objectUrl;
-  });
-}
-
 async function copyDistributionSvg(
   title: string,
   data: DistributionItem[],
@@ -1330,18 +1291,6 @@ async function copyDistributionSvg(
       typeof ClipboardItem !== "undefined" &&
       navigator.clipboard?.write
     ) {
-      const pngBlob = await svgToPngBlob(svg);
-
-      if (pngBlob) {
-        await navigator.clipboard.write([
-          new ClipboardItem({
-            "image/png": pngBlob,
-          }),
-        ]);
-
-        return;
-      }
-
       await navigator.clipboard.write([
         new ClipboardItem({
           "image/svg+xml": new Blob([svg], {
@@ -1356,11 +1305,12 @@ async function copyDistributionSvg(
       return;
     }
   } catch {
-    // Fallback texte.
+    // Fallback texte SVG pour conserver un collage exploitable si le navigateur bloque image/svg+xml.
   }
 
   await navigator.clipboard.writeText(svg);
 }
+
 
 function ChartFullScreenModal({
   title,
@@ -2176,16 +2126,31 @@ const exportColumns: ExportColumn<ExportRow>[] = [
     value: (row) => row.employee,
   },
   {
+    key: "requestId",
+    label: "ID demande",
+    value: (row) => row.requestId,
+  },
+  {
     key: "employeeNumber",
     label: "Matricule",
     value: (row) =>
       row.employeeNumber,
   },
   {
+    key: "professionalEmail",
+    label: "Email professionnel",
+    value: (row) => row.professionalEmail,
+  },
+  {
     key: "absenceType",
     label: "Type d’absence",
     value: (row) =>
       row.absenceType,
+  },
+  {
+    key: "absenceCode",
+    label: "Code absence",
+    value: (row) => row.absenceCode,
   },
   {
     key: "site",
@@ -2225,6 +2190,11 @@ const exportColumns: ExportColumn<ExportRow>[] = [
     label: "Jours calendaires",
     value: (row) =>
       row.calendarDays,
+  },
+  {
+    key: "workingDays",
+    label: "Jours ouvrés retenus",
+    value: (row) => row.workingDays,
   },
   {
     key: "holidayDays",
@@ -2269,6 +2239,16 @@ const exportColumns: ExportColumn<ExportRow>[] = [
     key: "archived",
     label: "Archivée",
     value: (row) => row.archived,
+  },
+  {
+    key: "createdAt",
+    label: "Créée le",
+    value: (row) => row.createdAt,
+  },
+  {
+    key: "updatedAt",
+    label: "Mise à jour le",
+    value: (row) => row.updatedAt,
   },
 ];
 
@@ -3074,6 +3054,10 @@ export default function HrAbsencesPage({
               );
 
             return {
+              requestId:
+                request.id ??
+                "",
+
               employee:
                 request.employee_name ??
                 "",
@@ -3082,8 +3066,16 @@ export default function HrAbsencesPage({
                 request.employee_number ??
                 "",
 
+              professionalEmail:
+                request.professional_email ??
+                "",
+
               absenceType:
                 request.absence_type_name ??
+                "",
+
+              absenceCode:
+                request.absence_type_code ??
                 "",
 
               site:
@@ -3115,6 +3107,11 @@ export default function HrAbsencesPage({
               calendarDays:
                 toNumber(
                   request.calendar_days,
+                ),
+
+              workingDays:
+                toNumber(
+                  (request as any).working_days ?? request.requested_amount,
                 ),
 
               holidayDays:
@@ -3152,6 +3149,12 @@ export default function HrAbsencesPage({
                 request.is_archived
                   ? "Oui"
                   : "Non",
+
+              createdAt:
+                formatDate((request as any).created_at),
+
+              updatedAt:
+                formatDate((request as any).updated_at),
             };
           },
         ),
