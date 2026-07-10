@@ -2,7 +2,7 @@
 -- Objectif : tracer les actions manager/RH/refus sans casser le schéma existant.
 -- Les updates sont dynamiques afin de rester compatibles avec les colonnes déjà présentes.
 
-create or replace function public.hr_absence_request_has_column(column_name_to_check text)
+create or replace function public.hr_absence_request_has_column(column_name text)
 returns boolean
 language sql
 stable
@@ -12,7 +12,7 @@ as $$
     from information_schema.columns
     where table_schema = 'public'
       and table_name = 'hr_absence_requests'
-      and column_name = column_name_to_check
+      and information_schema.columns.column_name = $1
   );
 $$;
 
@@ -112,6 +112,10 @@ begin
   return next;
 end;
 $$;
+
+drop function if exists public.approve_hr_absence_request_manager(uuid, uuid, uuid, text);
+drop function if exists public.approve_hr_absence_request_hr(uuid, uuid, uuid, text);
+drop function if exists public.reject_hr_absence_request(uuid, uuid, uuid, text);
 
 create or replace function public.approve_hr_absence_request_manager(
   target_request_id uuid,

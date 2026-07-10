@@ -92,12 +92,12 @@ as $$
   );
 $$;
 
-create or replace function public.hr_absence_request_has_column(column_name_to_check text)
+create or replace function public.hr_absence_request_has_column(column_name text)
 returns boolean
 language sql
 stable
 as $$
-  select public.hr_table_has_column('hr_absence_requests', column_name_to_check);
+  select public.hr_table_has_column('hr_absence_requests', $1);
 $$;
 
 -- Remplacement réel du calcul d'absence.

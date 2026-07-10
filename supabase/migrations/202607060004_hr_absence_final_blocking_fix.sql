@@ -16,9 +16,15 @@ returns boolean language sql immutable as $$
   ) select exists (select 1 from holidays where make_date = target_date);
 $$;
 
-create or replace function public.hr_absence_request_has_column(column_name_to_check text)
+create or replace function public.hr_absence_request_has_column(column_name text)
 returns boolean language sql stable as $$
-  select exists (select 1 from information_schema.columns where table_schema='public' and table_name='hr_absence_requests' and column_name = column_name_to_check);
+  select exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'hr_absence_requests'
+      and information_schema.columns.column_name = $1
+  );
 $$;
 
 drop function if exists public.calculate_hr_absence_amount(uuid, date, date, text, text) cascade;

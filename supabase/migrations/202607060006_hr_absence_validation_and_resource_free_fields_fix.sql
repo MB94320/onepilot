@@ -41,7 +41,7 @@ as $$
     from information_schema.columns
     where table_schema = 'public'
       and table_name = 'hr_absence_requests'
-      and columns.column_name = hr_absence_request_has_column.column_name
+      and information_schema.columns.column_name = $1
   );
 $$;
 

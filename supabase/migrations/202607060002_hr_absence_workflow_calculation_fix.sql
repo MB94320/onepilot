@@ -5,7 +5,7 @@
 -- 3. gérer les demi-journées ;
 -- 4. préparer les droits CP / RTT par défaut sur période 01/06/2026 -> 31/05/2027.
 
-create or replace function public.hr_absence_request_has_column(column_name_to_check text)
+create or replace function public.hr_absence_request_has_column(column_name text)
 returns boolean
 language sql
 stable
@@ -15,7 +15,7 @@ as $$
     from information_schema.columns
     where table_schema = 'public'
       and table_name = 'hr_absence_requests'
-      and column_name = column_name_to_check
+      and information_schema.columns.column_name = $1
   );
 $$;
 
