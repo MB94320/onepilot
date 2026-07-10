@@ -599,32 +599,87 @@ function AlertCard({
   accent: "indigo" | "emerald" | "amber" | "rose";
 }) {
   const classes = {
-    indigo:
-      "border-indigo-100 bg-indigo-50/60 text-indigo-700 dark:border-indigo-900/50 dark:bg-indigo-950/20 dark:text-indigo-300",
-    emerald:
-      "border-emerald-100 bg-emerald-50/60 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/20 dark:text-emerald-300",
-    amber:
-      "border-amber-100 bg-amber-50/60 text-amber-700 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-300",
-    rose:
-      "border-rose-100 bg-rose-50/60 text-rose-700 dark:border-rose-900/50 dark:bg-rose-950/20 dark:text-rose-300",
+    indigo: {
+      panel:
+        "border-indigo-100 bg-indigo-50/60 dark:border-indigo-900/50 dark:bg-indigo-950/20",
+      icon:
+        "bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300",
+      value: "text-indigo-700 dark:text-indigo-300",
+      badge:
+        "bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300",
+    },
+    emerald: {
+      panel:
+        "border-emerald-100 bg-emerald-50/60 dark:border-emerald-900/50 dark:bg-emerald-950/20",
+      icon:
+        "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+      value: "text-emerald-700 dark:text-emerald-300",
+      badge:
+        "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+    },
+    amber: {
+      panel:
+        "border-amber-100 bg-amber-50/60 dark:border-amber-900/50 dark:bg-amber-950/20",
+      icon:
+        "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+      value: "text-amber-700 dark:text-amber-300",
+      badge:
+        "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+    },
+    rose: {
+      panel:
+        "border-rose-100 bg-rose-50/60 dark:border-rose-900/50 dark:bg-rose-950/20",
+      icon:
+        "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300",
+      value: "text-rose-700 dark:text-rose-300",
+      badge:
+        "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300",
+    },
   };
 
+  const selectedClasses = classes[accent];
+  const statusLabel = value > 0 ? "Action" : "OK";
+
   return (
-    <article className={`rounded-2xl border p-4 shadow-sm ${classes[accent]}`}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="rounded-xl bg-white/70 p-2.5 dark:bg-slate-950/40">
+    <article
+      className={`rounded-2xl border px-3.5 py-3 shadow-sm ${selectedClasses.panel}`}
+    >
+      <div className="flex items-start gap-3">
+        <div
+          className={`rounded-lg p-1.5 ${selectedClasses.icon}`}
+        >
           <Icon
-            className="h-4 w-4"
+            className="h-3.5 w-3.5"
             strokeWidth={1.9}
           />
         </div>
 
-        <p className="text-2xl font-black">{value}</p>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-3">
+            <h3 className="text-xs font-black text-slate-950 dark:text-white">
+              {title}
+            </h3>
+
+            <span
+              className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wide ${selectedClasses.badge}`}
+            >
+              {statusLabel}
+            </span>
+          </div>
+
+          <div className="mt-1.5 flex items-end justify-between gap-3">
+            <p className="line-clamp-2 text-[11px] leading-5 text-slate-600 dark:text-slate-400">
+              {description}
+            </p>
+
+            <p
+              className={`shrink-0 text-xl font-black leading-none ${selectedClasses.value}`}
+            >
+              {value}
+            </p>
+          </div>
+        </div>
       </div>
-
-      <h3 className="mt-4 text-sm font-black">{title}</h3>
-
-      <p className="mt-2 text-xs leading-5 opacity-80">{description}</p>
     </article>
   );
 }
@@ -772,15 +827,15 @@ function AlertsPanel({
         </div>
       </div>
 
-      <div className="space-y-5 p-5">
+      <div className="space-y-4 p-5">
         <HrDecisionInsightPanels employees={employees} />
 
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           <AlertCard
             icon={Building2}
             title="Site manquant"
             value={missingSite}
-            description="Collaborateurs sans site de rattachement."
+            description="Risque : périmètre géographique incomplet. Action : renseigner site libre ou référentiel."
             accent={missingSite > 0 ? "amber" : "emerald"}
           />
 
@@ -788,7 +843,7 @@ function AlertsPanel({
             icon={ShieldAlert}
             title="Service manquant"
             value={missingDepartment}
-            description="Collaborateurs sans service ou département."
+            description="Risque : reporting RH imprécis. Action : renseigner service libre ou référentiel."
             accent={missingDepartment > 0 ? "amber" : "emerald"}
           />
 
@@ -796,7 +851,7 @@ function AlertsPanel({
             icon={MailWarning}
             title="Coordonnées manquantes"
             value={missingContact}
-            description="Fiches sans email ni téléphone professionnel."
+            description="Impact : relances et workflows RH fragiles. Action : compléter email ou téléphone."
             accent={missingContact > 0 ? "rose" : "emerald"}
           />
 
@@ -804,7 +859,7 @@ function AlertsPanel({
             icon={FileWarning}
             title="Contrat manquant"
             value={missingContract}
-            description="Collaborateurs sans type de contrat rattaché."
+            description="Impact : droits et pilotage incomplets. Action : vérifier le contrat principal."
             accent={missingContract > 0 ? "rose" : "emerald"}
           />
 
@@ -812,7 +867,7 @@ function AlertsPanel({
             icon={AlertCircle}
             title="Coût manquant"
             value={missingCost}
-            description="Fiches sans coût journalier chargé exploitable."
+            description="Impact : charge et rentabilité inexploitables. Action : compléter le coût chargé."
             accent={missingCost > 0 ? "amber" : "emerald"}
           />
 
@@ -820,7 +875,7 @@ function AlertsPanel({
             icon={UserX}
             title="Fiches inactives"
             value={inactive}
-            description="Collaborateurs archivés, sortis ou désactivés."
+            description="Suivi : fiches sorties ou archivées dans le périmètre filtré."
             accent="indigo"
           />
         </div>

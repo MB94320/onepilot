@@ -103,20 +103,39 @@ type ActionMenuProps = {
 };
 
 
-function getEmployeeSite(employee: HrDirectoryEmployee) {
-  return employee.site_free_text || employee.site_name;
+function getPreferredText(
+  freeText: string | null | undefined,
+  referenceText: string | null | undefined,
+) {
+  const normalizedFreeText = freeText?.trim();
+
+  if (normalizedFreeText) {
+    return normalizedFreeText;
+  }
+
+  return referenceText?.trim() || null;
 }
 
-function getEmployeeDepartment(employee: HrDirectoryEmployee) {
-  return employee.department_free_text || employee.department_name;
+export function getEmployeeSite(employee: HrDirectoryEmployee) {
+  return getPreferredText(employee.site_free_text, employee.site_name);
 }
 
-function getEmployeeJob(employee: HrDirectoryEmployee) {
-  return employee.job_free_text || employee.job_name;
+export function getEmployeeDepartment(employee: HrDirectoryEmployee) {
+  return getPreferredText(
+    employee.department_free_text,
+    employee.department_name,
+  );
 }
 
-function getEmployeeFunction(employee: HrDirectoryEmployee) {
-  return employee.function_free_text || employee.function_name;
+export function getEmployeeJob(employee: HrDirectoryEmployee) {
+  return getPreferredText(employee.job_free_text, employee.job_name);
+}
+
+export function getEmployeeFunction(employee: HrDirectoryEmployee) {
+  return getPreferredText(
+    employee.function_free_text,
+    employee.function_name,
+  );
 }
 
 function formatDate(

@@ -33,7 +33,13 @@ import {
   YAxis,
 } from "recharts";
 
-import type { HrDirectoryEmployee } from "@/components/hr/HrDirectory";
+import {
+  getEmployeeDepartment,
+  getEmployeeFunction,
+  getEmployeeJob,
+  getEmployeeSite,
+  type HrDirectoryEmployee,
+} from "@/components/hr/HrDirectory";
 
 type HrDecisionDashboardProps = {
   employees: HrDirectoryEmployee[];
@@ -135,10 +141,10 @@ function getDecisionMetrics(
   const employeesWithoutStructure =
     employees.filter(
       (employee) =>
-        !employee.site_name ||
-        !employee.department_name ||
-        (!employee.job_name &&
-          !employee.function_name),
+        !getEmployeeSite(employee) ||
+        !getEmployeeDepartment(employee) ||
+        (!getEmployeeJob(employee) &&
+          !getEmployeeFunction(employee)),
     ).length;
 
   const employeesWithoutManager =
@@ -176,11 +182,11 @@ function getDecisionMetrics(
   const structureComplete =
     employees.filter(
       (employee) =>
-        Boolean(employee.site_name) &&
-        Boolean(employee.department_name) &&
+        Boolean(getEmployeeSite(employee)) &&
+        Boolean(getEmployeeDepartment(employee)) &&
         Boolean(
-          employee.job_name ||
-            employee.function_name,
+          getEmployeeJob(employee) ||
+            getEmployeeFunction(employee),
         ),
     ).length;
 
@@ -310,25 +316,34 @@ function InsightCard({
   const styles = {
     info: {
       container:
-        "border-sky-100 bg-sky-50/70 dark:border-sky-900/50 dark:bg-sky-950/20",
+        "border-sky-100 bg-sky-50/60 dark:border-sky-900/50 dark:bg-sky-950/20",
       icon:
         "bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300",
+      badge:
+        "bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300",
+      label: "À suivre",
       Icon: CircleAlert,
     },
 
     warning: {
       container:
-        "border-amber-100 bg-amber-50/70 dark:border-amber-900/50 dark:bg-amber-950/20",
+        "border-amber-100 bg-amber-50/60 dark:border-amber-900/50 dark:bg-amber-950/20",
       icon:
         "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+      badge:
+        "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+      label: "Risque",
       Icon: AlertTriangle,
     },
 
     success: {
       container:
-        "border-emerald-100 bg-emerald-50/70 dark:border-emerald-900/50 dark:bg-emerald-950/20",
+        "border-emerald-100 bg-emerald-50/60 dark:border-emerald-900/50 dark:bg-emerald-950/20",
       icon:
         "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+      badge:
+        "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+      label: "OK",
       Icon: CheckCircle2,
     },
   };
@@ -338,21 +353,29 @@ function InsightCard({
 
   return (
     <article
-      className={`rounded-xl border p-4 ${selectedStyle.container}`}
+      className={`rounded-xl border px-3.5 py-3 ${selectedStyle.container}`}
     >
       <div className="flex items-start gap-3">
         <div
-          className={`rounded-lg p-2 ${selectedStyle.icon}`}
+          className={`rounded-lg p-1.5 ${selectedStyle.icon}`}
         >
-          <Icon className="h-4 w-4" />
+          <Icon className="h-3.5 w-3.5" />
         </div>
 
-        <div className="min-w-0">
-          <h4 className="text-sm font-bold text-slate-950 dark:text-white">
-            {title}
-          </h4>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <h4 className="text-xs font-black text-slate-950 dark:text-white">
+              {title}
+            </h4>
 
-          <p className="mt-1 text-xs leading-5 text-slate-600 dark:text-slate-400">
+            <span
+              className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wide ${selectedStyle.badge}`}
+            >
+              {selectedStyle.label}
+            </span>
+          </div>
+
+          <p className="mt-1 text-[11px] leading-5 text-slate-600 dark:text-slate-400">
             {description}
           </p>
         </div>
@@ -436,7 +459,7 @@ function DecisionPanel({
         </div>
       </div>
 
-      <div className="space-y-3 p-5">
+      <div className="space-y-3 p-4">
         {children}
       </div>
     </section>
@@ -483,31 +506,31 @@ export function HrDecisionInsightPanels({
   } = getDecisionMetrics(employees);
 
   return (
-    <div className="grid gap-5 xl:grid-cols-3">
+    <div className="grid gap-4 xl:grid-cols-3">
       <DecisionPanel
         icon={Gauge}
         title="Synthèse"
         description="Lecture rapide de la qualité et du coût"
         accent="emerald"
       >
-        <div className="rounded-xl border border-slate-100 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900">
-          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+        <div className="rounded-xl border border-slate-100 bg-slate-50 px-3.5 py-3 dark:border-slate-800 dark:bg-slate-900">
+          <p className="text-[9px] font-black uppercase tracking-wide text-slate-400">
             Coût horaire moyen
           </p>
 
-          <p className="mt-2 text-2xl font-black text-indigo-700 dark:text-indigo-300">
+          <p className="mt-1.5 text-xl font-black text-indigo-700 dark:text-indigo-300">
             {formatCurrency(
               averageLoadedHourlyCost,
             )}
           </p>
         </div>
 
-        <div className="rounded-xl border border-slate-100 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900">
-          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+        <div className="rounded-xl border border-slate-100 bg-slate-50 px-3.5 py-3 dark:border-slate-800 dark:bg-slate-900">
+          <p className="text-[9px] font-black uppercase tracking-wide text-slate-400">
             Qualité globale
           </p>
 
-          <p className="mt-2 text-2xl font-black text-emerald-700 dark:text-emerald-300">
+          <p className="mt-1.5 text-xl font-black text-emerald-700 dark:text-emerald-300">
             {Math.round(qualityScore)} %
           </p>
         </div>
@@ -578,7 +601,7 @@ export default function HrDecisionDashboard({
   const departmentData = groupByValue(
     employees,
     (employee) =>
-      employee.department_name,
+      getEmployeeDepartment(employee),
     "Sans service",
   ).slice(0, 8);
 
