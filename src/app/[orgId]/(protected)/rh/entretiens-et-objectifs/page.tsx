@@ -1,10 +1,13 @@
-import { redirect } from "next/navigation";
+import HrTalentModulePage from "@/components/hr/HrTalentModulePage";
 
 type PageParams = {
   orgId: string;
 };
 
-export default async function Page({ params }: { params: Promise<PageParams> }) {
-  const { orgId } = await params;
-  redirect(`/${encodeURIComponent(orgId)}/rh/entretiens-objectifs`);
+export default function HrReviewsObjectivesPage({
+  params,
+}: {
+  params: Promise<PageParams>;
+}) {
+  return <HrTalentModulePage params={params} moduleKey="reviews" />;
 }
