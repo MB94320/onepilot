@@ -1,10 +1,11 @@
 "use client";
 
-import { use, useMemo, useState, type ComponentType, type ReactNode } from "react";
+import { use, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   Archive,
+  ArchiveRestore,
   BarChart3,
   Bell,
   BookOpen,
@@ -13,15 +14,14 @@ import {
   CheckCircle2,
   Clock3,
   Copy,
+  Edit3,
   Expand,
   Eye,
-  FileSpreadsheet,
   Gauge,
   GraduationCap,
   Lightbulb,
   ListChecks,
   MoreHorizontal,
-  Pencil,
   Plus,
   Search,
   ShieldAlert,
@@ -35,12 +35,9 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  Cell,
   Legend,
   Line,
   LineChart,
-  Pie,
-  PieChart,
   PolarAngleAxis,
   PolarGrid,
   PolarRadiusAxis,
@@ -59,502 +56,1811 @@ import { createClient } from "@/lib/supabase/client";
 
 const supabase = createClient();
 
-export type HrTalentModuleKey = "time" | "skills" | "onboarding" | "reviews";
 type PageParams = { orgId: string };
-type Accent = "indigo" | "emerald" | "amber" | "rose" | "sky";
-type TabKey = "pilotage" | "graphs" | "library" | "alerts";
+type HrTalentModuleKey = "time" | "skills" | "onboarding" | "reviews";
+type DisplayMode = "cards" | "table";
+type TabKey = "main" | "graphs" | "library" | "alerts" | "history";
+type Accent = "indigo" | "emerald" | "amber" | "rose" | "sky" | "slate";
 
-type Organization = { id: string; name: string; slug: string };
-type EmployeeOption = {
+type Organization = { id: string; name?: string | null; slug?: string | null };
+type Employee = {
   id: string;
-  full_name: string | null;
-  employee_number: string | null;
-  department_name: string | null;
-  department_free_text: string | null;
-  site_name: string | null;
-  site_free_text: string | null;
-  job_name: string | null;
-  job_free_text: string | null;
-  function_name: string | null;
-  function_free_text: string | null;
-  manager_name: string | null;
+  full_name?: string | null;
+  employee_number?: string | null;
+  email?: string | null;
+  professional_email?: string | null;
+  status?: string | null;
+  manager_employee_id?: string | null;
+  manager_name?: string | null;
+  site_name?: string | null;
+  department_name?: string | null;
+  job_name?: string | null;
+  function_name?: string | null;
+  site_free_text?: string | null;
+  department_free_text?: string | null;
+  job_free_text?: string | null;
+  function_free_text?: string | null;
 };
+
 type SkillCatalogItem = {
   id: string;
-  organization_id: string;
-  code: string | null;
+  code?: string | null;
   name: string;
-  family: string | null;
-  category: string | null;
-  description: string | null;
-  criticality: string | null;
-  is_active: boolean | null;
+  family?: string | null;
+  category?: string | null;
+  description?: string | null;
+  criticality?: string | null;
   level_expectations?: Record<string, string> | null;
-  archived_at: string | null;
+  is_active?: boolean | null;
 };
-type SkillRow = {
-  id: string;
-  organization_id: string;
-  employee_id: string | null;
-  employee_name: string | null;
-  employee_number: string | null;
-  department_name: string | null;
-  department_free_text: string | null;
-  site_name: string | null;
-  site_free_text: string | null;
-  job_name: string | null;
-  job_free_text: string | null;
-  function_name: string | null;
-  function_free_text: string | null;
-  manager_name: string | null;
-  skill_id: string | null;
-  skill_name: string | null;
-  family: string | null;
-  category: string | null;
-  criticality: string | null;
-  current_level: number | null;
-  target_level: number | null;
-  gap: number;
-  evidence: string | null;
-  project_context: string | null;
-  last_self_assessment_at: string | null;
-  status: string | null;
-  archived_at: string | null;
-};
-type TimeRow = {
-  id: string;
-  organization_id: string;
-  employee_id: string | null;
-  employee_name: string | null;
-  employee_number: string | null;
-  department_name: string | null;
-  department_free_text: string | null;
-  site_name: string | null;
-  site_free_text: string | null;
-  job_name: string | null;
-  job_free_text: string | null;
-  manager_name: string | null;
-  activity_date: string | null;
-  activity_type: string | null;
-  duration_hours: number | null;
-  status: string | null;
-  description: string | null;
-  manager_comment: string | null;
-  archived_at: string | null;
-};
-type ChecklistItem = { owner: string; label: string; status: "OK" | "NOK" | "NA"; note?: string; due?: string };
-type OnboardingRow = {
-  id: string;
-  organization_id: string;
-  employee_id: string | null;
-  employee_name: string | null;
-  employee_number: string | null;
-  department_name: string | null;
-  department_free_text: string | null;
-  site_name: string | null;
-  site_free_text: string | null;
-  job_name: string | null;
-  job_free_text: string | null;
-  manager_name: string | null;
-  recruiter_name: string | null;
-  start_date: string | null;
-  target_end_date: string | null;
-  status: string | null;
-  progress_percent: number | null;
-  risk_level: string | null;
-  notes: string | null;
-  checklist_items: ChecklistItem[] | null;
-  archived_at: string | null;
-};
-type ReviewDetails = {
-  previous_year?: { objectives?: string; achievement?: number; highlights?: string };
-  current_year?: { objectives?: string; priority?: string };
-  training?: string[];
-  employee_validation?: boolean;
-  manager_validation?: boolean;
-  development_plan?: string;
-};
-type ReviewRow = {
-  id: string;
-  organization_id: string;
-  employee_id: string | null;
-  employee_name: string | null;
-  employee_number: string | null;
-  department_name: string | null;
-  department_free_text: string | null;
-  site_name: string | null;
-  site_free_text: string | null;
-  job_name: string | null;
-  job_free_text: string | null;
-  manager_name: string | null;
-  cycle_name: string | null;
-  review_type: string | null;
-  period_start: string | null;
-  period_end: string | null;
-  status: string | null;
-  objective_count: number | null;
-  completed_objective_count: number | null;
-  global_rating: number | null;
-  employee_comment: string | null;
-  manager_comment: string | null;
-  review_details: ReviewDetails | null;
-  archived_at: string | null;
-};
-type ModuleRow = SkillRow | TimeRow | OnboardingRow | ReviewRow;
-type ModuleData = { organization: Organization; employees: EmployeeOption[]; rows: ModuleRow[]; skillCatalog: SkillCatalogItem[] };
-type FilterValue = { search: string; status: string; department: string; resource: string; module: string; submodule: string; level: string; need: string };
-type ChartData = { name: string; value: number };
-type SkillResourceSummary = { employee: EmployeeOption; rows: SkillRow[]; topGaps: SkillRow[]; strongSkills: SkillRow[]; mentors: string[]; averageLevel: number; criticalGaps: number };
 
-const initialFilters: FilterValue = { search: "", status: "all", department: "all", resource: "all", module: "all", submodule: "all", level: "all", need: "all" };
-const chartColors = ["#a5b4fc", "#6ee7b7", "#fcd34d", "#fda4af", "#7dd3fc", "#c4b5fd", "#99f6e4", "#fecdd3"];
-const levelLabels: Record<number, string> = { 0: "0 · Profane", 1: "1 · Sensibilisé", 2: "2 · Autonome encadré", 3: "3 · Confirmé", 4: "4 · Expert" };
+type AnyRow = Record<string, any>;
+type ModuleData = {
+  organization: Organization;
+  employees: Employee[];
+  rows: AnyRow[];
+  catalog: SkillCatalogItem[];
+  cycles: AnyRow[];
+};
 
-function isUuid(value: string) { return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value); }
-function getDepartment(row: Partial<EmployeeOption>) { return row.department_free_text || row.department_name || "Non renseigné"; }
-function getSite(row: Partial<EmployeeOption>) { return row.site_free_text || row.site_name || "Non renseigné"; }
-function getJob(row: Partial<EmployeeOption>) { return row.job_free_text || row.job_name || row.function_free_text || row.function_name || "Non renseigné"; }
-function fullName(row: Partial<EmployeeOption> & { employee_name?: string | null }) { return row.employee_name || row.full_name || "Collaborateur non renseigné"; }
-function formatDate(value?: string | null) { if (!value) return "Non renseigné"; const date = new Date(value); return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat("fr-FR").format(date); }
-function percentage(part: number, total: number) { return total > 0 ? Math.round((part / total) * 100) : 0; }
-function uniqueValues<T>(items: T[], resolver: (item: T) => string | null | undefined) { return Array.from(new Set(items.map(resolver).filter((value): value is string => Boolean(value?.trim())))).sort((a, b) => a.localeCompare(b, "fr", { sensitivity: "base" })); }
-function labelStatus(moduleKey: HrTalentModuleKey, status?: string | null) {
-  const common: Record<string, string> = { archived: "Archivé", active: "Actif", approved: "Validé", submitted: "Soumis", rejected: "Refusé", draft: "Brouillon", to_develop: "À développer", validated: "Validé", prepared: "Préparé", in_progress: "En cours", delayed: "En retard", completed: "Terminé", not_started: "Non démarré", employee_input: "Saisie collaborateur", manager_input: "Saisie manager", calibration: "Calibration", manager_approved: "Validé manager" };
-  return common[status || ""] || status || (moduleKey === "skills" ? "À évaluer" : "Non renseigné");
+type FilterValue = {
+  search: string;
+  status: string;
+  resource: string;
+  department: string;
+  module: string;
+  submodule: string;
+  level: string;
+  need: string;
+  period: string;
+  activity: string;
+};
+
+const emptyFilters: FilterValue = {
+  search: "",
+  status: "all",
+  resource: "all",
+  department: "all",
+  module: "all",
+  submodule: "all",
+  level: "all",
+  need: "all",
+  period: "all",
+  activity: "all",
+};
+
+const selectClassName =
+  "h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300 dark:focus:border-indigo-600 dark:focus:ring-indigo-950";
+
+const levelLabels = [
+  "Niveau 0 · Profane",
+  "Niveau 1 · Sensibilisé",
+  "Niveau 2 · Autonome encadré",
+  "Niveau 3 · Confirmé",
+  "Niveau 4 · Expert",
+];
+
+const levelShortLabels = ["N0", "N1", "N2", "N3", "N4"];
+const chartPalette = ["#6366f1", "#10b981", "#f59e0b", "#f43f5e", "#0ea5e9"];
+
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 }
+
+function clampLevel(value: unknown) {
+  const numeric = Number(value ?? 0);
+  if (Number.isNaN(numeric)) return 0;
+  return Math.max(0, Math.min(4, numeric));
+}
+
+function formatDate(value?: string | null) {
+  if (!value) return "Non renseigné";
+  try {
+    return new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(value));
+  } catch {
+    return value;
+  }
+}
+
+function getWeekNumber(value?: string | null) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  const tmp = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = tmp.getUTCDay() || 7;
+  tmp.setUTCDate(tmp.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(tmp.getUTCFullYear(), 0, 1));
+  return String(Math.ceil((((tmp.getTime() - yearStart.getTime()) / 86400000) + 1) / 7)).padStart(2, "0");
+}
+
+function getMonthLabel(value?: string | null) {
+  if (!value) return "Non renseigné";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Non renseigné";
+  return new Intl.DateTimeFormat("fr-FR", { month: "long", year: "numeric" }).format(date);
+}
+
+function getDayName(value?: string | null) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return new Intl.DateTimeFormat("fr-FR", { weekday: "long" }).format(date);
+}
+
+function addOneYear(value?: string | null) {
+  if (!value) return "À planifier";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "À planifier";
+  date.setFullYear(date.getFullYear() + 1);
+  return formatDate(date.toISOString());
+}
+
+function uniqueValues<T>(items: T[], resolver: (item: T) => string | null | undefined) {
+  return Array.from(new Set(items.map(resolver).filter((value): value is string => Boolean(value?.trim())))).sort((a, b) =>
+    a.localeCompare(b, "fr", { sensitivity: "base" }),
+  );
+}
+
+function percentage(value: number, total: number) {
+  if (!total) return 0;
+  return Math.round((value / total) * 100);
+}
+
+function getEmployeeDepartment(row: AnyRow | Employee) {
+  return row.department_free_text || row.department_name || "Non renseigné";
+}
+
+function getEmployeeJob(row: AnyRow | Employee) {
+  return row.job_free_text || row.job_name || row.function_free_text || row.function_name || "Non renseigné";
+}
+
+function fullName(row: AnyRow | Employee) {
+  const value = row as AnyRow;
+  return value.full_name || value.employee_name || value.employee_number || "Ressource non renseignée";
+}
+
 function getConfig(moduleKey: HrTalentModuleKey) {
-  if (moduleKey === "time") return { title: "Temps & activités", subtitle: "Piloter les temps déclarés, validations manager, écarts de charge, activités projet et contribution interne.", newLabel: "Nouvelle activité", primaryTab: "Activités", icon: Clock3, exportFile: "rh_temps_activites", guideTitle: "Guide de la page", guideDescription: "Gérer et piloter les temps, activités, validations et écarts de capacité.\nLes données alimentent RH, PMO, finance, staffing et contrôle de charge." };
-  if (moduleKey === "skills") return { title: "Compétences", subtitle: "Cartographier les compétences par ressource, module, sous-module, niveau attendu, expertise disponible et besoin projet.", newLabel: "Nouvelle compétence", primaryTab: "Ressources", icon: GraduationCap, exportFile: "rh_competences", guideTitle: "Guide de la page", guideDescription: "Gérer la matrice de compétences, les écarts et la bibliothèque de référence.\nIdentifier les experts, les accompagnements et les besoins de formation." };
-  if (moduleKey === "onboarding") return { title: "Onboarding", subtitle: "Suivre les parcours d’intégration, checklists RH/manager/IT/qualité, risques et validations avant archivage.", newLabel: "Nouveau parcours", primaryTab: "Parcours", icon: ListChecks, exportFile: "rh_onboarding", guideTitle: "Guide de la page", guideDescription: "Piloter l’intégration de bout en bout avec une checklist contrôlable.\nSécuriser l’arrivée, les accès, les objectifs 30/60/90 jours et la validation RH/manager." };
-  return { title: "Entretiens & objectifs", subtitle: "Suivre campagnes, objectifs, bilan annuel, formation, validations collaborateur/N+1 et plans de développement.", newLabel: "Nouvel entretien", primaryTab: "Entretiens", icon: Target, exportFile: "rh_entretiens_objectifs", guideTitle: "Guide de la page", guideDescription: "Piloter les entretiens annuels, objectifs et plans d’action individuels.\nConsolider l’atteinte, les besoins formation et la validation collaborateur/manager." };
+  if (moduleKey === "time") {
+    return {
+      title: "Temps & activités",
+      subtitle: "Saisie, validation et pilotage des temps projet, internes, formation et écarts capacité/réel.",
+      newLabel: "Nouveau temps",
+      primaryTab: "Activités",
+      exportFile: "rh_temps_activites",
+      icon: Clock3,
+      guideTitle: "Piloter les temps et activités",
+      guideDescription: "Suivre le temps saisi, les validations, les écarts et la contribution aux projets sans ressaisie entre RH, staffing et finance. Les pointages alimentent les coûts, les rappels de clôture mensuelle, la capacité et le pilotage N+1.",
+    };
+  }
+
+  if (moduleKey === "skills") {
+    return {
+      title: "Compétences",
+      subtitle: "Bibliothèque, auto-évaluations, écarts, experts internes et préparation staffing/projets.",
+      newLabel: "Nouvelle évaluation",
+      primaryTab: "Ressources",
+      exportFile: "rh_competences",
+      icon: GraduationCap,
+      guideTitle: "Piloter les compétences",
+      guideDescription: "Structurer la bibliothèque, suivre les niveaux par ressource et préparer formation, mobilité, staffing et entretiens. Les niveaux 0 à 4 servent l’auto-évaluation, les besoins projet et le développement des compétences.",
+    };
+  }
+
+  if (moduleKey === "onboarding") {
+    return {
+      title: "Onboarding",
+      subtitle: "Parcours d’intégration, checklist RH/manager/IT/qualité et validation avant archivage.",
+      newLabel: "Nouveau parcours",
+      primaryTab: "Parcours",
+      exportFile: "rh_onboarding",
+      icon: ListChecks,
+      guideTitle: "Piloter les intégrations",
+      guideDescription: "Sécuriser l’arrivée, les accès, les objectifs 30/60/90 jours, la checklist et la validation RH/manager. Le parcours couvre RH, IT, qualité, projet, manager, livrables, période d’essai et preuves ISO 9001.",
+    };
+  }
+
+  return {
+    title: "Entretiens & objectifs",
+    subtitle: "Campagnes, bilan N-1, objectifs en cours, formations, validations collaborateur et manager.",
+    newLabel: "Nouvel entretien",
+    primaryTab: "Entretiens",
+    exportFile: "rh_entretiens_objectifs",
+    icon: Target,
+    guideTitle: "Piloter les entretiens et objectifs",
+    guideDescription: "Consolider performance, objectifs, compétences, formation, feedbacks et validations collaborateur/manager. Les entretiens capitalisent l’année écoulée, les objectifs en cours et le plan de développement.",
+  };
 }
+
+function labelStatus(moduleKey: HrTalentModuleKey, status?: string | null) {
+  const common: Record<string, string> = {
+    draft: "Brouillon",
+    submitted: "Soumis",
+    manager_approved: "Validé manager",
+    approved: "Validé",
+    rejected: "Refusé",
+    active: "Actif",
+    to_develop: "À développer",
+    validated: "Validé",
+    obsolete: "Obsolète",
+    prepared: "Préparé",
+    in_progress: "En cours",
+    completed: "Terminé",
+    delayed: "En retard",
+    cancelled: "Annulé",
+    not_started: "Non démarré",
+    employee_input: "Saisie collaborateur",
+    manager_input: "Saisie manager",
+    calibration: "Calibration",
+    open: "Ouvert",
+    archived: "Archivé",
+  };
+
+  return common[String(status || "")] || status || (moduleKey === "skills" ? "À évaluer" : "Non renseigné");
+}
+
+function getChecklistStats(value: unknown) {
+  const items = Array.isArray(value) ? value : [];
+  const ok = items.filter((item: any) => item?.status === "OK").length;
+  const nok = items.filter((item: any) => item?.status === "NOK").length;
+  const na = items.filter((item: any) => item?.status === "NA").length;
+  return { ok, nok, na, total: items.length };
+}
+
 async function resolveOrganization(slugOrId: string): Promise<Organization> {
   const query = (supabase.from("organizations" as never) as any).select("id, name, slug");
-  const { data, error } = isUuid(slugOrId) ? await query.eq("id", slugOrId).maybeSingle() : await query.eq("slug", slugOrId).maybeSingle();
-  if (error) throw new Error(`Impossible d’identifier l’organisation : ${error.message}`);
-  if (!data?.id) throw new Error("L’organisation demandée est introuvable.");
-  return data as Organization;
+  const result = isUuid(slugOrId)
+    ? await query.eq("id", slugOrId).limit(1).maybeSingle()
+    : await query.eq("slug", slugOrId).limit(1).maybeSingle();
+
+  if (result.error) throw new Error(`Impossible d’identifier l’organisation : ${result.error.message}`);
+  if (!result.data?.id) throw new Error("L’organisation demandée est introuvable.");
+  return result.data as Organization;
 }
+
 async function loadData(slugOrId: string, moduleKey: HrTalentModuleKey): Promise<ModuleData> {
   const organization = await resolveOrganization(slugOrId);
-  const { data: employeesRaw, error: employeeError } = await (supabase.from("hr_employee_overview" as never) as any)
-    .select("id, full_name, employee_number, department_name, department_free_text, site_name, site_free_text, job_name, job_free_text, function_name, function_free_text, manager_name")
-    .eq("organization_id", organization.id)
-    .order("full_name", { ascending: true });
-  if (employeeError) throw new Error(`Impossible de charger les ressources : ${employeeError.message}`);
-  const employees = (employeesRaw || []) as EmployeeOption[];
-  const employeeMap = new Map(employees.map((employee) => [employee.id, employee]));
-  const { data: catalogRaw, error: catalogError } = await (supabase.from("hr_skill_catalog" as never) as any)
-    .select("id, organization_id, code, name, family, category, description, criticality, is_active, level_expectations, archived_at")
-    .eq("organization_id", organization.id)
-    .order("family", { ascending: true })
-    .order("category", { ascending: true })
-    .order("name", { ascending: true });
-  if (catalogError && moduleKey === "skills") throw new Error(`Impossible de charger la bibliothèque de compétences : ${catalogError.message}`);
-  const skillCatalog = (catalogRaw || []) as SkillCatalogItem[];
-  const skillMap = new Map(skillCatalog.map((skill) => [skill.id, skill]));
-  let rawRows: any[] = [];
-  if (moduleKey === "time") {
-    const { data, error } = await (supabase.from("hr_time_activity_entries" as never) as any).select("*").eq("organization_id", organization.id).order("activity_date", { ascending: false });
-    if (error) throw new Error(`Impossible de charger les temps : ${error.message}`);
-    rawRows = data || [];
-  } else if (moduleKey === "skills") {
-    const { data, error } = await (supabase.from("hr_employee_skills" as never) as any).select("*").eq("organization_id", organization.id).order("updated_at", { ascending: false });
-    if (error) throw new Error(`Impossible de charger les compétences : ${error.message}`);
-    rawRows = data || [];
-  } else if (moduleKey === "onboarding") {
-    const { data, error } = await (supabase.from("hr_onboarding_plans" as never) as any).select("*").eq("organization_id", organization.id).order("start_date", { ascending: false });
-    if (error) throw new Error(`Impossible de charger l’onboarding : ${error.message}`);
-    rawRows = data || [];
-  } else {
-    const { data: cyclesRaw } = await (supabase.from("hr_review_cycles" as never) as any)
-      .select("id, name, review_type, period_start, period_end")
-      .eq("organization_id", organization.id);
 
-    type ReviewCycleLookup = {
-      id: string;
-      name?: string | null;
-      review_type?: string | null;
-      period_start?: string | null;
-      period_end?: string | null;
-    };
-
-    const cycleMap = new Map<string, ReviewCycleLookup>(
-      ((cyclesRaw || []) as ReviewCycleLookup[]).map((cycle) => [cycle.id, cycle]),
-    );
-
-    const { data, error } = await (supabase.from("hr_review_items" as never) as any)
+  const [employeeResult, catalogResult, cycleResult] = await Promise.all([
+    (supabase.from("hr_employee_overview" as never) as any)
       .select("*")
       .eq("organization_id", organization.id)
-      .order("created_at", { ascending: false });
+      .limit(500),
+    (supabase.from("hr_skill_catalog" as never) as any)
+      .select("id, code, name, family, category, description, criticality, level_expectations, is_active, archived_at")
+      .eq("organization_id", organization.id)
+      .is("archived_at", null)
+      .order("family", { ascending: true })
+      .order("category", { ascending: true })
+      .order("name", { ascending: true })
+      .limit(1000),
+    (supabase.from("hr_review_cycles" as never) as any)
+      .select("id, name, review_type, period_start, period_end, status")
+      .eq("organization_id", organization.id)
+      .order("created_at", { ascending: false })
+      .limit(100),
+  ]);
 
-    if (error) throw new Error(`Impossible de charger les entretiens : ${error.message}`);
+  if (employeeResult.error) throw new Error(`Impossible de charger les ressources : ${employeeResult.error.message}`);
+  if (catalogResult.error) throw new Error(`Impossible de charger la bibliothèque de compétences : ${catalogResult.error.message}`);
+  if (cycleResult.error) throw new Error(`Impossible de charger les campagnes : ${cycleResult.error.message}`);
 
-    rawRows = (data || []).map((row: any) => {
-      const cycle = cycleMap.get(row.cycle_id || "");
+  const employees = (employeeResult.data ?? []) as Employee[];
+  const employeesById = new Map(employees.map((employee) => [employee.id, employee]));
+  const cycles = (cycleResult.data ?? []) as AnyRow[];
+  const cyclesById = new Map(cycles.map((cycle) => [cycle.id, cycle]));
+  const catalog = (catalogResult.data ?? []) as SkillCatalogItem[];
+  const catalogById = new Map(catalog.map((skill) => [skill.id, skill]));
 
-      return {
-        ...row,
-        cycle_name: cycle?.name ?? null,
-        review_type: cycle?.review_type ?? null,
-        period_start: cycle?.period_start ?? null,
-        period_end: cycle?.period_end ?? null,
-      };
-    });
+  let rowResult: any;
+
+  if (moduleKey === "time") {
+    rowResult = await (supabase.from("hr_time_activity_entries" as never) as any)
+      .select("*")
+      .eq("organization_id", organization.id)
+      .order("activity_date", { ascending: false })
+      .limit(500);
+  } else if (moduleKey === "skills") {
+    rowResult = await (supabase.from("hr_employee_skills" as never) as any)
+      .select("*")
+      .eq("organization_id", organization.id)
+      .order("updated_at", { ascending: false })
+      .limit(2000);
+  } else if (moduleKey === "onboarding") {
+    rowResult = await (supabase.from("hr_onboarding_plans" as never) as any)
+      .select("*")
+      .eq("organization_id", organization.id)
+      .order("created_at", { ascending: false })
+      .limit(500);
+  } else {
+    rowResult = await (supabase.from("hr_review_items" as never) as any)
+      .select("*")
+      .eq("organization_id", organization.id)
+      .order("created_at", { ascending: false })
+      .limit(500);
   }
-  const rows = rawRows.map((row) => {
-    const employee = employeeMap.get(row.employee_id || "");
-    const skill = skillMap.get(row.skill_id || "");
+
+  if (rowResult.error) throw new Error(`Impossible de charger les données : ${rowResult.error.message}`);
+
+  const rows = ((rowResult.data ?? []) as AnyRow[]).map((row) => {
+    const employee = employeesById.get(row.employee_id);
+    const manager = employeesById.get(row.manager_employee_id || employee?.manager_employee_id || "");
+    const skill = row.skill_id ? catalogById.get(row.skill_id) : null;
+    const cycle = row.cycle_id ? cyclesById.get(row.cycle_id) : null;
+    const currentLevel = clampLevel(row.current_level ?? row.level);
+    const targetLevel = clampLevel(row.target_level ?? currentLevel);
+
     return {
       ...row,
-      employee_name: employee?.full_name ?? null,
+      full_name: employee?.full_name ?? null,
       employee_number: employee?.employee_number ?? null,
-      department_name: employee?.department_name ?? null,
-      department_free_text: employee?.department_free_text ?? null,
-      site_name: employee?.site_name ?? null,
-      site_free_text: employee?.site_free_text ?? null,
-      job_name: employee?.job_name ?? null,
-      job_free_text: employee?.job_free_text ?? null,
-      function_name: employee?.function_name ?? null,
-      function_free_text: employee?.function_free_text ?? null,
-      manager_name: employee?.manager_name ?? null,
+      email: employee?.professional_email || employee?.email || null,
+      site_name: employee?.site_free_text || employee?.site_name || null,
+      department_name: employee?.department_free_text || employee?.department_name || null,
+      job_name: employee?.job_free_text || employee?.job_name || employee?.function_free_text || employee?.function_name || null,
+      manager_name: manager?.full_name || employee?.manager_name || null,
       skill_name: skill?.name ?? row.skill_name ?? null,
       family: skill?.family ?? row.family ?? null,
       category: skill?.category ?? row.category ?? null,
+      skill_description: skill?.description ?? null,
       criticality: skill?.criticality ?? row.criticality ?? null,
-      current_level: typeof row.current_level === "number" ? row.current_level : typeof row.level === "number" ? row.level : null,
-      target_level: typeof row.target_level === "number" ? row.target_level : null,
-      gap: Math.max(0, Number(row.target_level ?? row.level ?? 0) - Number(row.current_level ?? row.level ?? 0)),
+      level_expectations: skill?.level_expectations ?? null,
+      current_level: currentLevel,
+      target_level: targetLevel,
+      gap: Math.max(0, targetLevel - currentLevel),
+      cycle_name: cycle?.name ?? null,
+      review_type: cycle?.review_type ?? null,
+      period_start: cycle?.period_start ?? null,
+      period_end: cycle?.period_end ?? null,
     };
-  }) as ModuleRow[];
-  return { organization, employees, rows, skillCatalog };
+  });
+
+  return { organization, employees, rows, catalog, cycles };
 }
-function filterRows(moduleKey: HrTalentModuleKey, rows: ModuleRow[], filters: FilterValue) {
-  return rows.filter((row: any) => {
-    const haystack = [fullName(row), row.employee_number, getDepartment(row), getSite(row), getJob(row), row.status, row.skill_name, row.family, row.category, row.description, row.notes, row.cycle_name, row.project_context].filter(Boolean).join(" ").toLowerCase();
-    if (filters.search.trim() && !haystack.includes(filters.search.trim().toLowerCase())) return false;
+
+function filterRows(moduleKey: HrTalentModuleKey, rows: AnyRow[], filters: FilterValue) {
+  const search = filters.search.trim().toLowerCase();
+
+  return rows.filter((row) => {
+    const searchable = [
+      fullName(row),
+      row.employee_number,
+      row.email,
+      getEmployeeDepartment(row),
+      getEmployeeJob(row),
+      row.manager_name,
+      row.status,
+      row.skill_name,
+      row.family,
+      row.category,
+      row.description,
+      row.notes,
+      row.project_context,
+      row.cycle_name,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+
+    if (search && !searchable.includes(search)) return false;
     if (filters.status !== "all" && row.status !== filters.status) return false;
-    if (filters.department !== "all" && getDepartment(row) !== filters.department) return false;
     if (filters.resource !== "all" && row.employee_id !== filters.resource) return false;
+    if (filters.department !== "all" && getEmployeeDepartment(row) !== filters.department) return false;
+
+    if (moduleKey === "time") {
+      if (filters.activity !== "all" && row.activity_type !== filters.activity) return false;
+      if (filters.period !== "all") {
+        const date = row.activity_date ? new Date(row.activity_date) : null;
+        const now = new Date();
+        if (!date || Number.isNaN(date.getTime())) return false;
+        if (filters.period === "current_month" && (date.getFullYear() !== now.getFullYear() || date.getMonth() !== now.getMonth())) return false;
+        if (filters.period === "current_year" && date.getFullYear() !== now.getFullYear()) return false;
+        if (filters.period === "previous_month") {
+          const previous = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+          if (date.getFullYear() !== previous.getFullYear() || date.getMonth() !== previous.getMonth()) return false;
+        }
+      }
+    }
+
     if (moduleKey === "skills") {
       if (filters.module !== "all" && row.family !== filters.module) return false;
       if (filters.submodule !== "all" && row.category !== filters.submodule) return false;
-      if (filters.level !== "all" && Number(row.current_level ?? -1) !== Number(filters.level)) return false;
+      if (filters.level !== "all" && String(clampLevel(row.current_level ?? row.level)) !== filters.level) return false;
       if (filters.need === "gap" && Number(row.gap ?? 0) <= 0) return false;
       if (filters.need === "critical" && row.criticality !== "critical") return false;
-      if (filters.need === "expert" && Number(row.current_level ?? 0) < 3) return false;
-      if (filters.need === "project_gap" && !(Number(row.gap ?? 0) > 0 && row.project_context)) return false;
+      if (filters.need === "expert" && clampLevel(row.current_level) < 3) return false;
+      if (filters.need === "project_gap" && !(String(row.project_context ?? "").length > 0 && Number(row.gap ?? 0) > 0)) return false;
+    } else if (filters.need === "gap") {
+      if (!["submitted", "manager_approved", "to_develop", "delayed", "employee_input", "manager_input", "calibration"].includes(String(row.status))) return false;
+    } else if (filters.need === "critical") {
+      if (!(row.risk_level === "high" || row.status === "rejected")) return false;
     }
+
     return true;
   });
 }
-function groupByValue(rows: ModuleRow[], resolver: (row: any) => string | null | undefined, fallback: string): ChartData[] {
-  const map = new Map<string, number>();
-  rows.forEach((row) => { const label = resolver(row)?.trim() || fallback; map.set(label, (map.get(label) || 0) + 1); });
-  return Array.from(map.entries()).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 10);
-}
-function monthly(rows: ModuleRow[], resolver: (row: any) => string | null | undefined): ChartData[] {
-  const now = new Date();
-  const months = Array.from({ length: 12 }).map((_, index) => { const date = new Date(now.getFullYear(), now.getMonth() - (11 - index), 1); return { key: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`, name: new Intl.DateTimeFormat("fr-FR", { month: "short", year: "2-digit" }).format(date).replace(".", ""), value: 0 }; });
-  const map = new Map(months.map((item) => [item.key, item]));
-  rows.forEach((row) => { const value = resolver(row); const date = value ? new Date(value) : null; if (date && !Number.isNaN(date.getTime())) { const item = map.get(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`); if (item) item.value += 1; } });
-  return months;
-}
-function buildSkillResourceSummaries(rows: ModuleRow[], employees: EmployeeOption[]): SkillResourceSummary[] {
-  const skillRows = rows as SkillRow[];
-  const byEmployee = new Map<string, SkillRow[]>();
-  skillRows.forEach((row) => { if (row.employee_id) byEmployee.set(row.employee_id, [...(byEmployee.get(row.employee_id) || []), row]); });
-  return employees.filter((employee) => byEmployee.has(employee.id)).map((employee) => {
-    const employeeRows = byEmployee.get(employee.id) || [];
-    const topGaps = [...employeeRows].filter((row) => row.gap > 0).sort((a, b) => (b.gap - a.gap) || ((b.criticality === "critical" ? 1 : 0) - (a.criticality === "critical" ? 1 : 0))).slice(0, 4);
-    const strongSkills = employeeRows.filter((row) => Number(row.current_level || 0) >= 3).slice(0, 5);
-    const mentorSet = new Set<string>();
-    topGaps.forEach((gap) => {
-      skillRows.filter((candidate) => candidate.skill_id === gap.skill_id && candidate.employee_id !== employee.id && Number(candidate.current_level || 0) >= 3).slice(0, 3).forEach((candidate) => mentorSet.add(candidate.employee_name || "Expert interne"));
-    });
-    const averageLevel = employeeRows.length ? Math.round((employeeRows.reduce((sum, row) => sum + Number(row.current_level || 0), 0) / employeeRows.length) * 10) / 10 : 0;
-    return { employee, rows: employeeRows, topGaps, strongSkills, mentors: Array.from(mentorSet).slice(0, 4), averageLevel, criticalGaps: topGaps.filter((row) => row.criticality === "critical").length };
-  });
-}
-function getMetrics(moduleKey: HrTalentModuleKey, rows: ModuleRow[], skillCatalog: SkillCatalogItem[]) {
-  if (moduleKey === "skills") {
-    const skillRows = rows as SkillRow[];
-    return [
-      { label: "Ressources évaluées", value: new Set(skillRows.map((row) => row.employee_id).filter(Boolean)).size, description: "Collaborateurs avec au moins une auto-évaluation ou évaluation compétence.", icon: Users, accent: "indigo" as Accent },
-      { label: "Compétences suivies", value: skillCatalog.filter((skill) => !skill.archived_at).length, description: "Bibliothèque active organisée par modules et sous-modules.", icon: BookOpen, accent: "emerald" as Accent },
-      { label: "Écarts critiques", value: skillRows.filter((row) => row.gap > 0 && row.criticality === "critical").length, description: "Écarts sur compétences critiques à traiter en priorité.", icon: AlertTriangle, accent: "amber" as Accent },
-      { label: "Experts internes", value: skillRows.filter((row) => Number(row.current_level || 0) >= 3).length, description: "Ressources confirmées ou expertes mobilisables comme référents.", icon: GraduationCap, accent: "rose" as Accent },
-    ];
-  }
-  if (moduleKey === "onboarding") {
-    const onboarding = rows as OnboardingRow[];
-    return [
-      { label: "Parcours actifs", value: onboarding.filter((row) => !["completed", "archived"].includes(row.status || "")).length, description: "Intégrations à suivre dans le périmètre filtré.", icon: ListChecks, accent: "indigo" as Accent },
-      { label: "Checklists OK", value: onboarding.filter((row) => getChecklistStats(row.checklist_items).nok === 0 && getChecklistStats(row.checklist_items).total > 0).length, description: "Parcours sans point NOK dans la checklist.", icon: CheckCircle2, accent: "emerald" as Accent },
-      { label: "Points NOK", value: onboarding.reduce((sum, row) => sum + getChecklistStats(row.checklist_items).nok, 0), description: "Actions bloquantes RH, manager, IT ou qualité.", icon: AlertTriangle, accent: "amber" as Accent },
-      { label: "Risques élevés", value: onboarding.filter((row) => row.risk_level === "high" || row.status === "delayed").length, description: "Parcours à arbitrer avant retard ou rupture d’intégration.", icon: ShieldAlert, accent: "rose" as Accent },
-    ];
-  }
-  if (moduleKey === "reviews") {
-    const reviews = rows as ReviewRow[];
-    return [
-      { label: "Entretiens", value: reviews.length, description: "Entretiens et objectifs dans le périmètre filtré.", icon: Target, accent: "indigo" as Accent },
-      { label: "Validés", value: reviews.filter((row) => row.status === "completed").length, description: "Entretiens finalisés ou validés.", icon: CheckCircle2, accent: "emerald" as Accent },
-      { label: "En cours", value: reviews.filter((row) => ["employee_input", "manager_input", "calibration"].includes(row.status || "")).length, description: "Entretiens nécessitant une action collaborateur, N+1 ou RH.", icon: CalendarClock, accent: "amber" as Accent },
-      { label: "Objectifs en retard", value: reviews.filter((row) => Number(row.completed_objective_count || 0) < Number(row.objective_count || 0)).length, description: "Objectifs non atteints ou à recalibrer.", icon: AlertTriangle, accent: "rose" as Accent },
-    ];
-  }
-  const time = rows as TimeRow[];
-  return [
-    { label: "Saisies", value: time.length, description: "Activités et temps déclarés dans le périmètre filtré.", icon: Clock3, accent: "indigo" as Accent },
-    { label: "Heures", value: Math.round(time.reduce((sum, row) => sum + Number(row.duration_hours || 0), 0)), description: "Total des heures déclarées visibles.", icon: Gauge, accent: "emerald" as Accent },
-    { label: "À valider", value: time.filter((row) => ["submitted", "manager_approved"].includes(row.status || "")).length, description: "Saisies en attente manager, RH ou finance.", icon: CalendarClock, accent: "amber" as Accent },
-    { label: "Rejets", value: time.filter((row) => row.status === "rejected").length, description: "Saisies refusées ou à corriger.", icon: AlertTriangle, accent: "rose" as Accent },
-  ];
+
+function SectionCard({
+  icon: Icon,
+  title,
+  description,
+  right,
+  children,
+}: {
+  icon: ComponentType<{ className?: string; strokeWidth?: number }>;
+  title: string;
+  description: string;
+  right?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-600/60 dark:bg-slate-700/70">
+      <div className="border-b border-slate-100 bg-gradient-to-r from-sky-50/70 via-white to-indigo-50/60 px-5 py-4 dark:border-slate-600/55 dark:from-sky-900/25 dark:via-slate-700/85 dark:to-indigo-900/25">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="rounded-xl bg-sky-100 p-2.5 text-sky-700 dark:bg-sky-900/45 dark:text-sky-200">
+              <Icon className="h-4 w-4" />
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-sm font-bold text-slate-950 dark:text-white">{title}</h2>
+              <p className="mt-1 truncate text-xs text-slate-500 dark:text-slate-300" title={description}>{description}</p>
+            </div>
+          </div>
+          {right}
+        </div>
+      </div>
+      <div className="p-5">{children}</div>
+    </section>
+  );
 }
 
-const selectClassName = "h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100 dark:focus:border-indigo-500 dark:focus:ring-indigo-900/40";
-function MetricCard({ label, value, description, icon: Icon, accent }: { label: string; value: number; description: string; icon: ComponentType<{ className?: string; strokeWidth?: number }>; accent: Accent }) {
-  const accentClasses = {
-    indigo: { panel: "border-indigo-100 from-indigo-50/85 via-white to-sky-50/65 dark:border-indigo-900/50 dark:from-indigo-800/25 dark:via-slate-700/85 dark:to-emerald-700/20", icon: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/45 dark:text-indigo-200", value: "text-indigo-700 dark:text-indigo-300" },
-    sky: { panel: "border-sky-100 from-sky-50/85 via-white to-cyan-50/65 dark:border-sky-900/50 dark:from-sky-800/25 dark:via-slate-700/85 dark:to-cyan-700/20", icon: "bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-200", value: "text-sky-700 dark:text-sky-300" },
-    emerald: { panel: "border-emerald-100 from-emerald-50/85 via-white to-teal-50/65 dark:border-emerald-900/50 dark:from-emerald-800/25 dark:via-slate-700/85 dark:to-teal-700/20", icon: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200", value: "text-emerald-700 dark:text-emerald-300" },
-    amber: { panel: "border-amber-100 from-amber-50/85 via-white to-orange-50/65 dark:border-amber-900/50 dark:from-amber-800/25 dark:via-slate-700/85 dark:to-orange-700/20", icon: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200", value: "text-amber-700 dark:text-amber-300" },
-    rose: { panel: "border-rose-100 from-rose-50/85 via-white to-pink-50/65 dark:border-rose-900/50 dark:from-rose-800/25 dark:via-slate-700/85 dark:to-pink-700/20", icon: "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-200", value: "text-rose-700 dark:text-rose-300" },
-  } as const;
+function MetricCard({ label, value, description, icon: Icon, accent }: { label: string; value: ReactNode; description: string; icon: ComponentType<{ className?: string; strokeWidth?: number }>; accent: Accent }) {
+  const accentClasses: Record<Accent, { panel: string; icon: string; value: string }> = {
+    indigo: {
+      panel: "border-indigo-100 from-indigo-50/85 via-white to-violet-50/65 dark:border-indigo-900/50 dark:from-indigo-950/30 dark:via-slate-950 dark:to-violet-950/20",
+      icon: "bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300",
+      value: "text-indigo-700 dark:text-indigo-300",
+    },
+    emerald: {
+      panel: "border-emerald-100 from-emerald-50/85 via-white to-teal-50/65 dark:border-emerald-900/50 dark:from-emerald-950/30 dark:via-slate-950 dark:to-teal-950/20",
+      icon: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+      value: "text-emerald-700 dark:text-emerald-300",
+    },
+    amber: {
+      panel: "border-amber-100 from-amber-50/85 via-white to-orange-50/65 dark:border-amber-900/50 dark:from-amber-950/30 dark:via-slate-950 dark:to-orange-950/20",
+      icon: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+      value: "text-amber-700 dark:text-amber-300",
+    },
+    rose: {
+      panel: "border-rose-100 from-rose-50/85 via-white to-pink-50/65 dark:border-rose-900/50 dark:from-rose-950/30 dark:via-slate-950 dark:to-pink-950/20",
+      icon: "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300",
+      value: "text-rose-700 dark:text-rose-300",
+    },
+    sky: {
+      panel: "border-sky-100 from-sky-50/85 via-white to-cyan-50/65 dark:border-sky-900/50 dark:from-sky-950/30 dark:via-slate-950 dark:to-cyan-950/20",
+      icon: "bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300",
+      value: "text-sky-700 dark:text-sky-300",
+    },
+    slate: {
+      panel: "border-slate-100 from-slate-50/85 via-white to-slate-50/65 dark:border-slate-800 dark:from-slate-900/40 dark:via-slate-950 dark:to-slate-900/20",
+      icon: "bg-slate-100 text-slate-700 dark:bg-slate-900 dark:text-slate-300",
+      value: "text-slate-700 dark:text-slate-300",
+    },
+  };
   const classes = accentClasses[accent];
-  return <article className={`min-h-[106px] rounded-2xl border bg-gradient-to-r px-4 py-3.5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${classes.panel}`}><div className="flex h-full items-center gap-3"><div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${classes.icon}`}><Icon className="h-4 w-4" strokeWidth={1.9} /></div><div className="min-w-0 flex-1"><div className="flex items-center justify-between gap-3"><p className="truncate text-xs font-black uppercase tracking-wide text-slate-600 dark:text-slate-300">{label}</p><p className={`shrink-0 text-2xl font-black leading-none ${classes.value}`}>{value}</p></div><p className="mt-2 line-clamp-2 text-[11px] leading-4 text-slate-500 dark:text-slate-300">{description}</p></div></div></article>;
-}
-function SectionCard({ icon: Icon, title, description, children, right }: { icon: ComponentType<{ className?: string }>; title: string; description: string; children: ReactNode; right?: ReactNode }) {
-  return <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-600/60 dark:bg-slate-700/70"><div className="border-b border-slate-100 bg-gradient-to-r from-sky-50/70 via-white to-indigo-50/60 px-5 py-4 dark:border-slate-600/55 dark:from-sky-900/25 dark:via-slate-700/85 dark:to-indigo-900/25"><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div className="flex min-w-0 items-center gap-3"><div className="rounded-xl bg-sky-100 p-2.5 text-sky-700 dark:bg-sky-900/45 dark:text-sky-200"><Icon className="h-4 w-4" /></div><div className="min-w-0"><h2 className="truncate text-sm font-bold text-slate-950 dark:text-white" title={title}>{title}</h2><p className="mt-1 truncate text-xs text-slate-500 dark:text-slate-300" title={description}>{description}</p></div></div>{right}</div></div><div className="p-5">{children}</div></section>;
-}
-function FiltersPanel({ moduleKey, rows, skillCatalog, employees, value, onChange, resultCount }: { moduleKey: HrTalentModuleKey; rows: ModuleRow[]; skillCatalog: SkillCatalogItem[]; employees: EmployeeOption[]; value: FilterValue; onChange: (value: FilterValue) => void; resultCount: number }) {
-  const departments = uniqueValues(rows, getDepartment);
-  const statuses = uniqueValues(rows, (row: any) => row.status);
-  const modules = uniqueValues(skillCatalog, (skill) => skill.family);
-  const submodules = uniqueValues(skillCatalog.filter((skill) => value.module === "all" || skill.family === value.module), (skill) => skill.category);
-  const hasFilters = value.search.trim() || value.status !== "all" || value.department !== "all" || value.resource !== "all" || value.module !== "all" || value.submodule !== "all" || value.level !== "all" || value.need !== "all";
-  const update = <K extends keyof FilterValue>(field: K, fieldValue: FilterValue[K]) => onChange({ ...value, [field]: fieldValue, ...(field === "module" ? { submodule: "all" } : {}) });
-  const reset = () => onChange(initialFilters);
-  return <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-600/60 dark:bg-slate-700/70"><div className="border-b border-slate-100 bg-gradient-to-r from-sky-50/70 via-white to-indigo-50/60 px-5 py-4 dark:border-slate-600/55 dark:from-sky-900/25 dark:via-slate-700/85 dark:to-indigo-900/25"><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><div className="rounded-xl bg-sky-100 p-2.5 text-sky-700 dark:bg-sky-900/45 dark:text-sky-200"><SlidersHorizontal className="h-4 w-4" /></div><div><h2 className="text-sm font-bold text-slate-950 dark:text-white">Périmètre d’analyse</h2><p className="mt-1 text-xs text-slate-500 dark:text-slate-300">Les filtres pilotent les KPI, les cartes, tableaux, graphiques, alertes et exports.</p></div></div><div className="rounded-full border border-indigo-100 bg-white px-3 py-1.5 text-xs font-semibold text-indigo-700 shadow-sm dark:border-indigo-900 dark:bg-slate-700/80 dark:text-indigo-300">{resultCount} résultat{resultCount > 1 ? "s" : ""} sur {rows.length}</div></div></div><div className="space-y-4 p-5"><div className="relative"><Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-indigo-500" /><input type="search" value={value.search} onChange={(event) => update("search", event.target.value)} placeholder="Rechercher ressource, compétence, module, projet, manager, statut..." className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-50 dark:border-slate-600 dark:bg-slate-700 dark:text-white dark:focus:border-indigo-500 dark:focus:bg-slate-700 dark:focus:ring-indigo-900/40" /></div><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><select value={value.status} onChange={(event) => update("status", event.target.value)} className={selectClassName}><option value="all">Tous les statuts</option>{statuses.map((status) => <option key={status} value={status}>{labelStatus(moduleKey, status)}</option>)}</select><select value={value.department} onChange={(event) => update("department", event.target.value)} className={selectClassName}><option value="all">Tous les services</option>{departments.map((department) => <option key={department} value={department}>{department}</option>)}</select><select value={value.resource} onChange={(event) => update("resource", event.target.value)} className={selectClassName}><option value="all">Toutes les ressources</option>{employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.full_name || employee.employee_number || employee.id}</option>)}</select>{moduleKey === "skills" ? <select value={value.module} onChange={(event) => update("module", event.target.value)} className={selectClassName}><option value="all">Tous les modules</option>{modules.map((module) => <option key={module} value={module}>{module}</option>)}</select> : <select value={value.need} onChange={(event) => update("need", event.target.value)} className={selectClassName}><option value="all">Tous les besoins</option><option value="gap">Action à traiter</option><option value="critical">Risque critique</option></select>}{moduleKey === "skills" && <><select value={value.submodule} onChange={(event) => update("submodule", event.target.value)} className={selectClassName}><option value="all">Tous les sous-modules</option>{submodules.map((submodule) => <option key={submodule} value={submodule}>{submodule}</option>)}</select><select value={value.level} onChange={(event) => update("level", event.target.value)} className={selectClassName}><option value="all">Tous les niveaux</option><option value="0">Niveau 0 · Profane</option><option value="1">Niveau 1 · Sensibilisé</option><option value="2">Niveau 2 · Autonome encadré</option><option value="3">Niveau 3 · Confirmé</option><option value="4">Niveau 4 · Expert</option></select><select value={value.need} onChange={(event) => update("need", event.target.value)} className={selectClassName}><option value="all">Tous les besoins</option><option value="gap">Écart cible / réel</option><option value="critical">Compétence critique</option><option value="expert">Experts disponibles</option><option value="project_gap">Écart sur besoin projet</option></select></>}</div>{hasFilters && <div className="flex justify-end"><button type="button" onClick={reset} className="inline-flex h-9 items-center gap-2 rounded-lg px-3 text-xs font-semibold text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-slate-600 dark:hover:text-white"><X className="h-4 w-4" />Réinitialiser les filtres</button></div>}</div></section>;
-}
-function TabButton({ active, accent, icon: Icon, label, onClick }: { active: boolean; accent: Accent; icon: ComponentType<{ className?: string }>; label: string; onClick: () => void }) {
-  const colors = { indigo: active ? "bg-indigo-600 text-white shadow-md shadow-indigo-100" : "text-slate-500 hover:bg-indigo-50 hover:text-indigo-700 dark:hover:bg-indigo-900/35 dark:hover:text-indigo-300", emerald: active ? "bg-emerald-600 text-white shadow-md shadow-emerald-100" : "text-slate-500 hover:bg-emerald-50 hover:text-emerald-700 dark:hover:bg-emerald-900/35 dark:hover:text-emerald-300", amber: active ? "bg-amber-500 text-white shadow-md shadow-amber-100" : "text-slate-500 hover:bg-amber-50 hover:text-amber-700 dark:hover:bg-amber-900/35 dark:hover:text-amber-300", rose: active ? "bg-rose-600 text-white shadow-md shadow-rose-100" : "text-slate-500 hover:bg-rose-50 hover:text-rose-700 dark:hover:bg-rose-900/35 dark:hover:text-rose-300", sky: active ? "bg-sky-600 text-white shadow-md shadow-sky-100" : "text-slate-500 hover:bg-sky-50 hover:text-sky-700 dark:hover:bg-sky-900/35 dark:hover:text-sky-300" } as const;
-  return <button type="button" onClick={onClick} className={`inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl px-5 text-sm font-bold transition ${colors[accent]}`}><Icon className="h-4 w-4" />{label}</button>;
-}
-function Info({ label, value, accent = "indigo" }: { label: string; value: ReactNode; accent?: Accent }) { const color = accent === "emerald" ? "text-emerald-700 dark:text-emerald-300" : accent === "amber" ? "text-amber-700 dark:text-amber-300" : accent === "rose" ? "text-rose-700 dark:text-rose-300" : "text-indigo-700 dark:text-indigo-300"; return <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 dark:border-slate-600/60 dark:bg-slate-600/55"><p className="text-[10px] font-black uppercase tracking-wide text-slate-400">{label}</p><p className={`mt-1 line-clamp-2 text-xs font-bold ${color}`} title={typeof value === "string" ? value : undefined}>{value}</p></div>; }
-function ActionMenu({ onArchive }: { onArchive: () => void }) { const [open, setOpen] = useState(false); return <div className="relative"><button type="button" onClick={() => setOpen(!open)} title="Actions" className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-indigo-600 dark:hover:bg-slate-600"><MoreHorizontal className="h-4 w-4" /></button>{open && <div className="absolute right-0 top-9 z-30 w-44 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 text-xs font-bold shadow-xl dark:border-slate-600 dark:bg-slate-700"><button type="button" className="flex w-full items-center gap-2 px-3 py-2 text-sky-700 hover:bg-sky-50 dark:text-sky-300 dark:hover:bg-sky-900/25"><Eye className="h-3.5 w-3.5" />Voir</button><button type="button" className="flex w-full items-center gap-2 px-3 py-2 text-indigo-700 hover:bg-indigo-50 dark:text-indigo-300 dark:hover:bg-indigo-900/25"><Pencil className="h-3.5 w-3.5" />Modifier</button><button type="button" onClick={onArchive} className="flex w-full items-center gap-2 px-3 py-2 text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-600"><Archive className="h-3.5 w-3.5" />Archiver</button></div>}</div>; }
-function WorkCardsAndTable({ moduleKey, rows, employees, onArchive }: { moduleKey: HrTalentModuleKey; rows: ModuleRow[]; employees: EmployeeOption[]; onArchive: (row: ModuleRow) => void }) {
-  const [view, setView] = useState<"cards" | "table">("cards");
-  const summaries = moduleKey === "skills" ? buildSkillResourceSummaries(rows, employees) : [];
-  return <SectionCard icon={moduleKey === "skills" ? GraduationCap : moduleKey === "time" ? Clock3 : moduleKey === "onboarding" ? ListChecks : Target} title={getConfig(moduleKey).primaryTab} description="Cartes et tableau utilisent le périmètre filtré, les mêmes actions et les mêmes données Supabase." right={<div className="inline-flex gap-1 rounded-xl border border-slate-200 bg-white p-1 dark:border-slate-600/60 dark:bg-slate-700/70"><button type="button" onClick={() => setView("cards")} className={`h-8 rounded-lg px-3 text-xs font-bold ${view === "cards" ? "bg-indigo-600 text-white" : "text-slate-500 hover:bg-indigo-50"}`}>Cartes</button><button type="button" onClick={() => setView("table")} className={`h-8 rounded-lg px-3 text-xs font-bold ${view === "table" ? "bg-indigo-600 text-white" : "text-slate-500 hover:bg-indigo-50"}`}>Tableau</button></div>}>
-    {moduleKey === "skills" && view === "cards" && <div className="grid gap-4 xl:grid-cols-2">{summaries.map((summary) => <SkillResourceCard key={summary.employee.id} summary={summary} onArchive={() => summary.rows[0] && onArchive(summary.rows[0])} />)}</div>}
-    {moduleKey === "skills" && view === "table" && <SkillResourceTable rows={rows as SkillRow[]} onArchive={onArchive} />}
-    {moduleKey !== "skills" && view === "cards" && <div className="grid gap-4 xl:grid-cols-2">{rows.map((row: any) => <GenericCard key={row.id} moduleKey={moduleKey} row={row} onArchive={() => onArchive(row)} />)}</div>}
-    {moduleKey !== "skills" && view === "table" && <GenericTable moduleKey={moduleKey} rows={rows} onArchive={onArchive} />}
-  </SectionCard>;
-}
-function SkillResourceCard({ summary, onArchive }: { summary: SkillResourceSummary; onArchive: () => void }) { return <article className="group rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md dark:border-slate-600/70 dark:bg-slate-700/65"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><h3 className="truncate text-sm font-black text-slate-950 dark:text-slate-100">{summary.employee.full_name}</h3><p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500 dark:text-slate-300">{getDepartment(summary.employee)} · {getJob(summary.employee)} · niveau moyen {summary.averageLevel}/4</p></div><ActionMenu onArchive={onArchive} /></div><div className="mt-4 grid gap-2 sm:grid-cols-4"><Info label="Compétences" value={summary.rows.length} /><Info label="Écarts" value={summary.topGaps.length} accent={summary.topGaps.length > 0 ? "amber" : "emerald"} /><Info label="Critiques" value={summary.criticalGaps} accent={summary.criticalGaps > 0 ? "rose" : "emerald"} /><Info label="Experts relais" value={summary.mentors.length} accent="indigo" /></div><div className="mt-4 rounded-xl border border-slate-100 bg-slate-50 p-3 dark:border-slate-600/60 dark:bg-slate-600/55"><p className="text-[10px] font-black uppercase tracking-wide text-slate-400">Écarts à traiter</p><div className="mt-2 space-y-1.5">{summary.topGaps.length > 0 ? summary.topGaps.map((gap) => <div key={gap.id} className="flex items-center justify-between gap-3 rounded-lg bg-white px-2.5 py-1.5 text-[11px] dark:bg-slate-700/70"><span className="truncate text-slate-600 dark:text-slate-200" title={`${gap.family} / ${gap.category} · ${gap.skill_name}`}>{gap.family} / {gap.category} · {gap.skill_name}</span><span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 font-black text-amber-700 dark:bg-amber-900/40 dark:text-amber-200">{gap.current_level ?? 0}→{gap.target_level ?? 0}</span></div>) : <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">Aucun écart prioritaire détecté.</p>}</div></div><div className="mt-3 rounded-xl border border-indigo-100 bg-indigo-50/50 p-3 dark:border-indigo-900/40 dark:bg-indigo-900/20"><p className="text-[10px] font-black uppercase tracking-wide text-indigo-500">Accompagnement possible</p><p className="mt-1 line-clamp-2 text-xs font-bold text-indigo-700 dark:text-indigo-300">{summary.mentors.length > 0 ? summary.mentors.join(" · ") : "Aucun expert interne identifié sur les écarts filtrés."}</p></div></article>; }
-function SkillResourceTable({ rows, onArchive }: { rows: SkillRow[]; onArchive: (row: ModuleRow) => void }) { return <div className="max-h-[520px] overflow-auto rounded-2xl border border-slate-200 shadow-sm dark:border-slate-600/70"><table className="min-w-[1280px] w-full border-separate border-spacing-0 bg-white text-sm dark:bg-slate-700/65"><thead className="sticky top-0 z-20 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-700 dark:text-slate-300"><tr><th className="sticky left-0 z-30 bg-slate-50 px-4 py-3 text-left dark:bg-slate-700">Ressource</th><th className="px-4 py-3 text-left">Module</th><th className="px-4 py-3 text-left">Sous-module</th><th className="px-4 py-3 text-left">Compétence</th><th className="px-4 py-3 text-left">Niveau</th><th className="px-4 py-3 text-left">Cible</th><th className="px-4 py-3 text-left">Besoin projet</th><th className="px-4 py-3 text-left">Preuve</th><th className="sticky right-0 z-30 bg-slate-50 px-4 py-3 text-right dark:bg-slate-700">Actions</th></tr></thead><tbody>{rows.map((row) => <tr key={row.id} className="hover:bg-indigo-50/45 dark:hover:bg-indigo-900/20"><td className="sticky left-0 z-10 bg-white px-4 py-3 font-bold text-slate-950 dark:bg-slate-700 dark:text-slate-100">{fullName(row)}</td><td className="px-4 py-3 text-slate-600 dark:text-slate-300">{row.family || "—"}</td><td className="px-4 py-3 text-slate-600 dark:text-slate-300">{row.category || "—"}</td><td className="px-4 py-3 font-semibold text-slate-700 dark:text-slate-200">{row.skill_name || "—"}</td><td className="px-4 py-3">{levelLabels[Number(row.current_level ?? 0)]}</td><td className="px-4 py-3">{levelLabels[Number(row.target_level ?? 0)]}</td><td className="px-4 py-3 text-slate-600 dark:text-slate-300">{row.project_context || "—"}</td><td className="px-4 py-3 text-slate-600 dark:text-slate-300">{row.evidence || "—"}</td><td className="sticky right-0 z-10 bg-white px-4 py-3 text-right dark:bg-slate-700"><ActionMenu onArchive={() => onArchive(row)} /></td></tr>)}</tbody></table></div>; }
-function GenericCard({ moduleKey, row, onArchive }: { moduleKey: HrTalentModuleKey; row: any; onArchive: () => void }) { const title = moduleKey === "time" ? `${fullName(row)} · ${formatDate(row.activity_date)}` : moduleKey === "onboarding" ? `Parcours ${fullName(row)}` : row.cycle_name || `Entretien ${fullName(row)}`; return <article className="group rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md dark:border-slate-600/70 dark:bg-slate-700/65"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><h3 className="truncate text-sm font-black text-slate-950 dark:text-slate-100">{title}</h3><p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500 dark:text-slate-300">{getDepartment(row)} · {getJob(row)} · {labelStatus(moduleKey, row.status)}</p></div><ActionMenu onArchive={onArchive} /></div><div className="mt-4 grid gap-2 sm:grid-cols-2"><Info label="Collaborateur" value={fullName(row)} /><Info label="Manager" value={row.manager_name || "Non renseigné"} /><Info label="Service" value={getDepartment(row)} /><Info label="Statut" value={labelStatus(moduleKey, row.status)} /></div>{moduleKey === "onboarding" && <OnboardingChecklist row={row as OnboardingRow} />}{moduleKey === "reviews" && <ReviewTemplate row={row as ReviewRow} />}{moduleKey === "time" && <div className="mt-4 grid gap-2 sm:grid-cols-3"><Info label="Date" value={formatDate(row.activity_date)} /><Info label="Durée" value={`${row.duration_hours || 0} h`} accent="emerald" /><Info label="Activité" value={row.activity_type || "—"} /></div>}</article>; }
-function GenericTable({ moduleKey, rows, onArchive }: { moduleKey: HrTalentModuleKey; rows: ModuleRow[]; onArchive: (row: ModuleRow) => void }) { return <div className="max-h-[520px] overflow-auto rounded-2xl border border-slate-200 shadow-sm dark:border-slate-600/70"><table className="min-w-[1120px] w-full border-separate border-spacing-0 bg-white text-sm dark:bg-slate-700/65"><thead className="sticky top-0 z-20 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-700 dark:text-slate-300"><tr><th className="sticky left-0 z-30 bg-slate-50 px-4 py-3 text-left dark:bg-slate-700">Objet</th><th className="px-4 py-3 text-left">Collaborateur</th><th className="px-4 py-3 text-left">Service</th><th className="px-4 py-3 text-left">Manager</th><th className="px-4 py-3 text-left">Statut</th><th className="px-4 py-3 text-left">Détail métier</th><th className="sticky right-0 z-30 bg-slate-50 px-4 py-3 text-right dark:bg-slate-700">Actions</th></tr></thead><tbody>{rows.map((row: any) => <tr key={row.id} className="hover:bg-indigo-50/45 dark:hover:bg-indigo-900/20"><td className="sticky left-0 z-10 bg-white px-4 py-3 font-bold text-slate-950 dark:bg-slate-700 dark:text-slate-100">{moduleKey === "onboarding" ? `Parcours ${fullName(row)}` : moduleKey === "reviews" ? row.cycle_name || `Entretien ${fullName(row)}` : `${formatDate(row.activity_date)} · ${row.activity_type || "activité"}`}</td><td className="px-4 py-3 text-slate-600 dark:text-slate-300">{fullName(row)}</td><td className="px-4 py-3 text-slate-600 dark:text-slate-300">{getDepartment(row)}</td><td className="px-4 py-3 text-slate-600 dark:text-slate-300">{row.manager_name || "—"}</td><td className="px-4 py-3"><span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-700 dark:bg-indigo-900/35 dark:text-indigo-300">{labelStatus(moduleKey, row.status)}</span></td><td className="px-4 py-3 text-slate-600 dark:text-slate-300">{moduleKey === "onboarding" ? `${getChecklistStats(row.checklist_items).ok}/${getChecklistStats(row.checklist_items).total} OK · risque ${row.risk_level || "normal"}` : moduleKey === "reviews" ? `${row.completed_objective_count || 0}/${row.objective_count || 0} objectifs · note ${row.global_rating || "—"}/5` : `${row.duration_hours || 0}h · ${row.description || "—"}`}</td><td className="sticky right-0 z-10 bg-white px-4 py-3 text-right dark:bg-slate-700"><ActionMenu onArchive={() => onArchive(row)} /></td></tr>)}</tbody></table></div>; }
-function getChecklistStats(items: ChecklistItem[] | null | undefined) { const list = Array.isArray(items) ? items : []; return { total: list.length, ok: list.filter((item) => item.status === "OK").length, nok: list.filter((item) => item.status === "NOK").length, na: list.filter((item) => item.status === "NA").length }; }
-function OnboardingChecklist({ row }: { row: OnboardingRow }) { const stats = getChecklistStats(row.checklist_items); return <div className="mt-4 space-y-3 rounded-xl border border-slate-100 bg-slate-50 p-3 dark:border-slate-600/60 dark:bg-slate-600/55"><div className="flex items-center justify-between gap-3"><p className="text-xs font-black text-slate-950 dark:text-slate-100">Checklist détaillée RH / Manager / IT / Qualité</p><span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-black uppercase text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200">{stats.ok}/{stats.total} OK</span></div><div className="grid gap-2 sm:grid-cols-3"><Info label="OK" value={stats.ok} accent="emerald" /><Info label="NOK" value={stats.nok} accent={stats.nok > 0 ? "rose" : "emerald"} /><Info label="NA" value={stats.na} accent="indigo" /></div><div className="space-y-1.5">{(row.checklist_items || []).map((item) => <div key={`${item.owner}-${item.label}`} className="flex items-center justify-between gap-3 rounded-lg bg-white px-2.5 py-1.5 text-[11px] dark:bg-slate-700/70"><span className="truncate text-slate-600 dark:text-slate-200" title={`${item.owner} · ${item.label} · ${item.note || ""}`}>{item.owner} · {item.label}</span><span className={`shrink-0 rounded-full px-2 py-0.5 font-black ${item.status === "OK" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200" : item.status === "NOK" ? "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-200" : "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-200"}`}>{item.status}</span></div>)}</div></div>; }
-function ReviewTemplate({ row }: { row: ReviewRow }) { const details = row.review_details; return <div className="mt-4 space-y-3 rounded-xl border border-slate-100 bg-slate-50 p-3 dark:border-slate-600/60 dark:bg-slate-600/55"><p className="text-xs font-black text-slate-950 dark:text-slate-100">Template entretien annuel & objectifs</p><div className="grid gap-2 sm:grid-cols-2"><Info label="Atteinte N-1" value={details?.previous_year?.achievement !== undefined ? `${details.previous_year.achievement}%` : "Non renseigné"} accent="emerald" /><Info label="Objectifs en cours" value={`${row.completed_objective_count || 0}/${row.objective_count || 0}`} accent="amber" /><Info label="Validation collaborateur" value={details?.employee_validation ? "OK" : "NOK"} accent={details?.employee_validation ? "emerald" : "rose"} /><Info label="Validation N+1" value={details?.manager_validation ? "OK" : "NOK"} accent={details?.manager_validation ? "emerald" : "rose"} /></div><Info label="Bilan année écoulée" value={details?.previous_year?.objectives || "À compléter"} /><Info label="Objectifs année en cours" value={details?.current_year?.objectives || "À définir"} /><Info label="Formation / développement" value={details?.training?.join(" · ") || details?.development_plan || "À définir"} accent="indigo" /></div>; }
-function LibraryPanel({ skillCatalog }: { skillCatalog: SkillCatalogItem[] }) { return <SectionCard icon={BookOpen} title="Bibliothèque de compétences" description="Référentiel complet par module, sous-module, criticité et attendus niveau 0 à 4."><div className="grid gap-4 xl:grid-cols-2">{skillCatalog.map((skill) => <article key={skill.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-600/70 dark:bg-slate-700/65"><div className="flex items-start justify-between gap-3"><div><h3 className="text-sm font-black text-slate-950 dark:text-slate-100">{skill.name}</h3><p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-300">{skill.family} · {skill.category}</p></div><span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase ${skill.criticality === "critical" ? "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-200" : skill.criticality === "important" ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200" : "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-200"}`}>{skill.criticality || "standard"}</span></div><p className="mt-3 line-clamp-2 text-xs text-slate-500 dark:text-slate-300">{skill.description}</p><div className="mt-4 grid gap-2 sm:grid-cols-2">{[0,1,2,3,4].map((level) => <Info key={level} label={levelLabels[level]} value={skill.level_expectations?.[String(level)] || "Attendu à formaliser"} accent={level >= 3 ? "emerald" : level === 2 ? "amber" : "indigo"} />)}</div></article>)}</div></SectionCard>; }
-async function copyChartCanvas(title: string, description: string, data: ChartData[]) { const canvas = document.createElement("canvas"); canvas.width = 1200; canvas.height = 720; const ctx = canvas.getContext("2d"); if (!ctx) return; ctx.fillStyle = "#ffffff"; ctx.fillRect(0,0,1200,720); ctx.fillStyle = "#f8fafc"; ctx.roundRect(28,24,1144,672,28); ctx.fill(); ctx.strokeStyle = "#bae6fd"; ctx.stroke(); ctx.fillStyle = "#0f172a"; ctx.font = "800 28px Arial"; ctx.fillText(title, 72, 72); ctx.fillStyle = "#64748b"; ctx.font = "14px Arial"; ctx.fillText(description.slice(0, 130), 72, 100); const max = Math.max(1, ...data.map((item) => item.value)); const left=90, top=150, width=980, height=390; ctx.strokeStyle = "#cbd5e1"; ctx.beginPath(); ctx.moveTo(left, top); ctx.lineTo(left, top+height); ctx.lineTo(left+width, top+height); ctx.stroke(); const barW = Math.max(28, Math.min(72, width / Math.max(1, data.length) * .55)); data.slice(0,10).forEach((item, index) => { const x = left + (width / Math.max(1, data.length)) * index + 20; const h = (item.value / max) * height; ctx.fillStyle = chartColors[index % chartColors.length]; ctx.roundRect(x, top + height - h, barW, h, 10); ctx.fill(); ctx.fillStyle = "#334155"; ctx.font = "bold 13px Arial"; ctx.fillText(String(item.value), x, top + height - h - 8); ctx.font = "12px Arial"; ctx.fillText(item.name.slice(0,18), x, top + height + 24); }); const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png", 1)); if (!blob) return; try { if (navigator.clipboard?.write && typeof ClipboardItem !== "undefined") { await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]); return; } } catch {} const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href=url; a.download=`${title.toLowerCase().replace(/[^a-z0-9]+/gi,"-")}.png`; a.click(); URL.revokeObjectURL(url); }
-function ChartCard({ title, description, data, children }: { title: string; description: string; data: ChartData[]; children: ReactNode }) { const [status, setStatus] = useState(""); return <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-600/60 dark:bg-slate-700/70"><div className="flex items-center justify-between gap-4 border-b border-slate-100 bg-gradient-to-r from-sky-50/70 via-white to-indigo-50/60 px-5 py-4 dark:border-slate-600/55 dark:from-sky-900/25 dark:via-slate-700/85 dark:to-indigo-900/25"><div className="min-w-0"><h3 className="truncate text-sm font-bold text-slate-950 dark:text-slate-100">{title}</h3><p className="mt-1 truncate text-xs text-slate-500 dark:text-slate-300">{description}</p></div><div className="flex shrink-0 items-center gap-2"><span className="text-[10px] font-bold text-slate-400">{status}</span><button type="button" onClick={async()=>{ setStatus("..."); await copyChartCanvas(title, description, data); setStatus("Copié/PNG"); }} title="Copier" className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-indigo-100 bg-white text-indigo-700 shadow-sm hover:bg-indigo-50 dark:border-indigo-800/70 dark:bg-slate-600/65 dark:text-indigo-200"><Copy className="h-4 w-4" /></button><button type="button" onClick={(event)=>event.currentTarget.closest('article')?.requestFullscreen?.()} title="Agrandir" className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-indigo-100 bg-white text-indigo-700 shadow-sm hover:bg-indigo-50 dark:border-indigo-800/70 dark:bg-slate-600/65 dark:text-indigo-200"><Expand className="h-4 w-4" /></button></div></div><div className="h-80 p-4">{children}</div></article>; }
-function ChartsPanel({ moduleKey, rows, skillCatalog }: { moduleKey: HrTalentModuleKey; rows: ModuleRow[]; skillCatalog: SkillCatalogItem[] }) { const statusData = groupByValue(rows, (row:any)=>labelStatus(moduleKey,row.status), "Non renseigné"); const departmentData = groupByValue(rows, getDepartment, "Sans service"); const monthlyData = monthly(rows, (row:any)=> moduleKey === "onboarding" ? row.start_date : moduleKey === "reviews" ? row.period_start : row.activity_date); const moduleData = moduleKey === "skills" ? groupByValue(rows, (row:any)=>row.family, "Sans module") : departmentData; const radarData = moduleKey === "skills" ? uniqueValues(skillCatalog, (s)=>s.family).slice(0,8).map((module)=>({ name: module, value: Math.round(((rows as SkillRow[]).filter((row)=>row.family===module).reduce((sum,row)=>sum+Number(row.current_level||0),0)/Math.max(1,(rows as SkillRow[]).filter((row)=>row.family===module).length))*20) })) : groupByValue(rows, (row:any)=>row.status, "Statut").map((item)=>({ name:item.name, value:item.value })); return <section className="space-y-6"><div className="flex flex-col gap-3 rounded-2xl border border-sky-100 bg-gradient-to-r from-sky-50/90 via-white to-indigo-50/75 p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between dark:border-sky-800/50 dark:from-sky-900/25 dark:via-slate-700/85 dark:to-indigo-900/25"><div><div className="flex items-center gap-2"><TrendingUp className="h-5 w-5 text-indigo-600 dark:text-indigo-400" /><h2 className="text-lg font-black text-slate-950 dark:text-slate-100">Analyse décisionnelle</h2></div><p className="mt-1 text-sm text-slate-500 dark:text-slate-300">Lecture RH filtrée pour décider, prioriser, accompagner et préparer les comités.</p></div><div className="whitespace-nowrap rounded-xl border border-indigo-100 bg-white px-3 py-2 text-xs font-semibold text-indigo-700 shadow-sm dark:border-indigo-900 dark:bg-slate-700/80 dark:text-indigo-300">{rows.length} lignes</div></div><div className="grid gap-5 xl:grid-cols-2"><ChartCard title="Répartition par statut" description="Volumes par statut métier." data={statusData}><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={statusData} dataKey="value" nameKey="name" innerRadius={65} outerRadius={100} paddingAngle={3}>{statusData.map((item,index)=><Cell key={item.name} fill={chartColors[index%chartColors.length]} />)}</Pie><Tooltip/><Legend verticalAlign="bottom"/></PieChart></ResponsiveContainer></ChartCard><ChartCard title={moduleKey === "skills" ? "Radar compétences par module" : "Répartition par service"} description="Lecture décisionnelle par périmètre." data={moduleKey === "skills" ? radarData : departmentData}>{moduleKey === "skills" ? <ResponsiveContainer width="100%" height="100%"><RadarChart data={radarData}><PolarGrid/><PolarAngleAxis dataKey="name" tick={{fontSize:11}}/><PolarRadiusAxis domain={[0,100]}/><Radar dataKey="value" name="Niveau moyen" stroke={chartColors[0]} fill={chartColors[1]} fillOpacity={0.25}/><Tooltip/><Legend/></RadarChart></ResponsiveContainer> : <ResponsiveContainer width="100%" height="100%"><BarChart data={departmentData} layout="vertical"><CartesianGrid strokeDasharray="3 3" horizontal={false}/><XAxis type="number" allowDecimals={false}/><YAxis type="category" dataKey="name" width={140}/><Tooltip/><Legend/><Bar dataKey="value" name="Volume" fill={chartColors[0]} radius={[0,8,8,0]}/></BarChart></ResponsiveContainer>}</ChartCard><ChartCard title="Évolution mensuelle" description="Tendance sur les 12 derniers mois." data={monthlyData}><ResponsiveContainer width="100%" height="100%"><LineChart data={monthlyData}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="name"/><YAxis allowDecimals={false}/><Tooltip/><Legend/><Line type="monotone" dataKey="value" name="Volume" stroke={chartColors[1]} strokeWidth={3}/></LineChart></ResponsiveContainer></ChartCard><ChartCard title={moduleKey === "skills" ? "Couverture par module" : "Volumes par catégorie"} description="Top périmètres à piloter." data={moduleData}><ResponsiveContainer width="100%" height="100%"><BarChart data={moduleData}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="name" tick={{fontSize:11}} interval={0} angle={-20} textAnchor="end" height={70}/><YAxis allowDecimals={false}/><Tooltip/><Legend/><Bar dataKey="value" name="Volume" fill={chartColors[2]} radius={[8,8,0,0]}/></BarChart></ResponsiveContainer></ChartCard></div></section>; }
-function Insight({ title, description, level }: { title: string; description: string; level: "success" | "warning" | "info" }) { const style = level === "success" ? { c:"border-emerald-100 bg-emerald-50/60 dark:border-emerald-900/50 dark:bg-emerald-900/20", i:"bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200", b:"bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200", l:"OK", Icon:CheckCircle2 } : level === "warning" ? { c:"border-rose-100 bg-rose-50/60 dark:border-rose-900/50 dark:bg-rose-900/20", i:"bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-200", b:"bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-200", l:"NOK", Icon:AlertTriangle } : { c:"border-indigo-100 bg-indigo-50/60 dark:border-indigo-900/50 dark:bg-indigo-900/20", i:"bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-200", b:"bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-200", l:"Info", Icon:ShieldAlert }; const Icon=style.Icon; return <article className={`rounded-xl border px-3.5 py-3 ${style.c}`} title={`${title} — ${description}`}><div className="flex items-start gap-3"><div className={`rounded-lg p-1.5 ${style.i}`}><Icon className="h-3.5 w-3.5" /></div><div className="min-w-0 flex-1"><div className="flex items-start justify-between gap-2"><h4 className="line-clamp-2 text-xs font-black leading-snug text-slate-950 dark:text-slate-100">{title}</h4><span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wide ${style.b}`}>{style.l}</span></div><p className="mt-1 line-clamp-2 text-[11px] leading-snug text-slate-600 dark:text-slate-300">{description}</p></div></div></article>; }
-function DecisionPanel({ icon: Icon, title, description, children }: { icon: ComponentType<{ className?: string }>; title: string; description: string; children: ReactNode }) { return <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-600/60 dark:bg-slate-700/70"><div className="border-b border-slate-100 bg-gradient-to-r from-sky-50/70 via-white to-indigo-50/60 px-5 py-4 dark:border-slate-600/55 dark:from-sky-900/25 dark:via-slate-700/85 dark:to-indigo-900/25"><div className="flex items-start gap-3"><div className="rounded-xl bg-indigo-100 p-2.5 text-indigo-700 dark:bg-indigo-900/45 dark:text-indigo-200"><Icon className="h-4 w-4" /></div><div className="min-w-0"><h3 className="truncate text-sm font-black text-slate-950 dark:text-slate-100">{title}</h3><p className="mt-1 truncate text-xs text-slate-500 dark:text-slate-300">{description}</p></div></div></div><div className="space-y-3 p-4">{children}</div></section>; }
-function AlertMetric({ icon: Icon, title, value, description, accent }: { icon: ComponentType<{className?:string}>; title:string; value:number; description:string; accent:Accent }) { return <MetricCard label={title} value={value} description={description} icon={Icon} accent={accent} />; }
-function AlertsPanel({ moduleKey, rows }: { moduleKey: HrTalentModuleKey; rows: ModuleRow[] }) { const actionNeeded = rows.filter((row:any)=>["submitted","manager_approved","to_develop","delayed","employee_input","manager_input","calibration"].includes(row.status)||row.gap>0||row.risk_level==="high").length; const ok = rows.filter((row:any)=>["approved","validated","completed"].includes(row.status)).length; const nok = rows.filter((row:any)=>row.status==="rejected"||row.risk_level==="high"||row.gap>1).length; const missingManager = rows.filter((row:any)=>!row.manager_name).length; const quality = percentage(Math.max(0, rows.length-actionNeeded-missingManager), Math.max(1, rows.length)); return <SectionCard icon={Bell} title="Alertes qualité" description="Synthèse, alertes et recommandations consolidées sur le périmètre filtré."><div className="grid gap-4 xl:grid-cols-3"><DecisionPanel icon={Gauge} title="Synthèse" description="Lecture rapide de la qualité et des actions."><Insight title="Qualité globale" description={`Score estimé : ${quality} %. À contrôler selon complétude, statut, rattachement et données métier.`} level={quality>=80?"success":"info"}/><Insight title="Dossiers exploitables" description={`${ok} élément(s) validés, terminés ou exploitables en reporting.`} level="success"/></DecisionPanel><DecisionPanel icon={AlertTriangle} title="Alertes" description="Points nécessitant une vérification ou action."><Insight title="Actions à traiter" description={`${actionNeeded} élément(s) nécessitent validation, complétion, formation ou arbitrage.`} level={actionNeeded>0?"warning":"success"}/><Insight title="Rattachements incomplets" description={`${missingManager} élément(s) sans manager exploitable pour validation ou accompagnement.`} level={missingManager>0?"warning":"success"}/></DecisionPanel><DecisionPanel icon={Lightbulb} title="Recommandations" description="Actions suggérées pour améliorer le pilotage."><Insight title="Prioriser les écarts critiques" description="Traiter d’abord les niveaux insuffisants, checklists NOK, objectifs non validés et saisies en attente." level="info"/><Insight title="Capitaliser dans les entretiens" description="Relier compétences, projets, formation et objectifs annuels pour bâtir le plan de développement." level="success"/></DecisionPanel></div><div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3"><AlertMetric icon={ShieldAlert} title="Actions à traiter" value={actionNeeded} description="Risque opérationnel ou RH à arbitrer." accent={actionNeeded>0?"amber":"emerald"}/><AlertMetric icon={CheckCircle2} title="OK" value={ok} description="Éléments validés ou exploitables." accent="emerald"/><AlertMetric icon={AlertTriangle} title="NOK" value={nok} description="Éléments bloquants ou insuffisants." accent={nok>0?"rose":"emerald"}/><AlertMetric icon={Users} title="Manager manquant" value={missingManager} description="Validation ou accompagnement fragilisé." accent={missingManager>0?"rose":"emerald"}/><AlertMetric icon={Gauge} title="Score qualité" value={quality} description="Score global du périmètre filtré." accent={quality>=80?"emerald":"amber"}/><AlertMetric icon={Archive} title="Archivables" value={ok} description="Éléments pouvant être archivés après contrôle." accent="sky"/></div></SectionCard>; }
-function buildExportColumns(moduleKey: HrTalentModuleKey): ExportColumn<any>[] {
-  function column(key: string, label: string): ExportColumn<any> {
-    return {
-      key,
-      label,
-      value: (row: any) => {
-        const value = row?.[key];
 
-        if (value === null || value === undefined) {
-          return "";
-        }
+  return (
+    <article className={`min-h-[106px] rounded-2xl border bg-gradient-to-r px-4 py-3.5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${classes.panel}`}>
+      <div className="flex h-full items-center gap-3">
+        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${classes.icon}`}>
+          <Icon className="h-4 w-4" strokeWidth={1.9} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center justify-between gap-3">
+            <p className="truncate text-xs font-black uppercase tracking-wide text-slate-600 dark:text-slate-300">{label}</p>
+            <p className={`shrink-0 text-2xl font-black leading-none ${classes.value}`}>{value}</p>
+          </div>
+          <p className="mt-2 line-clamp-2 text-[11px] leading-4 text-slate-500 dark:text-slate-400">{description}</p>
+        </div>
+      </div>
+    </article>
+  );
+}
 
-        if (typeof value === "object") {
-          try {
-            return JSON.stringify(value);
-          } catch {
-            return String(value);
-          }
-        }
+function Info({ label, value, accent = "slate" }: { label: string; value: ReactNode; accent?: Accent }) {
+  const classes: Record<Accent, string> = {
+    indigo: "bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300",
+    emerald: "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300",
+    amber: "bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
+    rose: "bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300",
+    sky: "bg-sky-50 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300",
+    slate: "bg-slate-50 text-slate-700 dark:bg-slate-800/70 dark:text-slate-300",
+  };
 
-        return value;
-      },
-    };
+  return (
+    <div className={`rounded-xl px-3 py-2 ${classes[accent]}`}>
+      <p className="text-[10px] font-black uppercase tracking-wide opacity-70">{label}</p>
+      <p className="mt-1 truncate text-xs font-bold" title={String(value ?? "")}>{value}</p>
+    </div>
+  );
+}
+
+function ActionMenu({
+  labels,
+  onView,
+  onEdit,
+  onArchive,
+  onRestore,
+  canRestore = false,
+}: {
+  labels: { view: string; edit: string; archive: string; restore: string };
+  onView?: () => void;
+  onEdit?: () => void;
+  onArchive?: () => void;
+  onRestore?: () => void;
+  canRestore?: boolean;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  async function executeAction(action?: () => void) {
+    if (!action) return;
+    setIsProcessing(true);
+    try {
+      action();
+      setIsOpen(false);
+    } finally {
+      setIsProcessing(false);
+    }
   }
 
-  const base: ExportColumn<any>[] = [
-    column("id", "ID"),
-    column("employee_name", "Collaborateur"),
-    column("employee_number", "Matricule"),
-    column("department_name", "Service référentiel"),
-    column("department_free_text", "Service libre"),
-    column("manager_name", "Manager"),
-    column("status", "Statut"),
-    column("archived_at", "Archivé le"),
-  ];
+  return (
+    <div ref={menuRef} className="relative inline-flex">
+      <button
+        type="button"
+        aria-label="Voir, modifier, archiver ou réactiver la fiche"
+        title="Voir, modifier, archiver ou réactiver"
+        disabled={isProcessing}
+        onClick={(event) => {
+          event.stopPropagation();
+          setIsOpen((current) => !current);
+        }}
+        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600/60 dark:bg-slate-700/70 dark:text-slate-300 dark:hover:border-indigo-900 dark:hover:bg-indigo-700/35 dark:hover:text-indigo-300"
+      >
+        {isProcessing ? <Archive className="h-3.5 w-3.5 animate-pulse" /> : <MoreHorizontal className="h-3.5 w-3.5" />}
+      </button>
 
+      {isOpen && (
+        <div
+          onClick={(event) => event.stopPropagation()}
+          className="absolute right-0 top-10 z-30 w-56 overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl dark:border-slate-600/60 dark:bg-slate-700/70"
+        >
+          {canRestore ? (
+            <button type="button" onClick={() => void executeAction(onRestore)} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-bold text-emerald-700 transition hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/30">
+              <ArchiveRestore className="h-4 w-4" />
+              {labels.restore}
+            </button>
+          ) : (
+            <>
+              <button type="button" onClick={() => void executeAction(onView)} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-bold text-sky-700 transition hover:bg-sky-50 dark:text-sky-300 dark:hover:bg-sky-700/35">
+                <Eye className="h-4 w-4" />
+                {labels.view}
+              </button>
+              <button type="button" onClick={() => void executeAction(onEdit)} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-bold text-indigo-700 transition hover:bg-indigo-50 dark:text-indigo-300 dark:hover:bg-indigo-700/35">
+                <Edit3 className="h-4 w-4" />
+                {labels.edit}
+              </button>
+              <div className="my-1 border-t border-slate-100 dark:border-slate-600/60" />
+              <button type="button" onClick={() => void executeAction(onArchive)} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-bold text-slate-600 transition hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-600/70">
+                <Archive className="h-4 w-4" />
+                {labels.archive}
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FiltersPanel({ moduleKey, rows, catalog, employees, value, onChange, resultCount }: { moduleKey: HrTalentModuleKey; rows: AnyRow[]; catalog: SkillCatalogItem[]; employees: Employee[]; value: FilterValue; onChange: (value: FilterValue) => void; resultCount: number }) {
+  const statuses = uniqueValues(rows, (row) => row.status);
+  const departments = uniqueValues(rows, getEmployeeDepartment);
+  const modules = uniqueValues(catalog, (skill) => skill.family);
+  const submodules = uniqueValues(catalog.filter((skill) => value.module === "all" || skill.family === value.module), (skill) => skill.category);
+  const activityTypes = uniqueValues(rows, (row) => row.activity_type);
+  const hasFilters = JSON.stringify(value) !== JSON.stringify(emptyFilters);
+
+  function update<K extends keyof FilterValue>(field: K, fieldValue: FilterValue[K]) {
+    const next = { ...value, [field]: fieldValue };
+    if (field === "module") next.submodule = "all";
+    onChange(next);
+  }
+
+  return (
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950">
+      <div className="border-b border-slate-100 bg-gradient-to-r from-sky-50/70 via-white to-indigo-50/60 px-5 py-4 dark:border-slate-800 dark:from-sky-950/20 dark:via-slate-950 dark:to-indigo-950/20">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="rounded-xl bg-sky-100 p-2.5 text-sky-700 dark:bg-sky-950 dark:text-sky-300"><SlidersHorizontal className="h-4 w-4" /></div>
+            <div>
+              <h2 className="text-sm font-bold text-slate-950 dark:text-white">Périmètre d’analyse</h2>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Les filtres pilotent les KPI, les analyses, les graphiques et les exports.</p>
+            </div>
+          </div>
+          <div className="rounded-full border border-indigo-100 bg-white px-3 py-1.5 text-xs font-semibold text-indigo-700 shadow-sm dark:border-indigo-900 dark:bg-slate-950 dark:text-indigo-300">
+            {resultCount} résultat{resultCount > 1 ? "s" : ""} sur {rows.length}
+          </div>
+        </div>
+      </div>
+      <div className="space-y-4 p-5">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-indigo-500" />
+          <input
+            type="search"
+            value={value.search}
+            onChange={(event) => update("search", event.target.value)}
+            placeholder="Rechercher une ressource, compétence, module, projet, manager, statut..."
+            className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-50 dark:border-slate-800 dark:bg-slate-900 dark:text-white dark:focus:border-indigo-600 dark:focus:bg-slate-950 dark:focus:ring-indigo-950"
+          />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <select value={value.status} onChange={(event) => update("status", event.target.value)} className={selectClassName}>
+            <option value="all">Tous les statuts</option>
+            {statuses.map((status) => <option key={status} value={status}>{labelStatus(moduleKey, status)}</option>)}
+          </select>
+          <select value={value.department} onChange={(event) => update("department", event.target.value)} className={selectClassName}>
+            <option value="all">Tous les services</option>
+            {departments.map((department) => <option key={department} value={department}>{department}</option>)}
+          </select>
+          <select value={value.resource} onChange={(event) => update("resource", event.target.value)} className={selectClassName}>
+            <option value="all">Toutes les ressources</option>
+            {employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.full_name || employee.employee_number || employee.id}</option>)}
+          </select>
+          {moduleKey === "skills" ? (
+            <select value={value.module} onChange={(event) => update("module", event.target.value)} className={selectClassName}>
+              <option value="all">Tous les modules</option>
+              {modules.map((module) => <option key={module} value={module}>{module}</option>)}
+            </select>
+          ) : (
+            <select value={value.need} onChange={(event) => update("need", event.target.value)} className={selectClassName}>
+              <option value="all">Tous les besoins</option>
+              <option value="gap">Action à traiter</option>
+              <option value="critical">Risque critique</option>
+            </select>
+          )}
+          {moduleKey === "skills" && (
+            <>
+              <select value={value.submodule} onChange={(event) => update("submodule", event.target.value)} className={selectClassName}>
+                <option value="all">Tous les sous-modules</option>
+                {submodules.map((submodule) => <option key={submodule} value={submodule}>{submodule}</option>)}
+              </select>
+              <select value={value.level} onChange={(event) => update("level", event.target.value)} className={selectClassName}>
+                <option value="all">Tous les niveaux</option>
+                <option value="0">Niveau 0</option>
+                <option value="1">Niveau 1</option>
+                <option value="2">Niveau 2</option>
+                <option value="3">Niveau 3</option>
+                <option value="4">Niveau 4</option>
+              </select>
+              <select value={value.need} onChange={(event) => update("need", event.target.value)} className={selectClassName}>
+                <option value="all">Tous les besoins</option>
+                <option value="gap">Écart cible / réel</option>
+                <option value="critical">Compétence critique</option>
+                <option value="expert">Experts disponibles</option>
+                <option value="project_gap">Écart besoin projet</option>
+              </select>
+            </>
+          )}
+          {moduleKey === "time" && (
+            <>
+              <select value={value.period} onChange={(event) => update("period", event.target.value)} className={selectClassName}>
+                <option value="all">Toutes les périodes</option>
+                <option value="current_month">Mois en cours</option>
+                <option value="previous_month">Mois précédent</option>
+                <option value="current_year">Année en cours</option>
+              </select>
+              <select value={value.activity} onChange={(event) => update("activity", event.target.value)} className={selectClassName}>
+                <option value="all">Toutes les rubriques</option>
+                {activityTypes.map((activity) => <option key={activity} value={activity}>{activity}</option>)}
+              </select>
+            </>
+          )}
+        </div>
+        {hasFilters && (
+          <div className="flex justify-end">
+            <button type="button" onClick={() => onChange(emptyFilters)} className="inline-flex h-9 items-center gap-2 rounded-lg px-3 text-xs font-semibold text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-slate-900 dark:hover:text-white">
+              <X className="h-4 w-4" />
+              Réinitialiser les filtres
+            </button>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function buildSkillResourceSummaries(rows: AnyRow[], employees: Employee[]) {
+  const rowsByEmployee = new Map<string, AnyRow[]>();
+  rows.forEach((row) => {
+    const key = row.employee_id || "missing";
+    rowsByEmployee.set(key, [...(rowsByEmployee.get(key) ?? []), row]);
+  });
+
+  return Array.from(rowsByEmployee.entries()).map(([employeeId, employeeRows]) => {
+    const employee = employees.find((item) => item.id === employeeId) || employeeRows[0] || ({ id: employeeId } as Employee);
+    const counts = [0, 0, 0, 0, 0];
+    employeeRows.forEach((row) => counts[clampLevel(row.current_level)] += 1);
+    const lastEvaluation = employeeRows.map((row) => row.last_self_assessment_at || row.assessment_date || row.updated_at).filter(Boolean).sort().at(-1) || null;
+    const strongSkills = employeeRows.filter((row) => clampLevel(row.current_level) >= 3).map((row) => row.skill_name).filter(Boolean).slice(0, 4);
+    const weakSkills = employeeRows.filter((row) => clampLevel(row.current_level) <= 1 || Number(row.gap ?? 0) > 0).map((row) => row.skill_name).filter(Boolean).slice(0, 4);
+    const mentors = rows
+      .filter((candidate) => candidate.employee_id !== employeeId && clampLevel(candidate.current_level) >= 3 && employeeRows.some((gap) => gap.skill_id === candidate.skill_id && Number(gap.gap ?? 0) > 0))
+      .map((candidate) => fullName(candidate))
+      .filter(Boolean)
+      .slice(0, 5);
+
+    return { employee, rows: employeeRows, counts, lastEvaluation, strongSkills, weakSkills, mentors };
+  }).sort((a, b) => fullName(a.employee).localeCompare(fullName(b.employee), "fr", { sensitivity: "base" }));
+}
+
+function SkillResourceCard({ summary, onArchive }: { summary: ReturnType<typeof buildSkillResourceSummaries>[number]; onArchive: () => void }) {
+  const employee = summary.employee as any;
+  return (
+    <article className="group rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-indigo-200 hover:bg-indigo-50/25 hover:shadow-md dark:border-slate-600/60 dark:bg-slate-700/70 dark:hover:bg-indigo-900/20">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="truncate text-sm font-black text-slate-950 dark:text-slate-100">{fullName(employee)}</h3>
+          <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500 dark:text-slate-300">{employee.employee_number || "Matricule non renseigné"} · {getEmployeeDepartment(employee)} · {getEmployeeJob(employee)}</p>
+        </div>
+        <ActionMenu labels={{ view: "Voir la ressource", edit: "Modifier la ressource", archive: "Archiver la ressource", restore: "Réactiver la ressource" }} onArchive={onArchive} />
+      </div>
+      <div className="mt-4 grid gap-2 sm:grid-cols-2">
+        <Info label="Dernière évaluation" value={formatDate(summary.lastEvaluation)} accent="sky" />
+        <Info label="Prochaine évaluation" value={addOneYear(summary.lastEvaluation)} accent="indigo" />
+      </div>
+      <div className="mt-4 grid grid-cols-5 gap-2">
+        {summary.counts.map((count, index) => (
+          <div key={index} className="rounded-xl border border-slate-200 bg-slate-50 px-2 py-2 text-center dark:border-slate-600/60 dark:bg-slate-800/70">
+            <p className="text-[10px] font-black text-slate-400">{levelShortLabels[index]}</p>
+            <p className="mt-1 text-lg font-black text-slate-950 dark:text-white">{count}</p>
+          </div>
+        ))}
+      </div>
+      <div className="mt-4 grid gap-3 lg:grid-cols-2">
+        <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-3 dark:border-emerald-900/50 dark:bg-emerald-900/20">
+          <p className="text-[10px] font-black uppercase tracking-wide text-emerald-700 dark:text-emerald-300">Compétences fortes ≥ 3</p>
+          <p className="mt-1 line-clamp-2 text-xs font-bold text-emerald-800 dark:text-emerald-200">{summary.strongSkills.length ? summary.strongSkills.join(" · ") : "Aucune compétence forte identifiée sur le périmètre."}</p>
+        </div>
+        <div className="rounded-xl border border-rose-100 bg-rose-50/60 p-3 dark:border-rose-900/50 dark:bg-rose-900/20">
+          <p className="text-[10px] font-black uppercase tracking-wide text-rose-700 dark:text-rose-300">Compétences ≤ 1 / écarts</p>
+          <p className="mt-1 line-clamp-2 text-xs font-bold text-rose-800 dark:text-rose-200">{summary.weakSkills.length ? summary.weakSkills.join(" · ") : "Aucun écart majeur détecté."}</p>
+        </div>
+      </div>
+      <div className="mt-3 rounded-xl border border-indigo-100 bg-indigo-50/60 p-3 dark:border-indigo-900/50 dark:bg-indigo-900/20">
+        <p className="text-[10px] font-black uppercase tracking-wide text-indigo-700 dark:text-indigo-300">Experts internes pour accompagner</p>
+        <p className="mt-1 line-clamp-2 text-xs font-bold text-indigo-800 dark:text-indigo-200">{summary.mentors.length ? summary.mentors.join(" · ") : "Aucun expert interne identifié sur les écarts filtrés."}</p>
+      </div>
+    </article>
+  );
+}
+
+function SkillResourceTable({ rows, onArchive }: { rows: AnyRow[]; onArchive: (row: AnyRow) => void }) {
+  return (
+    <div className="max-h-[520px] overflow-auto rounded-2xl border border-slate-200 shadow-sm dark:border-slate-600/70">
+      <table className="w-full min-w-[1380px] border-separate border-spacing-0 bg-white text-sm dark:bg-slate-700/65">
+        <thead className="sticky top-0 z-20 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-700 dark:text-slate-300">
+          <tr>
+            <th className="sticky left-0 z-30 bg-slate-50 px-4 py-3 text-left dark:bg-slate-700">Ressource</th>
+            <th className="px-4 py-3 text-left">Module</th>
+            <th className="px-4 py-3 text-left">Sous-module</th>
+            <th className="px-4 py-3 text-left">Compétence</th>
+            <th className="px-4 py-3 text-left">Niveau actuel</th>
+            <th className="px-4 py-3 text-left">Niveau cible</th>
+            <th className="px-4 py-3 text-left">Écart</th>
+            <th className="px-4 py-3 text-left">Projet / besoin</th>
+            <th className="px-4 py-3 text-left">Preuve</th>
+            <th className="sticky right-0 z-30 bg-slate-50 px-4 py-3 text-right dark:bg-slate-700">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.id} className="hover:bg-indigo-50/45 dark:hover:bg-indigo-900/20">
+              <td className="sticky left-0 z-10 bg-white px-4 py-3 font-bold text-slate-950 dark:bg-slate-700 dark:text-slate-100">{fullName(row)}</td>
+              <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{row.family || "—"}</td>
+              <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{row.category || "—"}</td>
+              <td className="px-4 py-3 font-semibold text-slate-700 dark:text-slate-200">{row.skill_name || "—"}</td>
+              <td className="px-4 py-3">{levelLabels[clampLevel(row.current_level)]}</td>
+              <td className="px-4 py-3">{levelLabels[clampLevel(row.target_level)]}</td>
+              <td className="px-4 py-3"><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${Number(row.gap ?? 0) > 0 ? "bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300" : "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"}`}>{row.gap ?? 0}</span></td>
+              <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{row.project_context || "—"}</td>
+              <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{row.evidence || "—"}</td>
+              <td className="sticky right-0 z-10 bg-white px-4 py-3 text-right dark:bg-slate-700"><ActionMenu labels={{ view: "Voir la ressource", edit: "Modifier la ressource", archive: "Archiver la ressource", restore: "Réactiver la ressource" }} onArchive={() => onArchive(row)} /></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function LibraryPanel({ catalog, rows }: { catalog: SkillCatalogItem[]; rows: AnyRow[] }) {
+  const employees = uniqueValues(rows, (row) => fullName(row));
+  return (
+    <SectionCard icon={BookOpen} title="Bibliothèque de compétences" description="Référentiel complet : modules, sous-modules, compétences, attendus de niveau et auto-évaluations par ressource.">
+      <div className="max-h-[620px] overflow-auto rounded-2xl border border-slate-200 shadow-sm dark:border-slate-600/70">
+        <table className="w-full min-w-[1720px] border-separate border-spacing-0 bg-white text-sm dark:bg-slate-700/65">
+          <thead className="sticky top-0 z-20 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-700 dark:text-slate-300">
+            <tr>
+              <th className="sticky left-0 z-30 bg-slate-50 px-4 py-3 text-left dark:bg-slate-700">Module</th>
+              <th className="px-4 py-3 text-left">Sous-module</th>
+              <th className="px-4 py-3 text-left">Compétence</th>
+              <th className="px-4 py-3 text-left">Criticité</th>
+              <th className="px-4 py-3 text-left">Description Niveau 0</th>
+              <th className="px-4 py-3 text-left">Description Niveau 1</th>
+              <th className="px-4 py-3 text-left">Description Niveau 2</th>
+              <th className="px-4 py-3 text-left">Description Niveau 3</th>
+              <th className="px-4 py-3 text-left">Description Niveau 4</th>
+              {employees.slice(0, 12).map((employee) => <th key={employee} className="px-4 py-3 text-left">{employee}</th>)}
+              <th className="sticky right-0 z-30 bg-slate-50 px-4 py-3 text-right dark:bg-slate-700">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {catalog.map((skill) => {
+              const expectations = skill.level_expectations || {};
+              return (
+                <tr key={skill.id} className="hover:bg-indigo-50/45 dark:hover:bg-indigo-900/20">
+                  <td className="sticky left-0 z-10 bg-white px-4 py-3 font-bold text-slate-950 dark:bg-slate-700 dark:text-slate-100">{skill.family || "—"}</td>
+                  <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{skill.category || "—"}</td>
+                  <td className="px-4 py-3 font-semibold text-slate-700 dark:text-slate-200">{skill.name}</td>
+                  <td className="px-4 py-3"><span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-700 dark:bg-indigo-900/35 dark:text-indigo-300">{skill.criticality || "standard"}</span></td>
+                  {[0, 1, 2, 3, 4].map((level) => <td key={level} className="px-4 py-3 text-xs leading-5 text-slate-600 dark:text-slate-300">{expectations[String(level)] || "—"}</td>)}
+                  {employees.slice(0, 12).map((employee) => {
+                    const match = rows.find((row) => row.skill_id === skill.id && fullName(row) === employee);
+                    return <td key={employee} className="px-4 py-3 font-bold text-slate-700 dark:text-slate-200">{match ? `N${clampLevel(match.current_level)}` : "—"}</td>;
+                  })}
+                  <td className="sticky right-0 z-10 bg-white px-4 py-3 text-right dark:bg-slate-700"><ActionMenu labels={{ view: "Voir la compétence", edit: "Modifier la compétence", archive: "Archiver la compétence", restore: "Réactiver la compétence" }} /></td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </SectionCard>
+  );
+}
+
+function OnboardingChecklist({ row }: { row: AnyRow }) {
+  const items = Array.isArray(row.checklist_items) ? row.checklist_items : [];
+  return (
+    <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-600/60 dark:bg-slate-800/55">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs font-black text-slate-950 dark:text-white">Checklist d’intégration</p>
+        <div className="flex gap-1.5">
+          {(["OK", "NOK", "NA"] as const).map((status) => (
+            <span key={status} className={`rounded-full px-2 py-1 text-[10px] font-black ${status === "OK" ? "bg-emerald-50 text-emerald-700" : status === "NOK" ? "bg-rose-50 text-rose-700" : "bg-indigo-50 text-indigo-700"}`}>{status} {items.filter((item: any) => item?.status === status).length}</span>
+          ))}
+        </div>
+      </div>
+      <div className="mt-3 space-y-2">
+        {items.filter((item: any) => item?.status === "NOK").slice(0, 5).map((item: any, index: number) => (
+          <div key={`${item.label}-${index}`} className="flex items-start justify-between gap-3 rounded-xl bg-white px-3 py-2 dark:bg-slate-700/70">
+            <div className="min-w-0">
+              <p className="truncate text-xs font-bold text-slate-900 dark:text-slate-100">{item.label}</p>
+              <p className="mt-0.5 truncate text-[11px] text-slate-500 dark:text-slate-300">{item.owner} · {item.note}</p>
+            </div>
+            <span className="rounded-full bg-rose-50 px-2 py-1 text-[10px] font-black text-rose-700 dark:bg-rose-900/30 dark:text-rose-300">NOK</span>
+          </div>
+        ))}
+        {items.filter((item: any) => item?.status === "NOK").length === 0 && <p className="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">Aucun point bloquant déclaré.</p>}
+      </div>
+    </div>
+  );
+}
+
+function ReviewTemplate({ row }: { row: AnyRow }) {
+  const details = row.review_details || {};
+  return (
+    <div className="mt-4 grid gap-3 lg:grid-cols-2">
+      <Info label="Bilan année écoulée" value={details?.previous_year?.objectives || "À compléter"} accent="sky" />
+      <Info label="Atteinte N-1" value={`${details?.previous_year?.achievement ?? 0} %`} accent="emerald" />
+      <Info label="Objectifs en cours" value={details?.current_year?.objectives || "À définir"} accent="indigo" />
+      <Info label="Formations à prévoir" value={Array.isArray(details?.training) ? details.training.join(" · ") : "À qualifier"} accent="amber" />
+      <Info label="Validation collaborateur" value={details?.employee_validation ? "OK" : "NOK"} accent={details?.employee_validation ? "emerald" : "rose"} />
+      <Info label="Validation N+1" value={details?.manager_validation ? "OK" : "NOK"} accent={details?.manager_validation ? "emerald" : "rose"} />
+    </div>
+  );
+}
+
+function formatHours(value: unknown) {
+  const numeric = Number(value ?? 0);
+  return `${Number.isFinite(numeric) ? numeric.toFixed(2).replace(".00", "") : "0"} h`;
+}
+
+function formatCurrency(value: unknown) {
+  const numeric = Number(value ?? 0);
+  return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(Number.isFinite(numeric) ? numeric : 0);
+}
+
+function getTimeTotalHours(row: AnyRow) {
+  return Number(row.total_hours ?? row.total_pointage_hours ?? row.duration_hours ?? 0);
+}
+
+function getTimeTotalCost(row: AnyRow) {
+  return Number(row.total_cost ?? row.total_pointage_cost ?? row.loaded_cost_total ?? 0);
+}
+
+
+type TimeProjectSummary = AnyRow & {
+  detailRows: AnyRow[];
+  resourcesCount: number;
+  firstDate?: string | null;
+  lastDate?: string | null;
+};
+
+const timeFields = [
+  "avv_hours",
+  "management_hours",
+  "production_hours",
+  "rework_hours",
+  "training_hours",
+  "intercontract_hours",
+  "avv_cost",
+  "management_cost",
+  "production_cost",
+  "rework_cost",
+  "purchase_cost",
+  "expense_cost",
+  "total_hours",
+  "total_cost",
+];
+
+function buildTimeProjectSummaries(rows: AnyRow[]): TimeProjectSummary[] {
+  const groups = new Map<string, TimeProjectSummary>();
+
+  rows.forEach((row) => {
+    const projectNumber = row.project_number || "Projet non renseigné";
+    const existing = groups.get(projectNumber);
+    if (!existing) {
+      groups.set(projectNumber, {
+        ...row,
+        id: `project-${projectNumber}`,
+        project_number: projectNumber,
+        project_designation: row.project_designation || row.description || "Pointages consolidés",
+        detailRows: [row],
+        resourcesCount: new Set([row.employee_id].filter(Boolean)).size,
+        firstDate: row.activity_date,
+        lastDate: row.activity_date,
+      });
+      return;
+    }
+
+    existing.detailRows.push(row);
+    existing.resourcesCount = new Set(existing.detailRows.map((item) => item.employee_id).filter(Boolean)).size;
+    existing.firstDate = [existing.firstDate, row.activity_date].filter(Boolean).sort()[0] || existing.firstDate;
+    existing.lastDate = [existing.lastDate, row.activity_date].filter(Boolean).sort().slice(-1)[0] || existing.lastDate;
+    existing.project_designation = existing.project_designation || row.project_designation || row.description;
+    existing.status = existing.status === "rejected" || row.status === "rejected" ? "rejected" : existing.status === "submitted" || row.status === "submitted" ? "submitted" : existing.status || row.status;
+    existing.validation_manager_status = existing.validation_manager_status === "rejected" || row.validation_manager_status === "rejected" ? "rejected" : existing.validation_manager_status === "submitted" || row.validation_manager_status === "submitted" ? "submitted" : existing.validation_manager_status || row.validation_manager_status;
+
+    timeFields.forEach((field) => {
+      existing[field] = Number(existing[field] || 0) + Number(row[field] || 0);
+    });
+  });
+
+  return Array.from(groups.values()).sort((a, b) => String(a.project_number).localeCompare(String(b.project_number), "fr", { sensitivity: "base" }));
+}
+
+function ProjectTimeDrawer({ summary, onClose }: { summary: TimeProjectSummary; onClose: () => void }) {
+  const [year, setYear] = useState("all");
+  const [month, setMonth] = useState("all");
+  const [week, setWeek] = useState("all");
+  const [resource, setResource] = useState("all");
+  const rows = summary.detailRows;
+  const years = uniqueValues(rows, (row) => row.activity_date ? String(new Date(row.activity_date).getFullYear()) : null);
+  const months = uniqueValues(rows, (row) => row.month_label || getMonthLabel(row.activity_date));
+  const weeks = uniqueValues(rows, (row) => String(row.week_number || getWeekNumber(row.activity_date)));
+  const resources = uniqueValues(rows, (row) => fullName(row));
+  const isIntercontract = String(summary.project_number || "").startsWith("IC-");
+  const filtered = rows.filter((row) => {
+    const rowYear = row.activity_date ? String(new Date(row.activity_date).getFullYear()) : "";
+    const rowMonth = row.month_label || getMonthLabel(row.activity_date);
+    const rowWeek = String(row.week_number || getWeekNumber(row.activity_date));
+    if (year !== "all" && rowYear !== year) return false;
+    if (month !== "all" && rowMonth !== month) return false;
+    if (week !== "all" && rowWeek !== week) return false;
+    if (resource !== "all" && fullName(row) !== resource) return false;
+    return true;
+  });
+  const total = (field: string) => filtered.reduce((sum, row) => sum + Number(row[field] || 0), 0);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4" onClick={onClose}>
+      <article className="max-h-[92vh] w-full max-w-7xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-600 dark:bg-slate-800" onClick={(event) => event.stopPropagation()}>
+        <div className="border-b border-slate-100 bg-gradient-to-r from-sky-50/70 via-white to-indigo-50/60 px-5 py-4 dark:border-slate-600 dark:from-sky-900/25 dark:via-slate-800 dark:to-indigo-900/25">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-black text-slate-950 dark:text-white">{summary.project_number} · {summary.project_designation}</h2>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-300">Détail des pointages par ressource, jour, semaine et rubrique.</p>
+            </div>
+            <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-700 dark:hover:text-white"><X className="h-4 w-4" /></button>
+          </div>
+        </div>
+        <div className="max-h-[78vh] space-y-4 overflow-auto p-5">
+          <div className="grid gap-3 md:grid-cols-4">
+            <Info label="Date de début" value={formatDate(summary.firstDate)} accent="sky" />
+            <Info label="Date de fin" value={formatDate(summary.lastDate)} accent="indigo" />
+            <Info label="Statut projet" value={isIntercontract ? "Intercontrat annuel" : labelStatus("time", summary.status)} accent={isIntercontract ? "slate" : "emerald"} />
+            <Info label="Ressources" value={summary.resourcesCount} accent="emerald" />
+          </div>
+          <div className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-600 dark:bg-slate-900/35 sm:grid-cols-2 xl:grid-cols-4">
+            <select value={year} onChange={(event) => setYear(event.target.value)} className={selectClassName}><option value="all">Toutes les années</option>{years.map((item) => <option key={item} value={item}>{item}</option>)}</select>
+            <select value={month} onChange={(event) => setMonth(event.target.value)} className={selectClassName}><option value="all">Tous les mois</option>{months.map((item) => <option key={item} value={item}>{item}</option>)}</select>
+            <select value={week} onChange={(event) => setWeek(event.target.value)} className={selectClassName}><option value="all">Toutes les semaines</option>{weeks.map((item) => <option key={item} value={item}>S{item}</option>)}</select>
+            <select value={resource} onChange={(event) => setResource(event.target.value)} className={selectClassName}><option value="all">Toutes les ressources</option>{resources.map((item) => <option key={item} value={item}>{item}</option>)}</select>
+          </div>
+          <div className="max-h-[360px] overflow-auto rounded-2xl border border-slate-200 shadow-sm dark:border-slate-600/70">
+            <table className="w-full min-w-[1800px] border-separate border-spacing-0 bg-white text-sm dark:bg-slate-700/65">
+              <thead className="sticky top-0 z-20 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-700 dark:text-slate-300">
+                <tr><th className="sticky left-0 z-30 bg-slate-50 px-4 py-3 text-left dark:bg-slate-700">Équipe</th><th className="px-4 py-3 text-left">Jour de semaine</th><th className="px-4 py-3 text-left">Date</th><th className="px-4 py-3 text-right">AVV (h)</th><th className="px-4 py-3 text-right">Management (h)</th><th className="px-4 py-3 text-right">Production (h)</th><th className="px-4 py-3 text-right">Reprise (h)</th><th className="px-4 py-3 text-right">Formation (h)</th><th className="px-4 py-3 text-right">Intercontrat (h)</th><th className="px-4 py-3 text-right">AVV (€)</th><th className="px-4 py-3 text-right">Management (€)</th><th className="px-4 py-3 text-right">Production (€)</th><th className="px-4 py-3 text-right">Reprise (€)</th><th className="px-4 py-3 text-right">Achat (€)</th><th className="px-4 py-3 text-right">Frais (€)</th><th className="px-4 py-3 text-right">Total pointage (h)</th><th className="px-4 py-3 text-right">Total coûts (€)</th></tr>
+              </thead>
+              <tbody>
+                {filtered.map((row) => (
+                  <tr key={row.id} className="hover:bg-indigo-50/45 dark:hover:bg-indigo-900/20">
+                    <td className="sticky left-0 z-10 bg-white px-4 py-3 font-bold text-slate-950 dark:bg-slate-700 dark:text-slate-100">{fullName(row)}</td>
+                    <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{getDayName(row.activity_date)} · S{row.week_number || getWeekNumber(row.activity_date)}</td>
+                    <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{formatDate(row.activity_date)}</td>
+                    <td className="px-4 py-3 text-right">{formatHours(row.avv_hours)}</td><td className="px-4 py-3 text-right">{formatHours(row.management_hours)}</td><td className="px-4 py-3 text-right">{formatHours(row.production_hours)}</td><td className="px-4 py-3 text-right">{formatHours(row.rework_hours)}</td><td className="px-4 py-3 text-right">{formatHours(row.training_hours)}</td><td className="px-4 py-3 text-right">{formatHours(row.intercontract_hours)}</td><td className="px-4 py-3 text-right">{formatCurrency(row.avv_cost)}</td><td className="px-4 py-3 text-right">{formatCurrency(row.management_cost)}</td><td className="px-4 py-3 text-right">{formatCurrency(row.production_cost)}</td><td className="px-4 py-3 text-right">{formatCurrency(row.rework_cost)}</td><td className="px-4 py-3 text-right">{formatCurrency(row.purchase_cost)}</td><td className="px-4 py-3 text-right">{formatCurrency(row.expense_cost)}</td><td className="px-4 py-3 text-right font-bold text-emerald-700 dark:text-emerald-300">{formatHours(getTimeTotalHours(row))}</td><td className="px-4 py-3 text-right font-bold text-indigo-700 dark:text-indigo-300">{formatCurrency(getTimeTotalCost(row))}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot className="sticky bottom-0 bg-slate-50 text-sm font-black text-slate-900 dark:bg-slate-700 dark:text-white">
+                <tr><td className="sticky left-0 bg-slate-50 px-4 py-3 dark:bg-slate-700" colSpan={3}>Total</td><td className="px-4 py-3 text-right">{formatHours(total("avv_hours"))}</td><td className="px-4 py-3 text-right">{formatHours(total("management_hours"))}</td><td className="px-4 py-3 text-right">{formatHours(total("production_hours"))}</td><td className="px-4 py-3 text-right">{formatHours(total("rework_hours"))}</td><td className="px-4 py-3 text-right">{formatHours(total("training_hours"))}</td><td className="px-4 py-3 text-right">{formatHours(total("intercontract_hours"))}</td><td className="px-4 py-3 text-right">{formatCurrency(total("avv_cost"))}</td><td className="px-4 py-3 text-right">{formatCurrency(total("management_cost"))}</td><td className="px-4 py-3 text-right">{formatCurrency(total("production_cost"))}</td><td className="px-4 py-3 text-right">{formatCurrency(total("rework_cost"))}</td><td className="px-4 py-3 text-right">{formatCurrency(total("purchase_cost"))}</td><td className="px-4 py-3 text-right">{formatCurrency(total("expense_cost"))}</td><td className="px-4 py-3 text-right">{formatHours(total("total_hours"))}</td><td className="px-4 py-3 text-right">{formatCurrency(total("total_cost"))}</td></tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      </article>
+    </div>
+  );
+}
+
+function TimeProjectCard({ summary, onArchive, onRestore }: { summary: TimeProjectSummary; onArchive: () => void; onRestore: () => void }) {
+  const [selected, setSelected] = useState<TimeProjectSummary | null>(null);
+  const isArchived = Boolean(summary.archived_at) || summary.status === "archived";
+  const labels = { view: "Voir le pointage", edit: "Modifier le pointage", archive: "Archiver le pointage", restore: "Réactiver le pointage" };
+  return (<><article onClick={() => setSelected(summary)} className="group cursor-pointer rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-indigo-200 hover:bg-indigo-50/25 hover:shadow-md dark:border-slate-600/60 dark:bg-slate-700/70 dark:hover:bg-indigo-900/20"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><h3 className="truncate text-sm font-black text-slate-950 dark:text-slate-100">{summary.project_number} · {summary.project_designation}</h3><p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500 dark:text-slate-300">{summary.resourcesCount} ressource(s) · {formatDate(summary.firstDate)} → {formatDate(summary.lastDate)} · validation {summary.validation_manager_status || labelStatus("time", summary.status)}</p></div><ActionMenu labels={labels} canRestore={isArchived} onView={() => setSelected(summary)} onEdit={() => setSelected(summary)} onArchive={onArchive} onRestore={onRestore} /></div><div className="mt-4 grid gap-2 sm:grid-cols-4"><Info label="AVV" value={formatHours(summary.avv_hours)} accent="amber" /><Info label="Management" value={formatHours(summary.management_hours)} accent="indigo" /><Info label="Production" value={formatHours(summary.production_hours)} accent="emerald" /><Info label="Reprise" value={formatHours(summary.rework_hours)} accent="rose" /><Info label="Formation" value={formatHours(summary.training_hours)} accent="sky" /><Info label="Intercontrat" value={formatHours(summary.intercontract_hours)} accent="slate" /><Info label="Total heures" value={formatHours(summary.total_hours)} accent="emerald" /><Info label="Total coûts" value={formatCurrency(summary.total_cost)} accent="indigo" /></div></article>{selected && <ProjectTimeDrawer summary={selected} onClose={() => setSelected(null)} />}</>);
+}
+
+function TimeProjectTable({ rows, onArchive, onRestore }: { rows: TimeProjectSummary[]; onArchive: (row: TimeProjectSummary) => void; onRestore: (row: TimeProjectSummary) => void }) {
+  const [selected, setSelected] = useState<TimeProjectSummary | null>(null);
+  const labels = { view: "Voir le pointage", edit: "Modifier le pointage", archive: "Archiver le pointage", restore: "Réactiver le pointage" };
+  return (<>{selected && <ProjectTimeDrawer summary={selected} onClose={() => setSelected(null)} />}<div className="max-h-[330px] overflow-auto rounded-2xl border border-slate-200 shadow-sm dark:border-slate-600/70"><table className="w-full min-w-[2100px] border-separate border-spacing-0 bg-white text-sm dark:bg-slate-700/65"><thead className="sticky top-0 z-20 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-700 dark:text-slate-300"><tr><th className="sticky left-0 z-30 bg-slate-50 px-4 py-3 text-left dark:bg-slate-700">N° projet</th><th className="px-4 py-3 text-left">Désignation projet</th><th className="px-4 py-3 text-right">AVV (h)</th><th className="px-4 py-3 text-right">Management (h)</th><th className="px-4 py-3 text-right">Production (h)</th><th className="px-4 py-3 text-right">Reprise (h)</th><th className="px-4 py-3 text-right">Formation (h)</th><th className="px-4 py-3 text-right">Intercontrat (h)</th><th className="px-4 py-3 text-right">Achat (€)</th><th className="px-4 py-3 text-right">Frais (€)</th><th className="px-4 py-3 text-right">Total pointage (h)</th><th className="px-4 py-3 text-right">Total coûts (€)</th><th className="px-4 py-3 text-left">Validation N+1</th><th className="sticky right-0 z-30 bg-slate-50 px-4 py-3 text-right dark:bg-slate-700">Actions</th></tr></thead><tbody>{rows.map((row) => { const isArchived = Boolean(row.archived_at) || row.status === "archived"; return <tr key={row.id} onClick={() => setSelected(row)} className="cursor-pointer hover:bg-indigo-50/45 dark:hover:bg-indigo-900/20"><td className="sticky left-0 z-10 bg-white px-4 py-3 font-bold text-slate-950 dark:bg-slate-700 dark:text-slate-100">{row.project_number}</td><td className="px-4 py-3 text-slate-700 dark:text-slate-200">{row.project_designation}</td><td className="px-4 py-3 text-right">{formatHours(row.avv_hours)}</td><td className="px-4 py-3 text-right">{formatHours(row.management_hours)}</td><td className="px-4 py-3 text-right">{formatHours(row.production_hours)}</td><td className="px-4 py-3 text-right">{formatHours(row.rework_hours)}</td><td className="px-4 py-3 text-right">{formatHours(row.training_hours)}</td><td className="px-4 py-3 text-right">{formatHours(row.intercontract_hours)}</td><td className="px-4 py-3 text-right">{formatCurrency(row.purchase_cost)}</td><td className="px-4 py-3 text-right">{formatCurrency(row.expense_cost)}</td><td className="px-4 py-3 text-right font-bold text-emerald-700 dark:text-emerald-300">{formatHours(row.total_hours)}</td><td className="px-4 py-3 text-right font-bold text-indigo-700 dark:text-indigo-300">{formatCurrency(row.total_cost)}</td><td className="px-4 py-3"><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${row.validation_manager_status === "approved" ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300" : row.validation_manager_status === "rejected" ? "bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300" : "bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"}`}>{row.validation_manager_status || labelStatus("time", row.status)}</span></td><td className="sticky right-0 z-10 bg-white px-4 py-3 text-right dark:bg-slate-700"><ActionMenu labels={labels} canRestore={isArchived} onView={() => setSelected(row)} onEdit={() => setSelected(row)} onArchive={() => onArchive(row)} onRestore={() => onRestore(row)} /></td></tr>; })}</tbody></table></div></>);
+}
+
+function TimeEntryCard({ row, onArchive, onRestore }: { row: AnyRow; onArchive: () => void; onRestore: () => void }) {
+  const isArchived = Boolean(row.archived_at) || row.status === "archived";
+  const labels = { view: "Voir le pointage", edit: "Modifier le pointage", archive: "Archiver le pointage", restore: "Réactiver le pointage" };
+  return (
+    <article className="group rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-indigo-200 hover:bg-indigo-50/25 hover:shadow-md dark:border-slate-600/60 dark:bg-slate-700/70 dark:hover:bg-indigo-900/20">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="truncate text-sm font-black text-slate-950 dark:text-slate-100">{row.project_number || "Projet non renseigné"} · {row.project_designation || row.description || "Pointage"}</h3>
+          <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500 dark:text-slate-300">{formatDate(row.activity_date)} · {fullName(row)} · validation {row.validation_manager_status || labelStatus("time", row.status)}</p>
+        </div>
+        <ActionMenu labels={labels} canRestore={isArchived} onView={() => window.alert(`Pointage : ${row.project_number || "projet"} / ${fullName(row)}`)} onEdit={() => window.alert("Le formulaire détaillé s’ouvre via + Nouveau temps ; l’édition inline sera branchée dans le lot CRUD complet.")} onArchive={onArchive} onRestore={onRestore} />
+      </div>
+      <div className="mt-4 grid gap-2 sm:grid-cols-4">
+        <Info label="AVV" value={formatHours(row.avv_hours)} accent="sky" />
+        <Info label="Management" value={formatHours(row.management_hours)} accent="indigo" />
+        <Info label="Production" value={formatHours(row.production_hours)} accent="emerald" />
+        <Info label="Reprise" value={formatHours(row.rework_hours)} accent="rose" />
+        <Info label="Formation" value={formatHours(row.training_hours)} accent="amber" />
+        <Info label="Intercontrat" value={formatHours(row.intercontract_hours)} accent="slate" />
+        <Info label="Total heures" value={formatHours(getTimeTotalHours(row))} accent="emerald" />
+        <Info label="Total coûts" value={formatCurrency(getTimeTotalCost(row))} accent="indigo" />
+      </div>
+      <p className="mt-4 line-clamp-2 text-xs leading-5 text-slate-500 dark:text-slate-300">{row.comments || row.description || "Commentaire non renseigné."}</p>
+    </article>
+  );
+}
+
+function TimeEntryTable({ rows, onArchive, onRestore }: { rows: AnyRow[]; onArchive: (row: AnyRow) => void; onRestore: (row: AnyRow) => void }) {
+  const labels = { view: "Voir le pointage", edit: "Modifier le pointage", archive: "Archiver le pointage", restore: "Réactiver le pointage" };
+  return (
+    <div className="max-h-[430px] overflow-auto rounded-2xl border border-slate-200 shadow-sm dark:border-slate-600/70">
+      <table className="w-full min-w-[2400px] border-separate border-spacing-0 bg-white text-sm dark:bg-slate-700/65">
+        <thead className="sticky top-0 z-20 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-700 dark:text-slate-300">
+          <tr>
+            <th className="sticky left-0 z-30 bg-slate-50 px-4 py-3 text-left dark:bg-slate-700">N° projet</th>
+            <th className="px-4 py-3 text-left">Désignation projet</th>
+            <th className="px-4 py-3 text-left">Semaine</th>
+            <th className="px-4 py-3 text-left">Mois</th>
+            <th className="px-4 py-3 text-left">Date</th>
+            <th className="px-4 py-3 text-left">Jour</th>
+            <th className="px-4 py-3 text-left">Ressource</th>
+            <th className="px-4 py-3 text-right">AVV (h)</th>
+            <th className="px-4 py-3 text-right">Management (h)</th>
+            <th className="px-4 py-3 text-right">Production (h)</th>
+            <th className="px-4 py-3 text-right">Reprise (h)</th>
+            <th className="px-4 py-3 text-right">Formation (h)</th>
+            <th className="px-4 py-3 text-right">Intercontrat (h)</th>
+            <th className="px-4 py-3 text-right">AVV (€)</th>
+            <th className="px-4 py-3 text-right">Management (€)</th>
+            <th className="px-4 py-3 text-right">Production (€)</th>
+            <th className="px-4 py-3 text-right">Reprise (€)</th>
+            <th className="px-4 py-3 text-right">Achat (€)</th>
+            <th className="px-4 py-3 text-right">Frais (€)</th>
+            <th className="px-4 py-3 text-right">Total pointage (h)</th>
+            <th className="px-4 py-3 text-right">Total coûts (€)</th>
+            <th className="px-4 py-3 text-left">Commentaires</th>
+            <th className="px-4 py-3 text-left">Validation N+1</th>
+            <th className="sticky right-0 z-30 bg-slate-50 px-4 py-3 text-right dark:bg-slate-700">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => {
+            const isArchived = Boolean(row.archived_at) || row.status === "archived";
+            return (
+              <tr key={row.id} className="hover:bg-indigo-50/45 dark:hover:bg-indigo-900/20">
+                <td className="sticky left-0 z-10 bg-white px-4 py-3 font-bold text-slate-950 dark:bg-slate-700 dark:text-slate-100">{row.project_number || "—"}</td>
+                <td className="px-4 py-3 text-slate-700 dark:text-slate-200">{row.project_designation || "—"}</td>
+                <td className="px-4 py-3 text-slate-600 dark:text-slate-300">S{row.week_number || getWeekNumber(row.activity_date)}</td>
+                <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{row.month_label || getMonthLabel(row.activity_date)}</td>
+                <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{formatDate(row.activity_date)}</td>
+                <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{getDayName(row.activity_date)}</td>
+                <td className="px-4 py-3 font-semibold text-slate-700 dark:text-slate-200">{fullName(row)}</td>
+                <td className="px-4 py-3 text-right">{formatHours(row.avv_hours)}</td>
+                <td className="px-4 py-3 text-right">{formatHours(row.management_hours)}</td>
+                <td className="px-4 py-3 text-right">{formatHours(row.production_hours)}</td>
+                <td className="px-4 py-3 text-right">{formatHours(row.rework_hours)}</td>
+                <td className="px-4 py-3 text-right">{formatHours(row.training_hours)}</td>
+                <td className="px-4 py-3 text-right">{formatHours(row.intercontract_hours)}</td>
+                <td className="px-4 py-3 text-right">{formatCurrency(row.avv_cost)}</td>
+                <td className="px-4 py-3 text-right">{formatCurrency(row.management_cost)}</td>
+                <td className="px-4 py-3 text-right">{formatCurrency(row.production_cost)}</td>
+                <td className="px-4 py-3 text-right">{formatCurrency(row.rework_cost)}</td>
+                <td className="px-4 py-3 text-right">{formatCurrency(row.purchase_cost)}</td>
+                <td className="px-4 py-3 text-right">{formatCurrency(row.expense_cost ?? row.expense_hours)}</td>
+                <td className="px-4 py-3 text-right font-bold text-emerald-700 dark:text-emerald-300">{formatHours(getTimeTotalHours(row))}</td>
+                <td className="px-4 py-3 text-right font-bold text-indigo-700 dark:text-indigo-300">{formatCurrency(getTimeTotalCost(row))}</td>
+                <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{row.comments || row.description || "—"}</td>
+                <td className="px-4 py-3"><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${row.validation_manager_status === "approved" ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300" : row.validation_manager_status === "rejected" ? "bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300" : "bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"}`}>{row.validation_manager_status || labelStatus("time", row.status)}</span></td>
+                <td className="sticky right-0 z-10 bg-white px-4 py-3 text-right dark:bg-slate-700"><ActionMenu labels={labels} canRestore={isArchived} onView={() => window.alert(`Pointage : ${row.project_number || "projet"} / ${fullName(row)}`)} onEdit={() => window.alert("Le formulaire détaillé s’ouvre via + Nouveau temps ; l’édition inline sera branchée dans le lot CRUD complet.")} onArchive={() => onArchive(row)} onRestore={() => onRestore(row)} /></td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function GenericCard({ moduleKey, row, onArchive, onRestore }: { moduleKey: HrTalentModuleKey; row: AnyRow; onArchive: () => void; onRestore: () => void }) {
+  if (moduleKey === "time") return <TimeEntryCard row={row} onArchive={onArchive} onRestore={onRestore} />;
+  const labels = moduleKey === "onboarding"
+    ? { view: "Voir le parcours", edit: "Modifier le parcours", archive: "Archiver le parcours", restore: "Réactiver le parcours" }
+    : moduleKey === "reviews"
+      ? { view: "Voir l’entretien", edit: "Modifier l’entretien", archive: "Archiver l’entretien", restore: "Réactiver l’entretien" }
+      : { view: "Voir le pointage", edit: "Modifier le pointage", archive: "Archiver le pointage", restore: "Réactiver le pointage" };
+  const title = moduleKey === "onboarding" ? `Parcours ${fullName(row)}` : row.cycle_name || `Entretien ${fullName(row)}`;
+
+  return (
+    <article className="group rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-indigo-200 hover:bg-indigo-50/25 hover:shadow-md dark:border-slate-600/60 dark:bg-slate-700/70 dark:hover:bg-indigo-900/20">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="truncate text-sm font-black text-slate-950 dark:text-slate-100">{title}</h3>
+          <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500 dark:text-slate-300">{getEmployeeDepartment(row)} · {getEmployeeJob(row)} · {labelStatus(moduleKey, row.status)}</p>
+        </div>
+        <ActionMenu labels={labels} canRestore={Boolean(row.archived_at) || row.status === "archived"} onView={() => window.alert(`${labels.view} : ${fullName(row)}`)} onEdit={() => window.alert(`${labels.edit} : ${fullName(row)}`)} onArchive={onArchive} onRestore={onRestore} />
+      </div>
+      <div className="mt-4 grid gap-2 sm:grid-cols-2">
+        <Info label="Collaborateur" value={fullName(row)} accent="indigo" />
+        <Info label="Manager" value={row.manager_name || "Non renseigné"} accent="sky" />
+        <Info label="Service" value={getEmployeeDepartment(row)} />
+        <Info label="Statut" value={labelStatus(moduleKey, row.status)} accent={row.status === "completed" || row.status === "approved" ? "emerald" : row.status === "delayed" || row.status === "rejected" ? "rose" : "amber"} />
+      </div>
+      {moduleKey === "onboarding" && <OnboardingChecklist row={row} />}
+      {moduleKey === "reviews" && <ReviewTemplate row={row} />}
+    </article>
+  );
+}
+
+function GenericTable({ moduleKey, rows, onArchive, onRestore }: { moduleKey: HrTalentModuleKey; rows: AnyRow[]; onArchive: (row: AnyRow) => void; onRestore: (row: AnyRow) => void }) {
+  if (moduleKey === "time") return <TimeEntryTable rows={rows} onArchive={onArchive} onRestore={onRestore} />;
+  const labels = moduleKey === "onboarding"
+    ? { view: "Voir le parcours", edit: "Modifier le parcours", archive: "Archiver le parcours", restore: "Réactiver le parcours" }
+    : moduleKey === "reviews"
+      ? { view: "Voir l’entretien", edit: "Modifier l’entretien", archive: "Archiver l’entretien", restore: "Réactiver l’entretien" }
+      : { view: "Voir le pointage", edit: "Modifier le pointage", archive: "Archiver le pointage", restore: "Réactiver le pointage" };
+
+  return (
+    <div className="max-h-[520px] overflow-auto rounded-2xl border border-slate-200 shadow-sm dark:border-slate-600/70">
+      <table className="w-full min-w-[1180px] border-separate border-spacing-0 bg-white text-sm dark:bg-slate-700/65">
+        <thead className="sticky top-0 z-20 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-700 dark:text-slate-300">
+          <tr>
+            <th className="sticky left-0 z-30 bg-slate-50 px-4 py-3 text-left dark:bg-slate-700">Objet</th>
+            <th className="px-4 py-3 text-left">Collaborateur</th>
+            <th className="px-4 py-3 text-left">Service</th>
+            <th className="px-4 py-3 text-left">Manager</th>
+            <th className="px-4 py-3 text-left">Statut</th>
+            <th className="px-4 py-3 text-left">Détail métier</th>
+            <th className="sticky right-0 z-30 bg-slate-50 px-4 py-3 text-right dark:bg-slate-700">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.id} className="hover:bg-indigo-50/45 dark:hover:bg-indigo-900/20">
+              <td className="sticky left-0 z-10 bg-white px-4 py-3 font-bold text-slate-950 dark:bg-slate-700 dark:text-slate-100">{moduleKey === "onboarding" ? `Parcours ${fullName(row)}` : moduleKey === "reviews" ? row.cycle_name || `Entretien ${fullName(row)}` : `${formatDate(row.activity_date)} · ${row.activity_type || "activité"}`}</td>
+              <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{fullName(row)}</td>
+              <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{getEmployeeDepartment(row)}</td>
+              <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{row.manager_name || "—"}</td>
+              <td className="px-4 py-3"><span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-700 dark:bg-indigo-900/35 dark:text-indigo-300">{labelStatus(moduleKey, row.status)}</span></td>
+              <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{moduleKey === "onboarding" ? `${getChecklistStats(row.checklist_items).ok}/${getChecklistStats(row.checklist_items).total} OK · risque ${row.risk_level || "normal"}` : moduleKey === "reviews" ? `${row.completed_objective_count || 0}/${row.objective_count || 0} objectifs · note ${row.global_rating || "—"}/5` : `${row.duration_hours || 0}h · ${row.description || "—"}`}</td>
+              <td className="sticky right-0 z-10 bg-white px-4 py-3 text-right dark:bg-slate-700"><ActionMenu labels={labels} canRestore={Boolean(row.archived_at) || row.status === "archived"} onView={() => window.alert(`${labels.view} : ${fullName(row)}`)} onEdit={() => window.alert(`${labels.edit} : ${fullName(row)}`)} onArchive={() => onArchive(row)} onRestore={() => onRestore(row)} /></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function WorkCardsAndTable({ moduleKey, rows, employees, onArchive, onRestore }: { moduleKey: HrTalentModuleKey; rows: AnyRow[]; employees: Employee[]; onArchive: (row: AnyRow) => void; onRestore: (row: AnyRow) => void }) {
+  const [view, setView] = useState<DisplayMode>("cards");
+  const summaries = moduleKey === "skills" ? buildSkillResourceSummaries(rows, employees) : [];
+  const timeSummaries = moduleKey === "time" ? buildTimeProjectSummaries(rows) : [];
+
+  return (
+    <SectionCard
+      icon={moduleKey === "skills" ? GraduationCap : moduleKey === "time" ? Clock3 : moduleKey === "onboarding" ? ListChecks : Target}
+      title={getConfig(moduleKey).primaryTab}
+      description="Cartes et tableau utilisent le périmètre filtré, les mêmes actions et les mêmes données Supabase."
+      right={
+        <div className="inline-flex gap-1 rounded-xl border border-slate-200 bg-white p-1 dark:border-slate-600/60 dark:bg-slate-700/70">
+          <button type="button" onClick={() => setView("cards")} className={`h-8 rounded-lg px-3 text-xs font-bold ${view === "cards" ? "bg-indigo-600 text-white" : "text-slate-500 hover:bg-indigo-50 hover:text-indigo-700"}`}>Cartes</button>
+          <button type="button" onClick={() => setView("table")} className={`h-8 rounded-lg px-3 text-xs font-bold ${view === "table" ? "bg-indigo-600 text-white" : "text-slate-500 hover:bg-indigo-50 hover:text-indigo-700"}`}>Tableau</button>
+        </div>
+      }
+    >
+      {moduleKey === "skills" && view === "cards" && <div className="grid gap-4 xl:grid-cols-2">{summaries.map((summary) => <SkillResourceCard key={summary.employee.id} summary={summary} onArchive={() => summary.rows[0] && onArchive(summary.rows[0])} />)}</div>}
+      {moduleKey === "skills" && view === "table" && <SkillResourceTable rows={rows} onArchive={onArchive} />}
+      {moduleKey === "time" && view === "cards" && <div className="grid gap-4 xl:grid-cols-2">{timeSummaries.map((summary) => <TimeProjectCard key={summary.id} summary={summary} onArchive={() => summary.detailRows.forEach((row) => onArchive(row))} onRestore={() => summary.detailRows.forEach((row) => onRestore(row))} />)}</div>}
+      {moduleKey === "time" && view === "table" && <TimeProjectTable rows={timeSummaries} onArchive={(summary) => summary.detailRows.forEach((row) => onArchive(row))} onRestore={(summary) => summary.detailRows.forEach((row) => onRestore(row))} />}
+      {moduleKey !== "skills" && moduleKey !== "time" && view === "cards" && <div className="grid gap-4 xl:grid-cols-2">{rows.map((row) => <GenericCard key={row.id} moduleKey={moduleKey} row={row} onArchive={() => onArchive(row)} onRestore={() => onRestore(row)} />)}</div>}
+      {moduleKey !== "skills" && moduleKey !== "time" && view === "table" && <GenericTable moduleKey={moduleKey} rows={rows} onArchive={onArchive} onRestore={onRestore} />}
+    </SectionCard>
+  );
+}
+
+function ChartCard({ title, description, children }: { title: string; description: string; children: ReactNode }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  async function copy() {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1400;
+    canvas.height = 720;
+    const context = canvas.getContext("2d");
+    if (!context) return;
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.fillStyle = "#0f172a";
+    context.font = "700 34px Arial";
+    context.fillText(title, 48, 72);
+    context.fillStyle = "#475569";
+    context.font = "22px Arial";
+    context.fillText(description, 48, 114);
+    context.fillStyle = "#6366f1";
+    context.font = "700 24px Arial";
+    context.fillText("Graphique ONEPILOT — export depuis le périmètre filtré", 48, 184);
+    canvas.toBlob(async (blob) => {
+      if (!blob) return;
+      try {
+        const ClipboardItemCtor = (window as any).ClipboardItem;
+        if (!ClipboardItemCtor || !navigator.clipboard?.write) throw new Error("Clipboard PNG unavailable");
+        await navigator.clipboard.write([new ClipboardItemCtor({ [blob.type]: blob })]);
+      } catch {
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = `${title.toLowerCase().replace(/[^a-z0-9]+/gi, "-")}.png`;
+        link.click();
+        URL.revokeObjectURL(link.href);
+      }
+    }, "image/png");
+  }
+
+  const card = (height: string) => (
+    <>
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="truncate text-sm font-black text-slate-950 dark:text-white" title={title}>{title}</h3>
+          <p className="mt-1 truncate text-xs text-slate-500 dark:text-slate-300" title={description}>{description}</p>
+        </div>
+        <div className="flex shrink-0 gap-1.5">
+          <button type="button" onClick={copy} title="Copier le graphique" className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700 dark:border-slate-600 dark:hover:bg-indigo-900/30"><Copy className="h-3.5 w-3.5" /></button>
+          <button type="button" onClick={() => setIsExpanded(true)} title="Agrandir le graphique" className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700 dark:border-slate-600 dark:hover:bg-indigo-900/30"><Expand className="h-3.5 w-3.5" /></button>
+        </div>
+      </div>
+      <div className={height}>{children}</div>
+    </>
+  );
+
+  return (
+    <>
+      <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-600/60 dark:bg-slate-700/70">
+        {card("h-[280px]")}
+      </article>
+      {isExpanded && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4" onClick={() => setIsExpanded(false)}>
+          <article className="h-[86vh] w-full max-w-6xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-600 dark:bg-slate-800" onClick={(event) => event.stopPropagation()}>
+            {card("h-[70vh]")}
+            <div className="mt-4 flex justify-end"><button type="button" onClick={() => setIsExpanded(false)} className="inline-flex h-10 items-center rounded-xl border border-slate-200 px-4 text-sm font-bold text-slate-600 transition hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700">Fermer</button></div>
+          </article>
+        </div>
+      )}
+    </>
+  );
+}
+
+function GraphsPanel({ moduleKey, rows, catalog }: { moduleKey: HrTalentModuleKey; rows: AnyRow[]; catalog: SkillCatalogItem[] }) {
+  const statusData = Object.entries(rows.reduce((acc: Record<string, number>, row) => { acc[labelStatus(moduleKey, row.status)] = (acc[labelStatus(moduleKey, row.status)] || 0) + 1; return acc; }, {})).map(([name, value]) => ({ name, value }));
+  const moduleData = Object.entries(rows.reduce((acc: Record<string, number>, row) => { const key = row.family || "Non renseigné"; acc[key] = (acc[key] || 0) + 1; return acc; }, {})).map(([name, value]) => ({ name, value }));
+  const levelData = [0, 1, 2, 3, 4].map((level) => ({ name: `Niveau ${level}`, ressources: rows.filter((row) => clampLevel(row.current_level) === level).length }));
+  const radarModuleData = Object.entries(rows.reduce((acc: Record<string, { total: number; count: number }>, row) => { const key = row.family || "Non renseigné"; acc[key] = acc[key] || { total: 0, count: 0 }; acc[key].total += clampLevel(row.current_level); acc[key].count += 1; return acc; }, {})).map(([module, item]) => ({ module, niveau: item.count ? Number((item.total / item.count).toFixed(2)) : 0 }));
+  const radarSubmoduleData = Object.entries(rows.reduce((acc: Record<string, { total: number; count: number }>, row) => { const key = row.category || "Non renseigné"; acc[key] = acc[key] || { total: 0, count: 0 }; acc[key].total += clampLevel(row.current_level); acc[key].count += 1; return acc; }, {})).slice(0, 12).map(([module, item]) => ({ module, niveau: item.count ? Number((item.total / item.count).toFixed(2)) : 0 }));
+  const criticalData = Object.entries(catalog.reduce((acc: Record<string, number>, skill) => { acc[skill.criticality || "standard"] = (acc[skill.criticality || "standard"] || 0) + 1; return acc; }, {})).map(([name, value]) => ({ name, value }));
+  const timeRubricData = [
+    { name: "AVV", heures: rows.reduce((sum, row) => sum + Number(row.avv_hours || 0), 0) },
+    { name: "Management", heures: rows.reduce((sum, row) => sum + Number(row.management_hours || 0), 0) },
+    { name: "Production", heures: rows.reduce((sum, row) => sum + Number(row.production_hours || 0), 0) },
+    { name: "Reprise", heures: rows.reduce((sum, row) => sum + Number(row.rework_hours || 0), 0) },
+    { name: "Formation", heures: rows.reduce((sum, row) => sum + Number(row.training_hours || 0), 0) },
+    { name: "Intercontrat", heures: rows.reduce((sum, row) => sum + Number(row.intercontract_hours || 0), 0) },
+  ];
+  const timeProjectData = Object.entries(rows.reduce((acc: Record<string, number>, row) => { const key = row.project_number || "Projet non renseigné"; acc[key] = (acc[key] || 0) + getTimeTotalHours(row); return acc; }, {})).map(([name, heures]) => ({ name, heures }));
+  const timeCostProjectData = Object.entries(rows.reduce((acc: Record<string, number>, row) => { const key = row.project_number || "Projet non renseigné"; acc[key] = (acc[key] || 0) + getTimeTotalCost(row); return acc; }, {})).map(([name, cout]) => ({ name, cout }));
+  const monthlyTimeData = Object.entries(rows.reduce((acc: Record<string, { heures: number; avv: number; management: number; production: number; formation: number; intercontrat: number; reprise: number; achat: number; frais: number }>, row) => {
+    const date = row.activity_date ? new Date(row.activity_date) : null;
+    const key = date && !Number.isNaN(date.getTime()) ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}` : "Non daté";
+    acc[key] = acc[key] || { heures: 0, avv: 0, management: 0, production: 0, formation: 0, intercontrat: 0, reprise: 0, achat: 0, frais: 0 };
+    acc[key].heures += getTimeTotalHours(row);
+    acc[key].avv += Number(row.avv_hours || 0);
+    acc[key].management += Number(row.management_hours || 0);
+    acc[key].production += Number(row.production_hours || 0);
+    acc[key].formation += Number(row.training_hours || 0);
+    acc[key].intercontrat += Number(row.intercontract_hours || 0);
+    acc[key].reprise += Number(row.rework_hours || 0);
+    acc[key].achat += Number(row.purchase_cost || 0);
+    acc[key].frais += Number(row.expense_cost ?? row.expense_hours ?? 0);
+    return acc;
+  }, {})).sort(([a], [b]) => a.localeCompare(b)).map(([month, values]) => ({ month, ...values }));
+
+  return (
+    <div className="space-y-4">
+      <SectionCard icon={BarChart3} title="Analyse décisionnelle" description="Graphiques consolidés sur le périmètre filtré pour arbitrer charge, compétences, intégrations et performance." right={<div className="whitespace-nowrap rounded-full border border-indigo-100 bg-white px-3 py-1.5 text-xs font-semibold text-indigo-700 shadow-sm dark:border-indigo-900 dark:bg-slate-950 dark:text-indigo-300">{rows.length} lignes</div>}>
+        <p className="text-xs leading-5 text-slate-500 dark:text-slate-300">Les graphiques utilisent uniquement les données Supabase filtrées : pas de capture statique, pas de donnée front inventée.</p>
+      </SectionCard>
+      <div className="grid gap-4 xl:grid-cols-2">
+        {moduleKey === "skills" ? (
+          <>
+            <ChartCard title="Radar par module" description="Niveau moyen réel par module de compétences, de 0 à 4.">
+              <ResponsiveContainer width="100%" height="100%"><RadarChart data={radarModuleData}><PolarGrid /><PolarAngleAxis dataKey="module" tick={{ fontSize: 10 }} /><PolarRadiusAxis domain={[0, 4]} /><Radar name="Niveau moyen" dataKey="niveau" stroke={chartPalette[0]} fill={chartPalette[0]} fillOpacity={0.22} /><Tooltip /><Legend /></RadarChart></ResponsiveContainer>
+            </ChartCard>
+            <ChartCard title="Radar par sous-module" description="Niveau moyen par sous-module pour identifier les zones fortes et faibles.">
+              <ResponsiveContainer width="100%" height="100%"><RadarChart data={radarSubmoduleData}><PolarGrid /><PolarAngleAxis dataKey="module" tick={{ fontSize: 10 }} /><PolarRadiusAxis domain={[0, 4]} /><Radar name="Niveau moyen" dataKey="niveau" stroke={chartPalette[1]} fill={chartPalette[1]} fillOpacity={0.22} /><Tooltip /><Legend /></RadarChart></ResponsiveContainer>
+            </ChartCard>
+            <ChartCard title="Ressources par module" description="Nombre d’évaluations disponibles par module.">
+              <ResponsiveContainer width="100%" height="100%"><BarChart data={moduleData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" tick={{ fontSize: 10 }} /><YAxis allowDecimals={false} /><Tooltip /><Legend /><Bar dataKey="value" name="Évaluations" fill={chartPalette[2]} radius={[8, 8, 0, 0]} /></BarChart></ResponsiveContainer>
+            </ChartCard>
+            <ChartCard title="Ressources par niveau" description="Répartition des niveaux 0 à 4 sur le périmètre filtré.">
+              <ResponsiveContainer width="100%" height="100%"><BarChart data={levelData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis allowDecimals={false} /><Tooltip /><Legend /><Bar dataKey="ressources" fill={chartPalette[3]} radius={[8, 8, 0, 0]} /></BarChart></ResponsiveContainer>
+            </ChartCard>
+            <ChartCard title="Criticité de la bibliothèque" description="Compétences standards, importantes et critiques dans le référentiel.">
+              <ResponsiveContainer width="100%" height="100%"><BarChart data={criticalData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis allowDecimals={false} /><Tooltip /><Legend /><Bar dataKey="value" fill={chartPalette[4]} radius={[8, 8, 0, 0]} /></BarChart></ResponsiveContainer>
+            </ChartCard>
+          </>
+        ) : moduleKey === "time" ? (
+          <>
+            <ChartCard title="Pointages par projet" description="Total des heures pointées par numéro de projet.">
+              <ResponsiveContainer width="100%" height="100%"><BarChart data={timeProjectData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" tick={{ fontSize: 10 }} /><YAxis allowDecimals={false} /><Tooltip /><Legend /><Bar dataKey="heures" name="Heures" fill={chartPalette[0]} radius={[8, 8, 0, 0]} /></BarChart></ResponsiveContainer>
+            </ChartCard>
+            <ChartCard title="Répartition par rubrique" description="AVV, management, production, reprise, formation et intercontrat.">
+              <ResponsiveContainer width="100%" height="100%"><BarChart data={timeRubricData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" tick={{ fontSize: 10 }} /><YAxis allowDecimals={false} /><Tooltip /><Legend /><Bar dataKey="heures" name="Heures" fill={chartPalette[1]} radius={[8, 8, 0, 0]} /></BarChart></ResponsiveContainer>
+            </ChartCard>
+            <ChartCard title="Suivi mensuel des heures" description="Tendance des heures pointées par mois.">
+              <ResponsiveContainer width="100%" height="100%"><LineChart data={monthlyTimeData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="month" /><YAxis allowDecimals={false} /><Tooltip /><Legend /><Line type="monotone" dataKey="heures" name="Heures" stroke={chartPalette[2]} strokeWidth={3} /></LineChart></ResponsiveContainer>
+            </ChartCard>
+            <ChartCard title="Rubriques par mois" description="Production, AVV, management, formation, intercontrat et reprise sur le même graphique.">
+              <ResponsiveContainer width="100%" height="100%"><LineChart data={monthlyTimeData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="month" /><YAxis allowDecimals={false} /><Tooltip /><Legend /><Line type="monotone" dataKey="production" name="Production" stroke="#10b981" strokeWidth={3} /><Line type="monotone" dataKey="avv" name="AVV" stroke="#f59e0b" strokeWidth={3} /><Line type="monotone" dataKey="management" name="Management" stroke="#6366f1" strokeWidth={3} /><Line type="monotone" dataKey="formation" name="Formation" stroke="#0ea5e9" strokeWidth={3} /><Line type="monotone" dataKey="intercontrat" name="IC" stroke="#f43f5e" strokeWidth={3} /><Line type="monotone" dataKey="reprise" name="Reprise" stroke="#dc2626" strokeWidth={3} /></LineChart></ResponsiveContainer>
+            </ChartCard>
+            <ChartCard title="Intercontrat par mois" description="Heures d’intercontrat à suivre pour capacité et staffing.">
+              <ResponsiveContainer width="100%" height="100%"><LineChart data={monthlyTimeData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="month" /><YAxis allowDecimals={false} /><Tooltip /><Legend /><Line type="monotone" dataKey="intercontrat" name="Intercontrat" stroke={chartPalette[3]} strokeWidth={3} /></LineChart></ResponsiveContainer>
+            </ChartCard>
+            <ChartCard title="Reprises par mois" description="Suivi des reprises à analyser par projet et par ressource.">
+              <ResponsiveContainer width="100%" height="100%"><LineChart data={monthlyTimeData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="month" /><YAxis allowDecimals={false} /><Tooltip /><Legend /><Line type="monotone" dataKey="reprise" name="Reprise" stroke={chartPalette[4]} strokeWidth={3} /></LineChart></ResponsiveContainer>
+            </ChartCard>
+            <ChartCard title="Achats et frais par mois" description="Suivi des achats et frais déclarés sur le périmètre filtré.">
+              <ResponsiveContainer width="100%" height="100%"><LineChart data={monthlyTimeData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="month" /><YAxis allowDecimals={false} /><Tooltip /><Legend /><Line type="monotone" dataKey="achat" name="Achat (€)" stroke={chartPalette[0]} strokeWidth={3} /><Line type="monotone" dataKey="frais" name="Frais (€)" stroke={chartPalette[1]} strokeWidth={3} /></LineChart></ResponsiveContainer>
+            </ChartCard>
+            <ChartCard title="Coûts par projet" description="Coûts chargés estimés par projet à partir des heures et taux RH.">
+              <ResponsiveContainer width="100%" height="100%"><BarChart data={timeCostProjectData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" tick={{ fontSize: 10 }} /><YAxis allowDecimals={false} /><Tooltip /><Legend /><Bar dataKey="cout" name="Coût" fill={chartPalette[0]} radius={[8, 8, 0, 0]} /></BarChart></ResponsiveContainer>
+            </ChartCard>
+          </>
+        ) : (
+          <>
+            <ChartCard title="Répartition par statut" description="Volume par statut sur le périmètre filtré.">
+              <ResponsiveContainer width="100%" height="100%"><BarChart data={statusData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis allowDecimals={false} /><Tooltip /><Legend /><Bar dataKey="value" name="Volume" fill={chartPalette[0]} radius={[8, 8, 0, 0]} /></BarChart></ResponsiveContainer>
+            </ChartCard>
+            <ChartCard title="Suivi mensuel" description="Tendance des volumes créés ou déclarés par mois.">
+              <ResponsiveContainer width="100%" height="100%"><LineChart data={statusData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis allowDecimals={false} /><Tooltip /><Legend /><Line type="monotone" dataKey="value" name="Volume" stroke={chartPalette[1]} strokeWidth={3} /></LineChart></ResponsiveContainer>
+            </ChartCard>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DecisionPanel({ icon: Icon, title, children, accent }: { icon: ComponentType<{ className?: string }>; title: string; children: ReactNode; accent: Accent }) {
+  const colors: Record<Accent, string> = {
+    indigo: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/45 dark:text-indigo-300",
+    emerald: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/45 dark:text-emerald-300",
+    amber: "bg-amber-100 text-amber-700 dark:bg-amber-900/45 dark:text-amber-300",
+    rose: "bg-rose-100 text-rose-700 dark:bg-rose-900/45 dark:text-rose-300",
+    sky: "bg-sky-100 text-sky-700 dark:bg-sky-900/45 dark:text-sky-300",
+    slate: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
+  };
+  return <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-600/60 dark:bg-slate-700/70"><div className="flex items-center gap-3"><div className={`rounded-xl p-2.5 ${colors[accent]}`}><Icon className="h-4 w-4" /></div><div><h3 className="text-sm font-black text-slate-950 dark:text-white">{title}</h3><p className="mt-1 truncate text-xs text-slate-500 dark:text-slate-300">Lecture synthétique du périmètre filtré.</p></div></div><div className="mt-4 space-y-2">{children}</div></div>;
+}
+
+function AlertMetric({ icon: Icon, title, value, description, accent }: { icon: ComponentType<{ className?: string }>; title: string; value: ReactNode; description: string; accent: Accent }) {
+  return <MetricCard icon={Icon} label={title} value={value} description={description} accent={accent} />;
+}
+
+function Insight({ title, description, level }: { title: string; description: string; level: "success" | "warning" | "danger" | "info" }) {
+  const classes = level === "success" ? "border-emerald-100 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-900/20 dark:text-emerald-200" : level === "danger" ? "border-rose-100 bg-rose-50 text-rose-800 dark:border-rose-900 dark:bg-rose-900/20 dark:text-rose-200" : level === "warning" ? "border-amber-100 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-200" : "border-indigo-100 bg-indigo-50 text-indigo-800 dark:border-indigo-900 dark:bg-indigo-900/20 dark:text-indigo-200";
+  return <div className={`rounded-xl border px-3 py-2 ${classes}`}><p className="text-xs font-black">{title}</p><p className="mt-1 line-clamp-2 text-xs leading-5 opacity-85">{description}</p></div>;
+}
+
+function AlertsPanel({ moduleKey, rows }: { moduleKey: HrTalentModuleKey; rows: AnyRow[] }) {
+  const actionNeeded = rows.filter((row) => ["submitted", "manager_approved", "to_develop", "delayed", "employee_input", "manager_input", "calibration"].includes(row.status) || Number(row.gap ?? 0) > 0 || row.risk_level === "high").length;
+  const ok = rows.filter((row) => ["approved", "validated", "completed"].includes(row.status) || (moduleKey === "skills" && Number(row.gap ?? 0) === 0)).length;
+  const nok = rows.filter((row) => row.status === "rejected" || row.risk_level === "high" || Number(row.gap ?? 0) > 1).length;
+  const missingManager = rows.filter((row) => !row.manager_name).length;
+  const quality = percentage(Math.max(0, rows.length - actionNeeded - missingManager), Math.max(1, rows.length));
+
+  return (
+    <SectionCard icon={Bell} title="Alertes qualité" description="Synthèse, alertes et recommandations consolidées sur le périmètre filtré.">
+      <div className="grid gap-4 xl:grid-cols-3">
+        <DecisionPanel icon={Gauge} title="Synthèse" accent="indigo"><Insight title="Qualité globale" description={`Score estimé : ${quality} %. Contrôler complétude, statut, rattachement et données métier.`} level={quality >= 80 ? "success" : "info"} /><Insight title="Dossiers exploitables" description={`${ok} élément(s) validés, terminés ou exploitables.`} level="success" /></DecisionPanel>
+        <DecisionPanel icon={AlertTriangle} title="Alertes" accent="rose"><Insight title="Actions à traiter" description={`${actionNeeded} élément(s) nécessitent validation, complétion, formation ou arbitrage.`} level={actionNeeded > 0 ? "warning" : "success"} /><Insight title="NOK / risques" description={`${nok} élément(s) bloquants ou à sécuriser.`} level={nok > 0 ? "danger" : "success"} /></DecisionPanel>
+        <DecisionPanel icon={Lightbulb} title="Recommandations" accent="emerald"><Insight title="Relier compétences et entretiens" description="Capitaliser écarts, objectifs, formations et retours projet dans le plan de développement." level="info" /><Insight title="Prioriser les risques" description="Traiter d’abord checklists NOK, objectifs non validés, compétences critiques et saisies en attente." level="success" /></DecisionPanel>
+      </div>
+      <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <AlertMetric icon={ShieldAlert} title="Actions à traiter" value={actionNeeded} description="Risque opérationnel ou RH à arbitrer." accent={actionNeeded > 0 ? "amber" : "emerald"} />
+        <AlertMetric icon={CheckCircle2} title="OK" value={ok} description="Éléments validés ou exploitables." accent="emerald" />
+        <AlertMetric icon={AlertTriangle} title="NOK" value={nok} description="Éléments bloquants ou insuffisants." accent={nok > 0 ? "rose" : "emerald"} />
+        <AlertMetric icon={Users} title="Manager manquant" value={missingManager} description="Validation ou accompagnement fragilisé." accent={missingManager > 0 ? "rose" : "emerald"} />
+        <AlertMetric icon={Gauge} title="Score qualité" value={`${quality}%`} description="Score global du périmètre filtré." accent={quality >= 80 ? "emerald" : "amber"} />
+        <AlertMetric icon={Archive} title="Archivables" value={ok} description="Éléments pouvant être archivés après contrôle." accent="sky" />
+      </div>
+    </SectionCard>
+  );
+}
+
+function buildMetrics(moduleKey: HrTalentModuleKey, rows: AnyRow[], catalog: SkillCatalogItem[]) {
   if (moduleKey === "skills") {
+    const resources = new Set(rows.map((row) => row.employee_id).filter(Boolean)).size;
+    const criticalGaps = rows.filter((row) => row.criticality === "critical" && Number(row.gap ?? 0) > 0).length;
+    const experts = rows.filter((row) => clampLevel(row.current_level) >= 3).length;
     return [
-      ...base,
-      column("family", "Module"),
-      column("category", "Sous-module"),
-      column("skill_name", "Compétence"),
-      column("current_level", "Niveau actuel"),
-      column("target_level", "Niveau cible"),
-      column("gap", "Écart"),
-      column("criticality", "Criticité"),
-      column("project_context", "Besoin projet"),
-      column("evidence", "Preuve"),
+      { label: "Ressources évaluées", value: resources, description: "Collaborateurs avec au moins une compétence évaluée.", icon: Users, accent: "indigo" as Accent },
+      { label: "Bibliothèque", value: catalog.length, description: "Compétences de référence actives.", icon: BookOpen, accent: "emerald" as Accent },
+      { label: "Écarts critiques", value: criticalGaps, description: "Compétences critiques sous le niveau cible.", icon: AlertTriangle, accent: "amber" as Accent },
+      { label: "Experts internes", value: experts, description: "Niveaux 3 ou 4 mobilisables en mentorat.", icon: GraduationCap, accent: "rose" as Accent },
     ];
   }
 
   if (moduleKey === "onboarding") {
     return [
-      ...base,
-      column("start_date", "Début"),
-      column("target_end_date", "Fin cible"),
-      column("progress_percent", "Progression"),
-      column("risk_level", "Risque"),
-      column("notes", "Notes"),
-      column("checklist_items", "Checklist"),
+      { label: "Parcours", value: rows.length, description: "Parcours dans le périmètre filtré.", icon: ListChecks, accent: "indigo" as Accent },
+      { label: "Terminés", value: rows.filter((row) => row.status === "completed").length, description: "Parcours complétés et contrôlables.", icon: CheckCircle2, accent: "emerald" as Accent },
+      { label: "À risque", value: rows.filter((row) => row.risk_level === "high" || row.status === "delayed").length, description: "Retards, NOK ou intégration à sécuriser.", icon: AlertTriangle, accent: "amber" as Accent },
+      { label: "Progression moyenne", value: `${Math.round(rows.reduce((sum, row) => sum + Number(row.progress_percent || 0), 0) / Math.max(1, rows.length))}%`, description: "Moyenne de complétion des checklists.", icon: TrendingUp, accent: "rose" as Accent },
     ];
   }
 
   if (moduleKey === "reviews") {
     return [
-      ...base,
-      column("cycle_name", "Campagne"),
-      column("objective_count", "Objectifs"),
-      column("completed_objective_count", "Objectifs atteints"),
-      column("global_rating", "Note"),
-      column("employee_comment", "Commentaire collaborateur"),
-      column("manager_comment", "Commentaire manager"),
-      column("review_details", "Détail entretien"),
+      { label: "Entretiens", value: rows.length, description: "Entretiens et objectifs suivis.", icon: Target, accent: "indigo" as Accent },
+      { label: "Validés", value: rows.filter((row) => row.status === "completed").length, description: "Entretiens finalisés et exploitables.", icon: CheckCircle2, accent: "emerald" as Accent },
+      { label: "En cours", value: rows.filter((row) => ["employee_input", "manager_input", "calibration"].includes(row.status)).length, description: "Saisies, arbitrages ou calibration en cours.", icon: CalendarClock, accent: "amber" as Accent },
+      { label: "Objectifs atteints", value: `${percentage(rows.reduce((sum, row) => sum + Number(row.completed_objective_count || 0), 0), rows.reduce((sum, row) => sum + Number(row.objective_count || 0), 0))}%`, description: "Taux global des objectifs déclarés.", icon: Gauge, accent: "rose" as Accent },
     ];
   }
 
+  return [
+    { label: "Temps saisis", value: rows.length, description: "Lignes de temps dans le périmètre filtré.", icon: Clock3, accent: "indigo" as Accent },
+    { label: "Validés", value: rows.filter((row) => ["approved", "manager_approved"].includes(row.status)).length, description: "Temps validés RH ou manager.", icon: CheckCircle2, accent: "emerald" as Accent },
+    { label: "À valider", value: rows.filter((row) => ["submitted", "manager_approved"].includes(row.status)).length, description: "Saisies nécessitant un contrôle.", icon: CalendarClock, accent: "amber" as Accent },
+    { label: "Heures", value: rows.reduce((sum, row) => sum + Number(row.duration_hours || 0), 0).toFixed(1), description: "Volume horaire total filtré.", icon: BriefcaseBusiness, accent: "rose" as Accent },
+  ];
+}
+
+function buildExportColumns(moduleKey: HrTalentModuleKey): ExportColumn<AnyRow>[] {
+  const base: ExportColumn<AnyRow>[] = [
+    { key: "id", label: "ID", value: (row) => row.id },
+    { key: "employee", label: "Collaborateur", value: (row) => fullName(row) },
+    { key: "employee_number", label: "Matricule", value: (row) => row.employee_number },
+    { key: "department", label: "Service", value: (row) => getEmployeeDepartment(row) },
+    { key: "manager", label: "Manager", value: (row) => row.manager_name },
+    { key: "status", label: "Statut", value: (row) => labelStatus(moduleKey, row.status) },
+  ];
+
+  if (moduleKey === "skills") return [...base, { key: "family", label: "Module", value: (row) => row.family }, { key: "category", label: "Sous-module", value: (row) => row.category }, { key: "skill", label: "Compétence", value: (row) => row.skill_name }, { key: "current_level", label: "Niveau actuel", value: (row) => clampLevel(row.current_level) }, { key: "target_level", label: "Niveau cible", value: (row) => clampLevel(row.target_level) }, { key: "gap", label: "Écart", value: (row) => row.gap }, { key: "criticality", label: "Criticité", value: (row) => row.criticality }, { key: "project_context", label: "Projet / besoin", value: (row) => row.project_context }, { key: "evidence", label: "Preuve", value: (row) => row.evidence }];
+  if (moduleKey === "onboarding") return [...base, { key: "start_date", label: "Début", value: (row) => row.start_date }, { key: "target_end_date", label: "Fin cible", value: (row) => row.target_end_date }, { key: "progress", label: "Progression", value: (row) => row.progress_percent }, { key: "risk", label: "Risque", value: (row) => row.risk_level }, { key: "checklist", label: "Checklist", value: (row) => JSON.stringify(row.checklist_items ?? []) }, { key: "notes", label: "Notes", value: (row) => row.notes }];
+  if (moduleKey === "reviews") return [...base, { key: "cycle", label: "Campagne", value: (row) => row.cycle_name }, { key: "objectives", label: "Objectifs", value: (row) => row.objective_count }, { key: "completed", label: "Objectifs complétés", value: (row) => row.completed_objective_count }, { key: "rating", label: "Note globale", value: (row) => row.global_rating }, { key: "employee_comment", label: "Commentaire collaborateur", value: (row) => row.employee_comment }, { key: "manager_comment", label: "Commentaire manager", value: (row) => row.manager_comment }, { key: "details", label: "Détail entretien", value: (row) => JSON.stringify(row.review_details ?? {}) }];
   return [
     ...base,
-    column("activity_date", "Date"),
-    column("activity_type", "Type activité"),
-    column("duration_hours", "Durée"),
-    column("description", "Description"),
-    column("manager_comment", "Commentaire manager"),
+    { key: "project_number", label: "N° projet", value: (row) => row.project_number },
+    { key: "project_designation", label: "Désignation projet", value: (row) => row.project_designation },
+    { key: "activity_date", label: "Date", value: (row) => row.activity_date },
+    { key: "avv_hours", label: "AVV (h)", value: (row) => row.avv_hours },
+    { key: "management_hours", label: "Management (h)", value: (row) => row.management_hours },
+    { key: "production_hours", label: "Production (h)", value: (row) => row.production_hours },
+    { key: "rework_hours", label: "Reprise (h)", value: (row) => row.rework_hours },
+    { key: "training_hours", label: "Formation (h)", value: (row) => row.training_hours },
+    { key: "intercontract_hours", label: "Intercontrat (h)", value: (row) => row.intercontract_hours },
+    { key: "avv_cost", label: "AVV (€)", value: (row) => row.avv_cost },
+    { key: "management_cost", label: "Management (€)", value: (row) => row.management_cost },
+    { key: "production_cost", label: "Production (€)", value: (row) => row.production_cost },
+    { key: "rework_cost", label: "Reprise (€)", value: (row) => row.rework_cost },
+    { key: "purchase_cost", label: "Achat (€)", value: (row) => row.purchase_cost },
+    { key: "expense_cost", label: "Frais (€)", value: (row) => row.expense_cost ?? row.expense_hours },
+    { key: "total_hours", label: "Total pointage (h)", value: (row) => getTimeTotalHours(row) },
+    { key: "total_cost", label: "Total coûts (€)", value: (row) => getTimeTotalCost(row) },
+    { key: "comments", label: "Commentaires", value: (row) => row.comments || row.description },
+    { key: "validation_manager_status", label: "Validation N+1", value: (row) => row.validation_manager_status || labelStatus(moduleKey, row.status) },
   ];
 }
-function CreateModal({ moduleKey, data, isOpen, onClose, onCreated }: { moduleKey: HrTalentModuleKey; data: ModuleData; isOpen: boolean; onClose: () => void; onCreated: () => Promise<void> }) { const [employeeId,setEmployeeId]=useState(data.employees[0]?.id||""); const [title,setTitle]=useState(""); const [saving,setSaving]=useState(false); if(!isOpen) return null; async function save(){ setSaving(true); try{ const employee=data.employees.find((item)=>item.id===employeeId); if(moduleKey==="time") { const {error}=await (supabase.from("hr_time_activity_entries" as never) as any).insert({organization_id:data.organization.id, employee_id:employeeId, activity_date:new Date().toISOString().slice(0,10), activity_type:"project_delivery", duration_hours:7.5, status:"draft", description:title||"Nouvelle activité projet", manager_comment:"À contrôler par le manager."}); if(error) throw error; } if(moduleKey==="skills") { const code=(title||"Nouvelle compétence").toUpperCase().replace(/[^A-Z0-9]+/g,"_").slice(0,40); const {data:skill,error}=await (supabase.from("hr_skill_catalog" as never) as any).insert({organization_id:data.organization.id, code, name:title||"Nouvelle compétence", family:"Module à classer", category:"Sous-module à classer", criticality:"important", description:"Compétence créée depuis l’interface RH.", is_active:true}).select("id").single(); if(error) throw error; await (supabase.from("hr_skills" as never) as any).insert({id:skill.id, organization_id:data.organization.id, code, name:title||"Nouvelle compétence", skill_type:"functional", description:"Compétence synchronisée RH/staffing.", is_active:true}); } if(moduleKey==="onboarding") { const checklist=defaultChecklist(); const {error}=await (supabase.from("hr_onboarding_plans" as never) as any).insert({organization_id:data.organization.id, employee_id:employeeId, manager_employee_id:null, start_date:new Date().toISOString().slice(0,10), target_end_date:new Date(Date.now()+45*86400000).toISOString().slice(0,10), status:"prepared", progress_percent:0, risk_level:"normal", notes:title||"Nouveau parcours d’intégration", checklist_items:checklist}); if(error) throw error; } if(moduleKey==="reviews") { const {data:cycle,error:cycleError}=await (supabase.from("hr_review_cycles" as never) as any).insert({organization_id:data.organization.id, name:title||`Campagne ${new Date().getFullYear()}`, review_type:"annual", period_start:`${new Date().getFullYear()}-01-01`, period_end:`${new Date().getFullYear()}-12-31`, status:"open"}).select("id").single(); if(cycleError) throw cycleError; const {error}=await (supabase.from("hr_review_items" as never) as any).insert({organization_id:data.organization.id, cycle_id:cycle.id, employee_id:employeeId, status:"not_started", objective_count:4, completed_objective_count:0, global_rating:null, employee_comment:"Auto-évaluation à compléter.", manager_comment:"Évaluation manager à compléter.", review_details:defaultReviewDetails(employee?.full_name||"")}); if(error) throw error; } await onCreated(); setTitle(""); onClose(); } finally { setSaving(false); } } return <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4"><section className="w-full max-w-xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-600 dark:bg-slate-700"><div className="flex items-center justify-between border-b border-slate-100 bg-gradient-to-r from-sky-50/70 via-white to-indigo-50/60 px-5 py-4 dark:border-slate-600/55 dark:from-sky-900/20 dark:via-slate-700/85 dark:to-indigo-900/20"><div><h2 className="text-sm font-black text-slate-950 dark:text-slate-100">{getConfig(moduleKey).newLabel}</h2><p className="mt-1 text-xs text-slate-500 dark:text-slate-300">Création rapide avec données métier exploitables immédiatement.</p></div><button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-600"><X className="h-4 w-4" /></button></div><div className="space-y-4 p-5">{moduleKey!=="skills"&&<select value={employeeId} onChange={(e)=>setEmployeeId(e.target.value)} className={selectClassName}>{data.employees.map((e)=><option key={e.id} value={e.id}>{e.full_name}</option>)}</select>}<input value={title} onChange={(e)=>setTitle(e.target.value)} placeholder={moduleKey==="skills"?"Nom de la compétence":"Libellé / contexte"} className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-900 outline-none focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-50 dark:border-slate-600 dark:bg-slate-700 dark:text-white"/><div className="flex justify-end gap-2"><button type="button" onClick={onClose} className="h-9 rounded-xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-600 hover:bg-slate-50">Annuler</button><button type="button" onClick={save} disabled={saving} className="h-9 rounded-xl bg-indigo-600 px-4 text-xs font-bold text-white hover:bg-indigo-700 disabled:opacity-60">Enregistrer</button></div></div></section></div>; }
-function defaultChecklist(): ChecklistItem[] { return [ {owner:"RH",label:"Contrat signé et dossier administratif complet",status:"NOK",note:"Contrat, RIB, urgence, justificatifs."}, {owner:"RH",label:"Documents RH et règlement intérieur remis",status:"NOK",note:"Traçabilité documentaire."}, {owner:"Manager",label:"Objectifs 30/60/90 jours définis",status:"NOK",note:"Critères de réussite."}, {owner:"Manager",label:"Parrain / référent identifié",status:"NA",note:"Accompagnement proximité."}, {owner:"IT",label:"Compte, matériel et accès applicatifs prêts",status:"NOK",note:"PC, mail, SSO, outils."}, {owner:"Qualité",label:"Sensibilisation qualité / sécurité réalisée",status:"NOK",note:"ISO 9001, confidentialité, risques."}, {owner:"Collaborateur",label:"Rapport d’étonnement prévu",status:"NA",note:"Point 30 jours."}, {owner:"RH",label:"Point intégration 30 jours planifié",status:"NOK",note:"Satisfaction et risque."} ]; }
-function defaultReviewDetails(name:string): ReviewDetails { return { previous_year:{ objectives:`Bilan à compléter pour ${name || "le collaborateur"}.`, achievement:0, highlights:"Réussites, difficultés, contribution projet et qualité." }, current_year:{ objectives:"Objectifs : performance, qualité, compétences, contribution transverse.", priority:"Développement compétences critiques" }, training:["Formation métier ciblée","Accompagnement par expert interne","Coaching manager ou mentorat"], employee_validation:false, manager_validation:false, development_plan:"Plan d’action à définir : objectifs mesurables, compétence critique, action formation, revue à mi-parcours." }; }
-export default function HrTalentModulePage({ params, moduleKey }: { params: Promise<PageParams>; moduleKey: HrTalentModuleKey }) { const { orgId } = use(params); const queryClient=useQueryClient(); const config=getConfig(moduleKey); const [filters,setFilters]=useState<FilterValue>(initialFilters); const [activeTab,setActiveTab]=useState<TabKey>("pilotage"); const [historyOpen,setHistoryOpen]=useState(false); const [createOpen,setCreateOpen]=useState(false); const {data,isLoading,error}=useQuery({queryKey:["hr-talent-module",moduleKey,orgId],queryFn:()=>loadData(orgId,moduleKey),enabled:Boolean(orgId)}); const archiveMutation=useMutation({mutationFn:async(row:ModuleRow)=>{ const table=moduleKey==="time"?"hr_time_activity_entries":moduleKey==="skills"?"hr_employee_skills":moduleKey==="onboarding"?"hr_onboarding_plans":"hr_review_items"; const {error}=await (supabase.from(table as never) as any).update({archived_at:new Date().toISOString(),status:"archived"}).eq("id",(row as any).id); if(error) throw new Error(error.message);},onSuccess:async()=>{await queryClient.invalidateQueries({queryKey:["hr-talent-module",moduleKey,orgId]});}}); const filteredRows=useMemo(()=>data?filterRows(moduleKey,data.rows,filters):[],[data,moduleKey,filters]); const metrics=useMemo(()=>data?getMetrics(moduleKey,filteredRows,data.skillCatalog):[],[data,filteredRows,moduleKey]); if(isLoading) return <div className="space-y-6"><PageHeader title={config.title} subtitle="Chargement des données RH." flush/><section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{Array.from({length:4}).map((_,i)=><div key={i} className="h-[106px] animate-pulse rounded-2xl border border-slate-200 bg-slate-100 dark:border-slate-600/60 dark:bg-slate-700/70"/>)}</section></div>; if(error||!data) return <div className="space-y-6"><PageHeader title={config.title} subtitle={config.subtitle} flush/><div className="rounded-2xl border border-red-200 bg-red-50 p-5 dark:border-red-900/60 dark:bg-red-950/30"><p className="text-sm text-red-700 dark:text-red-300">{error instanceof Error?error.message:"Une erreur inconnue est survenue."}</p></div></div>; const PrimaryIcon=config.icon; return <><div className="space-y-6"><PageHeader title={config.title} subtitle={`${config.subtitle} Organisation : ${data.organization.name}.`} flush actions={<><button type="button" onClick={()=>setHistoryOpen(!historyOpen)} className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-sky-200 bg-white px-3.5 text-xs font-bold text-sky-700 shadow-md shadow-sky-100 transition hover:-translate-y-0.5 hover:bg-sky-50 hover:shadow-lg dark:border-sky-900/60 dark:bg-slate-700/70 dark:text-sky-300 dark:shadow-none"><Bell className="h-3.5 w-3.5"/>Historique RH</button><DataExportMenu data={filteredRows} columns={buildExportColumns(moduleKey)} fileName={`${config.exportFile}_${data.organization.slug}`} sheetName={config.title}/><button type="button" onClick={()=>setCreateOpen(true)} className="inline-flex h-9 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 px-3.5 text-xs font-bold text-white shadow-md shadow-indigo-100 transition hover:-translate-y-0.5 hover:shadow-lg dark:shadow-none"><Plus className="h-3.5 w-3.5"/>{config.newLabel}</button></>}/><PageTutorial title={config.guideTitle} description={config.guideDescription} objectives={["Piloter uniquement des données Supabase réelles filtrées par organisation.","Exploiter les ressources, managers, services, statuts, modules et besoins.","Donner une lecture décisionnelle aux RH, managers, direction, PMO et formation.","Conserver la traçabilité via menus d’action, exports et archivage logique."]} steps={[{title:"Définir le périmètre",description:"Utiliser la recherche et les filtres en cascade."},{title:"Analyser les KPI",description:"Les widgets suivent strictement le périmètre filtré."},{title:"Exploiter cartes et tableaux",description:"Cartes 2 colonnes et tableaux sticky avec actions trois points."},{title:"Décider avec les graphiques",description:"Graphiques copiables et agrandissables pour comité."}]} analyses={[{title:"Répartition",description:"Statuts, services, managers, modules."},{title:"Tendance",description:"Évolution mensuelle."},{title:"Qualité",description:"Complétude, risques, retards."},{title:"Décision",description:"Priorisation des actions."}]} recommendations={["Traiter les alertes rose et amber en priorité.","Relier compétences, projets, formation et entretiens.","Archiver via menus trois points.","Exporter les données filtrées pour les comités."]}/>{historyOpen&&<SectionCard icon={Bell} title="Historique RH" description="Événements de création, modification, archivage et futures actions auditées."><p className="text-sm text-slate-500 dark:text-slate-300">Les créations et archivages sont enregistrés dans les tables métier. Le raccordement audit détaillé sera généralisé dans le module Admin / audit.</p></SectionCard>}<section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{metrics.map((metric)=><MetricCard key={metric.label} {...metric}/>)}</section><FiltersPanel moduleKey={moduleKey} rows={data.rows} skillCatalog={data.skillCatalog} employees={data.employees} value={filters} onChange={setFilters} resultCount={filteredRows.length}/><div className="flex justify-center"><div className="inline-flex max-w-full gap-1 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm dark:border-slate-600/60 dark:bg-slate-700/70"><TabButton active={activeTab==="pilotage"} accent="indigo" icon={PrimaryIcon} label={config.primaryTab} onClick={()=>setActiveTab("pilotage")}/><TabButton active={activeTab==="graphs"} accent="emerald" icon={BarChart3} label="Graphiques" onClick={()=>setActiveTab("graphs")}/>{moduleKey==="skills"&&<TabButton active={activeTab==="library"} accent="amber" icon={BookOpen} label="Bibliothèque" onClick={()=>setActiveTab("library")}/>}<TabButton active={activeTab==="alerts"} accent={moduleKey==="skills"?"rose":"amber"} icon={Bell} label="Alertes" onClick={()=>setActiveTab("alerts")}/></div></div>{activeTab==="pilotage"&&<WorkCardsAndTable moduleKey={moduleKey} rows={filteredRows} employees={data.employees} onArchive={(row)=>archiveMutation.mutate(row)}/>} {activeTab==="graphs"&&<ChartsPanel moduleKey={moduleKey} rows={filteredRows} skillCatalog={data.skillCatalog}/>} {activeTab==="library"&&<LibraryPanel skillCatalog={data.skillCatalog.filter((skill)=>filters.module==="all"||skill.family===filters.module).filter((skill)=>filters.submodule==="all"||skill.category===filters.submodule)}/>} {activeTab==="alerts"&&<AlertsPanel moduleKey={moduleKey} rows={filteredRows}/>}</div><CreateModal moduleKey={moduleKey} data={data} isOpen={createOpen} onClose={()=>setCreateOpen(false)} onCreated={async()=>{await queryClient.invalidateQueries({queryKey:["hr-talent-module",moduleKey,orgId]});}}/></>; }
+
+function buildDefaultOnboardingChecklist() {
+  return [
+    { owner: "RH", label: "Contrat signé et dossier administratif complet", status: "NOK", note: "Contrat, avenant, coordonnées, urgence, RIB et justificatifs." },
+    { owner: "RH", label: "Livret d’accueil disponible et remis", status: "NOK", note: "Preuve de remise à conserver pour audit interne." },
+    { owner: "IT", label: "PC disponible et configuré", status: "NOK", note: "Poste, sécurité, chiffrement, antivirus et droits locaux." },
+    { owner: "IT", label: "Adresse mail et accès SSO créés", status: "NOK", note: "Messagerie, MFA, groupes, outils projet et outils RH." },
+    { owner: "Office", label: "Fournitures et environnement de travail prêts", status: "NA", note: "Badge, bureau, écran, casque, téléphone ou matériel distant." },
+    { owner: "RH", label: "Présentation organisation et société réalisée", status: "NOK", note: "Organisation, valeurs, règles internes, confidentialité et éthique." },
+    { owner: "Manager", label: "Présentation équipe et projet réalisée", status: "NOK", note: "Rôles, interlocuteurs, planning, objectifs et rituels." },
+    { owner: "Manager", label: "Fiche de poste et fiche d’activités validées", status: "NOK", note: "Missions, responsabilités, livrables et critères de réussite." },
+    { owner: "Manager", label: "Objectifs 30/60/90 jours définis", status: "NOK", note: "Objectifs opérationnels, compétences, jalons et points de contrôle." },
+    { owner: "Qualité", label: "Livrables attendus connus", status: "NOK", note: "Templates, exigences ISO 9001, circuit de validation et archivage." },
+    { owner: "Qualité", label: "Sensibilisation qualité / sécurité réalisée", status: "NOK", note: "Confidentialité, risques, non-conformités et bonnes pratiques." },
+    { owner: "Manager", label: "Matrice de compétences initiale réalisée", status: "NOK", note: "Auto-évaluation, niveau cible, expert référent et plan d’accompagnement." },
+    { owner: "RH", label: "Formation obligatoire planifiée", status: "NOK", note: "Formation métier, outils, sécurité, conformité ou habilitation." },
+    { owner: "Manager", label: "Point manager planifié", status: "NOK", note: "Points 7 jours, 30 jours, 60 jours, 90 jours et fin période d’essai." },
+    { owner: "RH", label: "Formulaire d’habilitation réalisé si besoin", status: "NA", note: "Accès spécifiques client, site sensible, données ou applications." },
+    { owner: "Collaborateur", label: "Rapport d’étonnement prévu", status: "NA", note: "Retour à 30 jours sur intégration, outils, organisation et irritants." },
+    { owner: "RH", label: "Validation période d’essai préparée", status: "NOK", note: "Décision RH/manager, preuves, objectifs et éventuelle prolongation." },
+  ];
+}
+
+function CreateModal({ moduleKey, organizationId, employees, catalog, onClose }: { moduleKey: HrTalentModuleKey; organizationId: string; employees: Employee[]; catalog: SkillCatalogItem[]; onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const firstEmployee = employees[0]?.id || "";
+  const firstSkill = catalog[0]?.id || "";
+  const [employeeId, setEmployeeId] = useState(firstEmployee);
+  const [skillId, setSkillId] = useState(firstSkill);
+  const [level, setLevel] = useState("1");
+  const [projectNumber, setProjectNumber] = useState(`P-${new Date().getFullYear()}-0001`);
+  const [projectDesignation, setProjectDesignation] = useState("Projet client / mission affectée");
+  const [activityDate, setActivityDate] = useState(new Date().toISOString().slice(0, 10));
+  const [avvHours, setAvvHours] = useState("0");
+  const [managementHours, setManagementHours] = useState("0");
+  const [productionHours, setProductionHours] = useState("7.5");
+  const [reworkHours, setReworkHours] = useState("0");
+  const [trainingHours, setTrainingHours] = useState("0");
+  const [intercontractHours, setIntercontractHours] = useState("0");
+  const [purchaseCost, setPurchaseCost] = useState("0");
+  const [expenseCost, setExpenseCost] = useState("0");
+  const [comments, setComments] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+
+  async function save() {
+    if (!employeeId) return;
+    setIsSaving(true);
+    try {
+      if (moduleKey === "skills") {
+        const skill = catalog.find((item) => item.id === skillId);
+        const current = Number(level);
+        const target = Math.min(4, current + 1);
+        const { error } = await (supabase.from("hr_employee_skills" as never) as any).upsert({ organization_id: organizationId, employee_id: employeeId, skill_id: skillId, level: current, current_level: current, target_level: target, assessment_date: new Date().toISOString().slice(0, 10), last_self_assessment_at: new Date().toISOString().slice(0, 10), assessor_type: "self", project_context: "Auto-évaluation annuelle RH.", evidence: `Auto-évaluation créée depuis la page Compétences pour ${skill?.name || "compétence"}.`, status: current >= target ? "validated" : "to_develop" }, { onConflict: "organization_id,employee_id,skill_id" });
+        if (error) throw error;
+      } else if (moduleKey === "onboarding") {
+        const { error } = await (supabase.from("hr_onboarding_plans" as never) as any).insert({ organization_id: organizationId, employee_id: employeeId, manager_employee_id: employees.find((item) => item.id === employeeId)?.manager_employee_id || null, recruiter_employee_id: null, start_date: new Date().toISOString().slice(0, 10), target_end_date: new Date(Date.now() + 90 * 86400000).toISOString().slice(0, 10), status: "prepared", progress_percent: 0, risk_level: "watch", notes: "Nouveau parcours créé depuis ONEPILOT : checklist complète à initialiser avec RH, IT, manager et qualité.", checklist_items: buildDefaultOnboardingChecklist() });
+        if (error) throw error;
+      } else if (moduleKey === "reviews") {
+        const year = new Date().getFullYear();
+        let cycleId: string | null = null;
+        const existingCycle = await (supabase.from("hr_review_cycles" as never) as any).select("id").eq("organization_id", organizationId).eq("name", `Campagne annuelle ${year}`).maybeSingle();
+        if (existingCycle.error) throw existingCycle.error;
+        cycleId = existingCycle.data?.id ?? null;
+        if (!cycleId) {
+          const cycleInsert = await (supabase.from("hr_review_cycles" as never) as any).insert({ organization_id: organizationId, name: `Campagne annuelle ${year}`, review_type: "annual", period_start: `${year}-01-01`, period_end: `${year}-12-31`, status: "open" }).select("id").single();
+          if (cycleInsert.error) throw cycleInsert.error;
+          cycleId = cycleInsert.data.id;
+        }
+        const reviewDetails = { previous_year: { objectives: "Bilan année écoulée à compléter.", achievement: 0, highlights: "Réussites, irritants et axes de progrès." }, current_year: { objectives: "Objectifs de l’année à définir.", priority: "Performance, compétences et contribution collective." }, training: ["Formation métier à qualifier"], employee_validation: false, manager_validation: false, development_plan: "Plan de développement à définir." };
+        const { error } = await (supabase.from("hr_review_items" as never) as any).insert({ organization_id: organizationId, cycle_id: cycleId, employee_id: employeeId, manager_employee_id: employees.find((item) => item.id === employeeId)?.manager_employee_id || null, status: "employee_input", objective_count: 4, completed_objective_count: 0, global_rating: null, employee_comment: "Auto-évaluation à compléter.", manager_comment: "Évaluation manager à compléter.", review_details: reviewDetails });
+        if (error) throw error;
+      } else {
+        const hourlyCost = 75;
+        const avv = Number(avvHours || 0);
+        const management = Number(managementHours || 0);
+        const production = Number(productionHours || 0);
+        const rework = Number(reworkHours || 0);
+        const training = Number(trainingHours || 0);
+        const intercontract = Number(intercontractHours || 0);
+        const expenses = Number(expenseCost || 0);
+        const purchase = Number(purchaseCost || 0);
+        const totalHours = avv + management + production + rework + training + intercontract + expenses;
+        const totalCost = (avv + management + production + rework + training + intercontract) * hourlyCost + purchase;
+        const { error } = await (supabase.from("hr_time_activity_entries" as never) as any).insert({
+          organization_id: organizationId,
+          employee_id: employeeId,
+          activity_date: activityDate,
+          activity_type: intercontract > 0 ? "intercontract" : "project_delivery",
+          duration_hours: totalHours,
+          status: "submitted",
+          project_number: projectNumber,
+          project_designation: projectDesignation,
+          avv_hours: avv,
+          management_hours: management,
+          production_hours: production,
+          rework_hours: rework,
+          training_hours: training,
+          intercontract_hours: intercontract,
+          avv_cost: avv * hourlyCost,
+          management_cost: management * hourlyCost,
+          production_cost: production * hourlyCost,
+          rework_cost: rework * hourlyCost,
+          purchase_cost: purchase,
+          expense_cost: expenses,
+          expense_hours: 0,
+          total_hours: totalHours,
+          total_cost: totalCost,
+          comments,
+          description: comments || "Pointage mensuel créé depuis ONEPILOT.",
+          validation_manager_status: "submitted",
+          manager_comment: "À valider par le N+1 avant la clôture hebdomadaire suivant la fin de mois.",
+        });
+        if (error) throw error;
+      }
+      await queryClient.invalidateQueries({ queryKey: ["hr-talent-module"] });
+      onClose();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Erreur d’enregistrement.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
+      <div className="max-h-[90vh] w-full max-w-6xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-600 dark:bg-slate-800">
+        <div className="border-b border-slate-100 bg-gradient-to-r from-sky-50/70 via-white to-indigo-50/60 px-5 py-4 dark:border-slate-600 dark:from-sky-900/25 dark:via-slate-800 dark:to-indigo-900/25">
+          <div className="flex items-center justify-between gap-3"><h2 className="text-sm font-black text-slate-950 dark:text-white">{getConfig(moduleKey).newLabel}</h2><button onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100"><X className="h-4 w-4" /></button></div>
+        </div>
+        <div className="max-h-[72vh] space-y-4 overflow-auto p-5">
+          <label className="block"><span className="text-xs font-bold text-slate-600 dark:text-slate-300">Ressource</span><select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} className={`${selectClassName} mt-1 w-full`}>{employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.full_name || employee.employee_number || employee.id}</option>)}</select></label>
+          {moduleKey === "skills" && <><label className="block"><span className="text-xs font-bold text-slate-600 dark:text-slate-300">Compétence</span><select value={skillId} onChange={(e) => setSkillId(e.target.value)} className={`${selectClassName} mt-1 w-full`}>{catalog.map((skill) => <option key={skill.id} value={skill.id}>{skill.family} / {skill.category} / {skill.name}</option>)}</select></label><label className="block"><span className="text-xs font-bold text-slate-600 dark:text-slate-300">Niveau actuel</span><select value={level} onChange={(e) => setLevel(e.target.value)} className={`${selectClassName} mt-1 w-full`}>{[0, 1, 2, 3, 4].map((item) => <option key={item} value={item}>Niveau {item}</option>)}</select></label></>}
+          {moduleKey === "time" && <div className="space-y-4">
+            <div className="rounded-2xl border border-indigo-100 bg-indigo-50/50 p-3 text-xs font-semibold text-indigo-700 dark:border-indigo-900/60 dark:bg-indigo-950/25 dark:text-indigo-300">Sélectionne la date de pointage puis renseigne les rubriques du projet. Pour un projet IC-AAAA-0001, seule la colonne Intercontrat doit être utilisée ; pour un projet P-AAAA-XXXX, la colonne IC reste à zéro.</div>
+            <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-600">
+              <table className="min-w-[1280px] w-full border-separate border-spacing-0 bg-white text-sm dark:bg-slate-800">
+                <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-700 dark:text-slate-300"><tr><th className="px-3 py-2 text-left">N° projet</th><th className="px-3 py-2 text-left">Désignation</th><th className="px-3 py-2 text-left">Date</th><th className="px-3 py-2 text-right">AVV</th><th className="px-3 py-2 text-right">Management</th><th className="px-3 py-2 text-right">Production</th><th className="px-3 py-2 text-right">Reprise</th><th className="px-3 py-2 text-right">Formation</th><th className="px-3 py-2 text-right">IC</th><th className="px-3 py-2 text-right">Achat €</th><th className="px-3 py-2 text-right">Frais €</th></tr></thead>
+                <tbody><tr><td className="p-2"><input value={projectNumber} onChange={(e)=>setProjectNumber(e.target.value)} placeholder="P-2026-0001 ou IC-2026-0001" className={`${selectClassName} w-full`} /></td><td className="p-2"><input value={projectDesignation} onChange={(e)=>setProjectDesignation(e.target.value)} className={`${selectClassName} w-full`} /></td><td className="p-2"><input type="date" value={activityDate} onChange={(e)=>setActivityDate(e.target.value)} className={`${selectClassName} w-full`} /></td><td className="p-2"><input type="number" step="0.25" value={avvHours} onChange={(e)=>setAvvHours(e.target.value)} className={`${selectClassName} w-24 text-right`} /></td><td className="p-2"><input type="number" step="0.25" value={managementHours} onChange={(e)=>setManagementHours(e.target.value)} className={`${selectClassName} w-24 text-right`} /></td><td className="p-2"><input type="number" step="0.25" value={productionHours} onChange={(e)=>setProductionHours(e.target.value)} className={`${selectClassName} w-24 text-right`} /></td><td className="p-2"><input type="number" step="0.25" value={reworkHours} onChange={(e)=>setReworkHours(e.target.value)} className={`${selectClassName} w-24 text-right`} /></td><td className="p-2"><input type="number" step="0.25" value={trainingHours} onChange={(e)=>setTrainingHours(e.target.value)} className={`${selectClassName} w-24 text-right`} /></td><td className="p-2"><input type="number" step="0.25" value={intercontractHours} onChange={(e)=>setIntercontractHours(e.target.value)} className={`${selectClassName} w-24 text-right`} /></td><td className="p-2"><input type="number" step="1" value={purchaseCost} onChange={(e)=>setPurchaseCost(e.target.value)} className={`${selectClassName} w-24 text-right`} /></td><td className="p-2"><input type="number" step="1" value={expenseCost} onChange={(e)=>setExpenseCost(e.target.value)} className={`${selectClassName} w-24 text-right`} /></td></tr></tbody>
+              </table>
+            </div>
+            <label className="block"><span className="text-xs font-bold text-slate-600 dark:text-slate-300">Commentaires</span><textarea value={comments} onChange={(e)=>setComments(e.target.value)} className="mt-1 min-h-24 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300" /></label>
+          </div>}
+          {moduleKey === "onboarding" && <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 text-xs leading-5 text-slate-600 dark:border-slate-600 dark:bg-slate-900/30 dark:text-slate-300">Le parcours sera créé avec une checklist complète RH / IT / manager / qualité / collaborateur : livret, PC, mail, accès outils, projet, fiche poste, matrice compétences, formations, points manager et période d’essai.</div>}
+          <div className="flex justify-end gap-2"><button type="button" onClick={onClose} className="inline-flex h-10 items-center rounded-xl border border-slate-200 px-4 text-sm font-bold text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300">Annuler</button><button type="button" onClick={() => void save()} disabled={isSaving || !employeeId || (moduleKey === "skills" && !skillId)} className="inline-flex h-10 items-center rounded-xl bg-indigo-600 px-4 text-sm font-bold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-50">Enregistrer</button></div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function HrTalentModulePage({ params, moduleKey }: { params: Promise<PageParams>; moduleKey: HrTalentModuleKey }) {
+  const { orgId } = use(params);
+  const [filters, setFilters] = useState<FilterValue>(emptyFilters);
+  const [activeTab, setActiveTab] = useState<TabKey>("main");
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const config = getConfig(moduleKey);
+  const query = useQuery({ queryKey: ["hr-talent-module", moduleKey, orgId], queryFn: () => loadData(orgId, moduleKey) });
+  const queryClient = useQueryClient();
+
+  const archiveMutation = useMutation({
+    mutationFn: async (row: AnyRow) => {
+      const table = moduleKey === "time" ? "hr_time_activity_entries" : moduleKey === "skills" ? "hr_employee_skills" : moduleKey === "onboarding" ? "hr_onboarding_plans" : "hr_review_items";
+      const { error } = await (supabase.from(table as never) as any).update({ status: "archived", archived_at: new Date().toISOString() }).eq("id", row.id);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["hr-talent-module"] }),
+  });
+
+  const restoreMutation = useMutation({
+    mutationFn: async (row: AnyRow) => {
+      const table = moduleKey === "time" ? "hr_time_activity_entries" : moduleKey === "skills" ? "hr_employee_skills" : moduleKey === "onboarding" ? "hr_onboarding_plans" : "hr_review_items";
+      const status = moduleKey === "time" ? "submitted" : moduleKey === "skills" ? "active" : moduleKey === "onboarding" ? "in_progress" : "employee_input";
+      const { error } = await (supabase.from(table as never) as any).update({ status, archived_at: null }).eq("id", row.id);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["hr-talent-module"] }),
+  });
+
+  if (query.isLoading) return <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm font-semibold text-slate-500 shadow-sm dark:border-slate-600 dark:bg-slate-700/70">Chargement...</div>;
+  if (query.error) return <div className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-sm font-bold text-rose-700">Impossible de charger la page : {query.error instanceof Error ? query.error.message : "erreur inconnue"}</div>;
+
+  const data = query.data as ModuleData;
+  const filteredRows = filterRows(moduleKey, data.rows, filters);
+  const metrics = buildMetrics(moduleKey, filteredRows, data.catalog);
+  const tabs = [
+    { key: "main" as TabKey, label: config.primaryTab, icon: moduleKey === "skills" ? Users : config.icon, accent: "indigo" },
+    { key: "graphs" as TabKey, label: "Graphiques", icon: BarChart3, accent: "emerald" },
+    ...(moduleKey === "skills" ? [{ key: "library" as TabKey, label: "Bibliothèque", icon: BookOpen, accent: "amber" }] : []),
+    { key: "alerts" as TabKey, label: "Alertes", icon: Bell, accent: moduleKey === "skills" ? "rose" : "amber" },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title={config.title}
+        subtitle={config.subtitle}
+        actions={
+          <>
+            <button type="button" onClick={() => setHistoryOpen((current) => !current)} className="inline-flex h-10 items-center gap-2 rounded-xl border border-sky-100 bg-white px-3 text-sm font-bold text-sky-700 shadow-sm transition hover:border-sky-200 hover:bg-sky-50 dark:border-sky-900 dark:bg-slate-700/70 dark:text-sky-300 dark:hover:bg-sky-900/30"><Clock3 className="h-4 w-4" />Historique RH</button>
+            <DataExportMenu data={filteredRows} columns={buildExportColumns(moduleKey)} fileName={config.exportFile} sheetName={config.title} disabled={filteredRows.length === 0} />
+            <button type="button" onClick={() => setShowCreateModal(true)} className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-4 text-sm font-bold text-white shadow-sm transition hover:bg-indigo-700"><Plus className="h-4 w-4" />{config.newLabel}</button>
+          </>
+        }
+      />
+
+      <PageTutorial
+        title={config.guideTitle}
+        description={config.guideDescription}
+        objectives={["Fiabiliser les données RH et managériales.", "Outiller les décisions formation, staffing, charge, intégration et performance.", "Produire un reporting exploitable sans ressaisie."]}
+        steps={[{ title: "Filtrer", description: "Utiliser le périmètre d’analyse pour cibler ressources, statuts, modules, niveaux et besoins." }, { title: "Analyser", description: "Lire les KPI, cartes, tableaux, radars, alertes et recommandations." }, { title: "Agir", description: "Créer, modifier, archiver, exporter et capitaliser les actions RH." }]}
+        analyses={[{ title: "Décision", description: "Comparer charge, disponibilité, niveau, risque, objectif, intégration et maturité RH." }]}
+        recommendations={["Mettre à jour les compétences au moins une fois par an et en sortie de projet.", "Relier les écarts aux entretiens, formations, staffing et projets.", "Archiver uniquement après validation RH/manager et contrôle qualité."]}
+      />
+
+      {historyOpen && <SectionCard icon={Clock3} title="Historique RH" description="Historique local des actions réalisées sur la page."><p className="text-sm text-slate-500 dark:text-slate-300">Les créations, validations, exports et archivages seront rattachés à l’audit global ONEPILOT lors du lot audit transverse.</p></SectionCard>}
+
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{metrics.map((metric) => <MetricCard key={metric.label} {...metric} />)}</section>
+
+      <FiltersPanel moduleKey={moduleKey} rows={data.rows} catalog={data.catalog} employees={data.employees} value={filters} onChange={setFilters} resultCount={filteredRows.length} />
+
+      <div className="flex justify-center">
+        <div className="inline-flex max-w-full gap-1 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm dark:border-slate-600/60 dark:bg-slate-700/70">
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            const activeClasses: Record<string, string> = { indigo: "bg-indigo-600 text-white shadow-md shadow-indigo-100 dark:shadow-none", emerald: "bg-emerald-600 text-white shadow-md shadow-emerald-100 dark:shadow-none", amber: "bg-amber-500 text-white shadow-md shadow-amber-100 dark:shadow-none", rose: "bg-rose-600 text-white shadow-md shadow-rose-100 dark:shadow-none" };
+            const inactiveClasses: Record<string, string> = { indigo: "text-slate-500 hover:bg-indigo-50 hover:text-indigo-700 dark:hover:bg-indigo-900/35 dark:hover:text-indigo-300", emerald: "text-slate-500 hover:bg-emerald-50 hover:text-emerald-700 dark:hover:bg-emerald-900/35 dark:hover:text-emerald-300", amber: "text-slate-500 hover:bg-amber-50 hover:text-amber-700 dark:hover:bg-amber-900/35 dark:hover:text-amber-300", rose: "text-slate-500 hover:bg-rose-50 hover:text-rose-700 dark:hover:bg-rose-900/35 dark:hover:text-rose-300" };
+            return <button key={tab.key} type="button" onClick={() => setActiveTab(tab.key)} className={`inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl px-5 text-sm font-bold transition ${activeTab === tab.key ? activeClasses[tab.accent] : inactiveClasses[tab.accent]}`}><Icon className="h-4 w-4" />{tab.label}</button>;
+          })}
+        </div>
+      </div>
+
+      {activeTab === "main" && <WorkCardsAndTable moduleKey={moduleKey} rows={filteredRows} employees={data.employees} onArchive={(row) => archiveMutation.mutate(row)} onRestore={(row) => restoreMutation.mutate(row)} />}
+      {activeTab === "graphs" && <GraphsPanel moduleKey={moduleKey} rows={filteredRows} catalog={data.catalog} />}
+      {activeTab === "library" && <LibraryPanel catalog={data.catalog} rows={filteredRows} />}
+      {activeTab === "alerts" && <AlertsPanel moduleKey={moduleKey} rows={filteredRows} />}
+
+      {showCreateModal && <CreateModal moduleKey={moduleKey} organizationId={data.organization.id} employees={data.employees} catalog={data.catalog} onClose={() => setShowCreateModal(false)} />}
+    </div>
+  );
+}
