@@ -1,7 +1,7 @@
-import HrTalentModulePage from "@/components/hr/HrTalentModulePage";
+import HrTimeActivitiesPage from "@/components/hr/HrTimeActivitiesPage";
 
 type PageParams = { orgId: string };
 
-export default function HrTimeActivitiesPage({ params }: { params: Promise<PageParams> }) {
-  return <HrTalentModulePage params={params} moduleKey="time" />;
+export default function Page({ params }: { params: Promise<PageParams> }) {
+  return <HrTimeActivitiesPage params={params} />;
 }

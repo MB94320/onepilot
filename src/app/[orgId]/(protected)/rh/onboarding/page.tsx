@@ -1,7 +1,7 @@
-import HrTalentModulePage from "@/components/hr/HrTalentModulePage";
+import HrOnboardingPage from "@/components/hr/HrOnboardingPage";
 
 type PageParams = { orgId: string };
 
-export default function HrOnboardingPage({ params }: { params: Promise<PageParams> }) {
-  return <HrTalentModulePage params={params} moduleKey="onboarding" />;
+export default function Page({ params }: { params: Promise<PageParams> }) {
+  return <HrOnboardingPage params={params} />;
 }

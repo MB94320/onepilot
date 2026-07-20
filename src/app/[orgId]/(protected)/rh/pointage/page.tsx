@@ -1,7 +1,8 @@
-import HrTalentModulePage from "@/components/hr/HrTalentModulePage";
+import { redirect } from "next/navigation";
 
 type PageParams = { orgId: string };
 
-export default function Page({ params }: { params: Promise<PageParams> }) {
-  return <HrTalentModulePage params={params} moduleKey="time" />;
+export default async function Page({ params }: { params: Promise<PageParams> }) {
+  const { orgId } = await params;
+  redirect(`/${orgId}/rh/temps-activites`);
 }
