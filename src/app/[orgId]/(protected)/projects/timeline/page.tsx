@@ -1,9 +1,9 @@
 import ProjectManagementPage from "@/components/projects/ProjectManagementPage";
 
-export default function ProjectsPage({
+export default function ProjectTimelinePage({
   params,
 }: {
   params: Promise<{ orgId: string }>;
 }) {
-  return <ProjectManagementPage params={params} mode="portfolio" />;
+  return <ProjectManagementPage params={params} mode="timeline" />;
 }

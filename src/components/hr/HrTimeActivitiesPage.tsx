@@ -22,6 +22,7 @@ import {
   Gauge,
   GraduationCap,
   Lightbulb,
+  MoreHorizontal,
   Plus,
   Search,
   ShieldAlert,
@@ -64,7 +65,12 @@ const supabase = createClient();
 
 type PageParams = { orgId: string };
 type AnyRow = Record<string, any>;
-type TabKey = "entries" | "validations" | "graphs" | "alerts";
+type TabKey =
+  | "entries"
+  | "validations"
+  | "graphs"
+  | "alerts"
+  | "summaries";
 type ViewMode = "cards" | "table";
 type DrawerMode = "view" | "edit";
 
@@ -175,13 +181,13 @@ const emptyFilters: Filters = {
   period: "all",
 };
 const chartColors = {
-  indigo: "#6366f1",
-  emerald: "#10b981",
-  amber: "#f59e0b",
-  rose: "#f43f5e",
-  sky: "#0ea5e9",
-  red: "#ef4444",
-  slate: "#64748b",
+  indigo: "#818cf8",
+  emerald: "#6ee7b7",
+  amber: "#fcd34d",
+  rose: "#fda4af",
+  sky: "#7dd3fc",
+  red: "#fca5a5",
+  slate: "#94a3b8",
 };
 
 function isUuid(value: string) {
@@ -400,7 +406,7 @@ function statusLabel(status?: string | null) {
   const values: Record<string, string> = {
     draft: "Brouillon",
     submitted: "À valider",
-    manager_approved: "Validé N+1",
+    manager_approved: "Validé",
     approved: "Validé",
     rejected: "Refusé",
     archived: "Archivé",
@@ -1166,6 +1172,9 @@ function ProjectDrawer({
     Object.fromEntries(summary.detailRows.map((row) => [row.id, { ...row }])),
   );
   const [saving, setSaving] = useState(false);
+  const [validatingId, setValidatingId] = useState<string | null>(null);
+  const [rejectingRow, setRejectingRow] = useState<TimeEntry | null>(null);
+  const [rejectionComment, setRejectionComment] = useState("");
   const availability = availabilityRows(summary, data);
   const rows = [
     ...summary.detailRows.map((row) => draftRows[row.id] || row),
@@ -1218,6 +1227,13 @@ function ProjectDrawer({
         a.full_name.localeCompare(b.full_name, "fr") ||
         a.activity_date.localeCompare(b.activity_date),
     );
+  const hasDetailFilters =
+    year !== "all" ||
+    month !== "all" ||
+    week !== "all" ||
+    resource !== "all" ||
+    Boolean(dateStart) ||
+    Boolean(dateEnd);
   const totals = filtered.reduce(
     (acc, row) => {
       if (!row.is_availability_row) {
@@ -1276,6 +1292,56 @@ function ProjectDrawer({
       ...current,
       [id]: { ...current[id], [field]: value },
     }));
+  }
+  async function updateLineValidation(
+    row: TimeEntry,
+    status: "approved" | "rejected",
+    comment?: string,
+  ) {
+    setValidatingId(row.id);
+    try {
+      const now = new Date().toISOString();
+      const payload =
+        status === "approved"
+          ? {
+              status: "approved",
+              validation_manager_status: "approved",
+              validation_manager_comment: null,
+              manager_validated_at: now,
+              manager_rejected_at: null,
+              manager_rejection_reason: null,
+            }
+          : {
+              status: "rejected",
+              validation_manager_status: "rejected",
+              validation_manager_comment: comment || null,
+              manager_validated_at: null,
+              manager_rejected_at: now,
+              manager_rejection_reason: comment || null,
+            };
+      const { error } = await (
+        supabase.from("hr_time_activity_entries" as never) as any
+      )
+        .update({ ...payload, updated_at: now })
+        .eq("id", row.id)
+        .eq("organization_id", data.organization.id);
+      if (error) throw error;
+      setDraftRows((current) => ({
+        ...current,
+        [row.id]: { ...current[row.id], ...payload },
+      }));
+      setRejectingRow(null);
+      setRejectionComment("");
+      onSaved();
+    } catch (error) {
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Impossible de mettre à jour la validation.",
+      );
+    } finally {
+      setValidatingId(null);
+    }
   }
   async function save() {
     setSaving(true);
@@ -1463,6 +1529,25 @@ function ProjectDrawer({
                 ))}
               </select>
             </div>
+            {hasDetailFilters && (
+              <div className="mt-3 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setYear("all");
+                    setMonth("all");
+                    setWeek("all");
+                    setResource("all");
+                    setDateStart("");
+                    setDateEnd("");
+                  }}
+                  className="inline-flex h-9 items-center gap-2 rounded-lg px-3 text-xs font-semibold text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-600"
+                >
+                  <X className="h-4 w-4" />
+                  Réinitialiser les filtres
+                </button>
+              </div>
+            )}
           </HrSectionCard>
           <div className="max-h-[360px] overflow-auto rounded-2xl border border-slate-200 dark:border-slate-600">
             <table className="min-w-[2600px] w-full border-separate border-spacing-0 bg-white text-xs dark:bg-slate-700">
@@ -1493,6 +1578,7 @@ function ProjectDrawer({
                     "Total pointage (h)",
                     "Total coûts (€)",
                     "Commentaires",
+                    "Validation",
                   ].map((label, index) => (
                     <th
                       key={label}
@@ -1658,6 +1744,47 @@ function ProjectDrawer({
                           row.comments || row.description || "—"
                         )}
                       </td>
+                      <td className="border-b border-slate-100 px-3 py-3 dark:border-slate-600">
+                        {absence ? (
+                          <span className="text-xs font-bold text-slate-400">
+                            Non applicable
+                          </span>
+                        ) : ["approved", "manager_approved"].includes(
+                            String(
+                              row.validation_manager_status || row.status,
+                            ),
+                          ) ? (
+                          <HrStatusBadge status="approved" label="Validé" />
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              disabled={validatingId === row.id}
+                              onClick={() =>
+                                void updateLineValidation(row, "approved")
+                              }
+                              className="rounded-lg bg-emerald-50 px-2.5 py-1.5 text-[11px] font-black text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-50"
+                            >
+                              Valider
+                            </button>
+                            <button
+                              type="button"
+                              disabled={validatingId === row.id}
+                              onClick={() => {
+                                setRejectingRow(row);
+                                setRejectionComment(
+                                  row.manager_rejection_reason ||
+                                    row.validation_manager_comment ||
+                                    "",
+                                );
+                              }}
+                              className="rounded-lg bg-rose-50 px-2.5 py-1.5 text-[11px] font-black text-rose-700 transition hover:bg-rose-100 disabled:opacity-50"
+                            >
+                              Refuser
+                            </button>
+                          </div>
+                        )}
+                      </td>
                     </tr>
                   );
                 })}
@@ -1709,6 +1836,7 @@ function ProjectDrawer({
                     {formatCurrency(totals.cost)}
                   </td>
                   <td className="border-t border-slate-200 px-3 py-3">—</td>
+                  <td className="border-t border-slate-200 px-3 py-3">—</td>
                 </tr>
               </tfoot>
             </table>
@@ -1730,6 +1858,45 @@ function ProjectDrawer({
               >
                 Enregistrer les modifications
               </button>
+            </div>
+          )}
+          {rejectingRow && (
+            <div className="rounded-2xl border border-rose-200 bg-rose-50/70 p-4 dark:border-rose-900/60 dark:bg-rose-950/20">
+              <p className="text-sm font-black text-rose-800 dark:text-rose-200">
+                Motif du refus · {rejectingRow.full_name} · {formatDate(rejectingRow.activity_date)}
+              </p>
+              <textarea
+                value={rejectionComment}
+                onChange={(event) => setRejectionComment(event.target.value)}
+                placeholder="Expliquer précisément la correction attendue avant une nouvelle soumission…"
+                className="mt-3 min-h-24 w-full rounded-xl border border-rose-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-100 dark:border-rose-900/60 dark:bg-slate-700 dark:text-slate-100"
+              />
+              <div className="mt-3 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRejectingRow(null);
+                    setRejectionComment("");
+                  }}
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-600"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  disabled={!rejectionComment.trim() || validatingId !== null}
+                  onClick={() =>
+                    void updateLineValidation(
+                      rejectingRow,
+                      "rejected",
+                      rejectionComment.trim(),
+                    )
+                  }
+                  className="rounded-xl bg-rose-600 px-4 py-2 text-xs font-bold text-white hover:bg-rose-700 disabled:opacity-50"
+                >
+                  Confirmer le refus
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -2173,10 +2340,12 @@ function ValidationsPanel({
   summaries: ProjectSummary[];
   onView: (summary: ProjectSummary) => void;
   onApprove: (summary: ProjectSummary) => void;
-  onReject: (summary: ProjectSummary) => void;
+  onReject: (summary: ProjectSummary, comment: string) => void;
   loading: boolean;
 }) {
   const [view, setView] = useState<ViewMode>("cards");
+  const [rejecting, setRejecting] = useState<ProjectSummary | null>(null);
+  const [rejectionComment, setRejectionComment] = useState("");
   const pending = summaries.filter((summary) =>
     summary.detailRows.some(
       (row) =>
@@ -2188,35 +2357,45 @@ function ValidationsPanel({
   );
 
   const decisions = (summary: ProjectSummary) => (
-    <div
-      className="flex flex-wrap gap-2"
+    <details
+      className="relative inline-flex"
       onClick={(event) => event.stopPropagation()}
     >
-      <button
-        type="button"
-        onClick={() => onView(summary)}
-        className="inline-flex items-center gap-1.5 rounded-lg border border-sky-200 bg-white px-3 py-2 text-xs font-bold text-sky-700 transition hover:bg-sky-50"
-      >
-        <Eye className="h-3.5 w-3.5" />
-        Voir le détail
-      </button>
-      <button
-        type="button"
-        disabled={loading}
-        onClick={() => onApprove(summary)}
-        className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
-      >
-        Valider
-      </button>
-      <button
-        type="button"
-        disabled={loading}
-        onClick={() => onReject(summary)}
-        className="rounded-lg bg-rose-600 px-3 py-2 text-xs font-bold text-white hover:bg-rose-700 disabled:opacity-50"
-      >
-        Refuser
-      </button>
-    </div>
+      <summary className="inline-flex h-8 w-8 cursor-pointer list-none items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700 [&::-webkit-details-marker]:hidden">
+        <MoreHorizontal className="h-3.5 w-3.5" />
+      </summary>
+      <div className="absolute right-0 top-10 z-40 w-56 overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl dark:border-slate-600 dark:bg-slate-700">
+        <button
+          type="button"
+          onClick={() => onView(summary)}
+          className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-xs font-bold text-sky-700 transition hover:bg-sky-50 dark:text-sky-300 dark:hover:bg-sky-900/30"
+        >
+          <Eye className="h-4 w-4" />
+          Voir le détail
+        </button>
+        <button
+          type="button"
+          disabled={loading}
+          onClick={() => onApprove(summary)}
+          className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-xs font-bold text-emerald-700 transition hover:bg-emerald-50 disabled:opacity-50 dark:text-emerald-300 dark:hover:bg-emerald-900/30"
+        >
+          <CheckCircle2 className="h-4 w-4" />
+          Valider
+        </button>
+        <button
+          type="button"
+          disabled={loading}
+          onClick={() => {
+            setRejecting(summary);
+            setRejectionComment("");
+          }}
+          className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-xs font-bold text-rose-700 transition hover:bg-rose-50 disabled:opacity-50 dark:text-rose-300 dark:hover:bg-rose-900/30"
+        >
+          <X className="h-4 w-4" />
+          Refuser
+        </button>
+      </div>
+    </details>
   );
 
   return (
@@ -2268,7 +2447,10 @@ function ValidationsPanel({
                       ressource(s)
                     </p>
                   </div>
-                  <HrStatusBadge status="submitted" label="À valider" />
+                  <div className="flex items-center gap-2">
+                    <HrStatusBadge status="submitted" label="À valider" />
+                    {decisions(summary)}
+                  </div>
                 </div>
                 <div className="mt-4 grid gap-2 sm:grid-cols-2">
                   <HrInfo
@@ -2286,7 +2468,6 @@ function ValidationsPanel({
                     accent={totals.missingCosts ? "rose" : "emerald"}
                   />
                 </div>
-                <div className="mt-4">{decisions(summary)}</div>
               </article>
             );
           })}
@@ -2356,6 +2537,46 @@ function ValidationsPanel({
               })}
             </tbody>
           </table>
+        </div>
+      )}
+      {rejecting && (
+        <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50/70 p-4 dark:border-rose-900/60 dark:bg-rose-950/20">
+          <p className="text-sm font-black text-rose-800 dark:text-rose-200">
+            Refuser les pointages · {rejecting.project_number}
+          </p>
+          <p className="mt-1 text-xs text-rose-700/80 dark:text-rose-300">
+            Le commentaire sera conservé sur chaque ligne refusée afin que la ressource sache précisément quoi corriger.
+          </p>
+          <textarea
+            value={rejectionComment}
+            onChange={(event) => setRejectionComment(event.target.value)}
+            placeholder="Motif du refus et correction attendue…"
+            className="mt-3 min-h-24 w-full rounded-xl border border-rose-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-100 dark:border-rose-900/60 dark:bg-slate-700 dark:text-slate-100"
+          />
+          <div className="mt-3 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setRejecting(null);
+                setRejectionComment("");
+              }}
+              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-600"
+            >
+              Annuler
+            </button>
+            <button
+              type="button"
+              disabled={!rejectionComment.trim() || loading}
+              onClick={() => {
+                onReject(rejecting, rejectionComment.trim());
+                setRejecting(null);
+                setRejectionComment("");
+              }}
+              className="rounded-xl bg-rose-600 px-4 py-2 text-xs font-bold text-white hover:bg-rose-700 disabled:opacity-50"
+            >
+              Confirmer le refus
+            </button>
+          </div>
         </div>
       )}
     </HrSectionCard>
@@ -2968,6 +3189,286 @@ function AlertsPanel({ entries }: { entries: TimeEntry[] }) {
   );
 }
 
+type ResourceProjectSummary = {
+  key: string;
+  employee_id: string;
+  employee_number?: string | null;
+  full_name: string;
+  project_number: string;
+  project_designation: string;
+  avv: number;
+  management: number;
+  production: number;
+  rework: number;
+  training: number;
+  intercontract: number;
+  purchase: number;
+  expense: number;
+  totalHours: number;
+  totalCost: number;
+};
+
+function buildResourceProjectSummaries(entries: TimeEntry[]) {
+  const grouped = new Map<string, ResourceProjectSummary>();
+  entries
+    .filter((row) => !isArchived(row) && !row.is_availability_row)
+    .forEach((row) => {
+      const key = `${row.employee_id}:${row.project_number}`;
+      const current = grouped.get(key) || {
+        key,
+        employee_id: row.employee_id,
+        employee_number: row.employee_number,
+        full_name: row.full_name,
+        project_number: row.project_number,
+        project_designation: row.project_designation,
+        avv: 0,
+        management: 0,
+        production: 0,
+        rework: 0,
+        training: 0,
+        intercontract: 0,
+        purchase: 0,
+        expense: 0,
+        totalHours: 0,
+        totalCost: 0,
+      };
+      current.avv += Number(row.avv_hours || 0);
+      current.management += Number(row.management_hours || 0);
+      current.production += Number(row.production_hours || 0);
+      current.rework += Number(row.rework_hours || 0);
+      current.training += Number(row.training_hours || 0);
+      current.intercontract += Number(row.intercontract_hours || 0);
+      current.purchase += Number(row.purchase_cost || 0);
+      current.expense += Number(row.expense_cost || 0);
+      current.totalHours += getHours(row);
+      current.totalCost += getCost(row);
+      grouped.set(key, current);
+    });
+  return Array.from(grouped.values()).sort(
+    (a, b) =>
+      a.full_name.localeCompare(b.full_name, "fr") ||
+      a.project_number.localeCompare(b.project_number, "fr"),
+  );
+}
+
+const resourceSummaryExportColumns: ExportColumn<ResourceProjectSummary>[] = [
+  { key: "resource", label: "Ressource", value: (row) => row.full_name },
+  {
+    key: "employee_number",
+    label: "Matricule",
+    value: (row) => row.employee_number,
+  },
+  {
+    key: "project_number",
+    label: "N° projet",
+    value: (row) => row.project_number,
+  },
+  {
+    key: "project_name",
+    label: "Nom du projet",
+    value: (row) => row.project_designation,
+  },
+  { key: "avv", label: "AVV (h)", value: (row) => row.avv },
+  {
+    key: "management",
+    label: "Management (h)",
+    value: (row) => row.management,
+  },
+  {
+    key: "production",
+    label: "Production (h)",
+    value: (row) => row.production,
+  },
+  { key: "rework", label: "Reprise (h)", value: (row) => row.rework },
+  {
+    key: "training",
+    label: "Formation (h)",
+    value: (row) => row.training,
+  },
+  {
+    key: "intercontract",
+    label: "Intercontrat (h)",
+    value: (row) => row.intercontract,
+  },
+  { key: "purchase", label: "Achats (€)", value: (row) => row.purchase },
+  { key: "expense", label: "Frais (€)", value: (row) => row.expense },
+  {
+    key: "total_hours",
+    label: "Total heures",
+    value: (row) => row.totalHours,
+  },
+  {
+    key: "total_cost",
+    label: "Total coûts (€)",
+    value: (row) => row.totalCost,
+  },
+];
+
+function TimeSummariesPanel({ entries }: { entries: TimeEntry[] }) {
+  const [view, setView] = useState<ViewMode>("cards");
+  const rows = buildResourceProjectSummaries(entries);
+  const resources = Array.from(
+    rows.reduce((map, row) => {
+      const current = map.get(row.employee_id) || {
+        employee_id: row.employee_id,
+        full_name: row.full_name,
+        employee_number: row.employee_number,
+        rows: [] as ResourceProjectSummary[],
+      };
+      current.rows.push(row);
+      map.set(row.employee_id, current);
+      return map;
+    }, new Map<string, { employee_id: string; full_name: string; employee_number?: string | null; rows: ResourceProjectSummary[] }>())
+      .values(),
+  );
+  return (
+    <HrSectionCard
+      icon={Users}
+      title="Synthèse par ressource et projet"
+      description="Consolidation croisée des rubriques, heures et coûts pour contrôler charge, contribution et rentabilité."
+      right={
+        <div className="flex items-center gap-2">
+          <DataExportMenu
+            data={rows}
+            columns={resourceSummaryExportColumns}
+            fileName="rh_synthese_pointages_ressources_projets"
+            sheetName="Synthèse pointages"
+            disabled={rows.length === 0}
+          />
+          <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1">
+            <button
+              type="button"
+              onClick={() => setView("cards")}
+              className={`rounded-lg px-3 py-1.5 text-xs font-bold ${view === "cards" ? "bg-indigo-600 text-white" : "text-slate-500"}`}
+            >
+              Cartes
+            </button>
+            <button
+              type="button"
+              onClick={() => setView("table")}
+              className={`rounded-lg px-3 py-1.5 text-xs font-bold ${view === "table" ? "bg-indigo-600 text-white" : "text-slate-500"}`}
+            >
+              Tableau
+            </button>
+          </div>
+        </div>
+      }
+    >
+      {view === "cards" ? (
+        <div className="grid gap-4 xl:grid-cols-2">
+          {resources.map((resource) => {
+            const totalHours = resource.rows.reduce(
+              (sum, row) => sum + row.totalHours,
+              0,
+            );
+            const totalCost = resource.rows.reduce(
+              (sum, row) => sum + row.totalCost,
+              0,
+            );
+            return (
+              <article
+                key={resource.employee_id}
+                className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-indigo-200 hover:shadow-md dark:border-slate-600 dark:bg-slate-700/70"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-black text-slate-950 dark:text-white">
+                      {resource.full_name}
+                    </h3>
+                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-300">
+                      {resource.employee_number || "Matricule non renseigné"} · {resource.rows.length} projet(s)
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap justify-end gap-1.5">
+                    <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-[10px] font-black text-indigo-700">
+                      {formatHours(totalHours)}
+                    </span>
+                    <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-black text-emerald-700">
+                      {formatCurrency(totalCost)}
+                    </span>
+                  </div>
+                </div>
+                <div className="mt-4 space-y-2">
+                  {resource.rows.map((row) => (
+                    <div
+                      key={row.key}
+                      className="grid gap-2 rounded-xl border border-slate-100 bg-gradient-to-r from-sky-50/60 via-white to-indigo-50/50 p-3 sm:grid-cols-[1fr_auto_auto] dark:border-slate-600 dark:from-sky-900/20 dark:via-slate-700 dark:to-indigo-900/20"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-black text-slate-900 dark:text-white">
+                          {row.project_number} · {row.project_designation}
+                        </p>
+                        <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-300">
+                          AVV {formatHours(row.avv)} · Management {formatHours(row.management)} · Production {formatHours(row.production)} · Formation {formatHours(row.training)}
+                        </p>
+                      </div>
+                      <span className="text-xs font-black text-indigo-700 dark:text-indigo-300">
+                        {formatHours(row.totalHours)}
+                      </span>
+                      <span className="text-xs font-black text-emerald-700 dark:text-emerald-300">
+                        {formatCurrency(row.totalCost)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="max-h-[360px] overflow-auto rounded-2xl border border-slate-200 dark:border-slate-600">
+          <table className="min-w-[1900px] w-full border-separate border-spacing-0 bg-white text-sm dark:bg-slate-700">
+            <thead className="sticky top-0 z-20 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-600 dark:text-slate-200">
+              <tr>
+                {[
+                  "Ressource",
+                  "N° projet",
+                  "Nom du projet",
+                  "AVV (h)",
+                  "Management (h)",
+                  "Production (h)",
+                  "Reprise (h)",
+                  "Formation (h)",
+                  "Intercontrat (h)",
+                  "Achats (€)",
+                  "Frais (€)",
+                  "Total heures",
+                  "Total coûts (€)",
+                ].map((label, index) => (
+                  <th
+                    key={label}
+                    className={`${index === 0 ? "sticky left-0 z-30" : ""} whitespace-nowrap border-b border-slate-200 bg-inherit px-4 py-3 text-left`}
+                  >
+                    {label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.key} className="hover:bg-indigo-50/40 dark:hover:bg-indigo-900/20">
+                  <td className="sticky left-0 z-10 border-b border-slate-100 bg-white px-4 py-3 font-black dark:border-slate-600 dark:bg-slate-700">
+                    {row.full_name}
+                  </td>
+                  <td className="border-b border-slate-100 px-4 py-3 font-bold dark:border-slate-600">{row.project_number}</td>
+                  <td className="border-b border-slate-100 px-4 py-3 dark:border-slate-600">{row.project_designation}</td>
+                  {[row.avv, row.management, row.production, row.rework, row.training, row.intercontract].map((value, index) => (
+                    <td key={index} className="border-b border-slate-100 px-4 py-3 dark:border-slate-600">{formatHours(value)}</td>
+                  ))}
+                  <td className="border-b border-slate-100 px-4 py-3 dark:border-slate-600">{formatCurrency(row.purchase)}</td>
+                  <td className="border-b border-slate-100 px-4 py-3 dark:border-slate-600">{formatCurrency(row.expense)}</td>
+                  <td className="border-b border-slate-100 px-4 py-3 font-black text-indigo-700 dark:border-slate-600 dark:text-indigo-300">{formatHours(row.totalHours)}</td>
+                  <td className="border-b border-slate-100 px-4 py-3 font-black text-emerald-700 dark:border-slate-600 dark:text-emerald-300">{formatCurrency(row.totalCost)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </HrSectionCard>
+  );
+}
+
 const exportColumns: ExportColumn<TimeEntry>[] = [
   {
     key: "project_number",
@@ -3116,12 +3617,22 @@ export default function HrTimeActivitiesPage({
     mutationFn: async ({
       summary,
       status,
+      comment,
     }: {
       summary: ProjectSummary;
       status: string;
+      comment?: string;
     }) => {
       const ids = summary.detailRows
-        .filter((row) => !isArchived(row))
+        .filter(
+          (row) =>
+            !isArchived(row) &&
+            (status === "archived" ||
+              status === "submitted" ||
+              !["approved", "manager_approved"].includes(
+                String(row.validation_manager_status || row.status),
+              )),
+        )
         .map((row) => row.id);
       if (!ids.length) return;
       const payload: AnyRow =
@@ -3133,9 +3644,15 @@ export default function HrTimeActivitiesPage({
                 status,
                 validation_manager_status: status,
                 manager_validated_at:
-                  status === "manager_approved"
+                  status === "approved"
                     ? new Date().toISOString()
                     : null,
+                manager_rejected_at:
+                  status === "rejected" ? new Date().toISOString() : null,
+                manager_rejection_reason:
+                  status === "rejected" ? comment || null : null,
+                validation_manager_comment:
+                  status === "rejected" ? comment || null : null,
                 archived_at: null,
               };
       const { error } = await (
@@ -3212,6 +3729,13 @@ export default function HrTimeActivitiesPage({
       active: "bg-rose-600 text-white shadow-md shadow-rose-100",
       inactive: "text-slate-500 hover:bg-rose-50 hover:text-rose-700",
     },
+    {
+      key: "summaries",
+      label: "Synthèses",
+      icon: Users,
+      active: "bg-sky-600 text-white shadow-md shadow-sky-100",
+      inactive: "text-slate-500 hover:bg-sky-50 hover:text-sky-700",
+    },
   ];
   return (
     <div className="space-y-6">
@@ -3265,7 +3789,7 @@ export default function HrTimeActivitiesPage({
           {
             title: "Valider",
             description:
-              "Le N+1 contrôle les heures, coûts, absences et commentaires dans l’onglet Validations.",
+              "Le N+1 contrôle le détail et valide chaque ligne conforme ; tout refus conserve un commentaire de correction.",
           },
           {
             title: "Analyser",
@@ -3277,7 +3801,7 @@ export default function HrTimeActivitiesPage({
           {
             title: "Décision",
             description:
-              "Comparer heures, coûts, capacité, qualité de saisie, validation et disponibilité réelle.",
+              "Comparer heures, coûts, capacité, qualité de saisie et synthèses croisées par ressource et projet.",
           },
         ]}
         recommendations={[
@@ -3413,10 +3937,14 @@ export default function HrTimeActivitiesPage({
           summaries={summaries}
           onView={(summary) => setDrawer({ summary, mode: "view" })}
           onApprove={(summary) =>
-            bulkStatusMutation.mutate({ summary, status: "manager_approved" })
+            bulkStatusMutation.mutate({ summary, status: "approved" })
           }
-          onReject={(summary) =>
-            bulkStatusMutation.mutate({ summary, status: "rejected" })
+          onReject={(summary, comment) =>
+            bulkStatusMutation.mutate({
+              summary,
+              status: "rejected",
+              comment,
+            })
           }
           loading={bulkStatusMutation.isPending}
         />
@@ -3425,6 +3953,7 @@ export default function HrTimeActivitiesPage({
         <GraphsPanel entries={entries} summaries={summaries} />
       )}
       {activeTab === "alerts" && <AlertsPanel entries={entries} />}
+      {activeTab === "summaries" && <TimeSummariesPanel entries={entries} />}
       {weeklyOpen && (
         <WeeklyTimeModal
           data={data}

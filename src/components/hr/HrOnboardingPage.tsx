@@ -123,12 +123,12 @@ const themes = [
   "Intégration & période d’essai",
 ];
 const colors = {
-  indigo: "#6366f1",
-  emerald: "#10b981",
-  amber: "#f59e0b",
-  rose: "#f43f5e",
-  sky: "#0ea5e9",
-  slate: "#64748b",
+  indigo: "#818cf8",
+  emerald: "#6ee7b7",
+  amber: "#fcd34d",
+  rose: "#fda4af",
+  sky: "#7dd3fc",
+  slate: "#94a3b8",
 };
 
 const checklistTemplate: Array<Omit<ChecklistItem, "status" | "note">> = [
@@ -355,12 +355,16 @@ function stats(checklist: ChecklistItem[]) {
   const ok = checklist.filter((item) => item.status === "OK").length;
   const nok = checklist.filter((item) => item.status === "NOK").length;
   const na = checklist.filter((item) => item.status === "NA").length;
+  const applicable = ok + nok;
   return {
     ok,
     nok,
     na,
     total: checklist.length,
     progress: checklist.length ? Math.round((ok / checklist.length) * 100) : 0,
+    decisionScore: applicable
+      ? Number(((ok / applicable) * 10).toFixed(1))
+      : null,
   };
 }
 function themeStats(checklist: ChecklistItem[], theme: string) {
@@ -438,11 +442,18 @@ async function loadData(slugOrId: string): Promise<Data> {
   const deduplicated = new Map<string, AnyRow>();
   raw.forEach((row) => {
     const current = deduplicated.get(row.employee_id);
+    const rowArchived = Boolean(row.archived_at) || row.status === "archived";
+    const currentArchived = current
+      ? Boolean(current.archived_at) || current.status === "archived"
+      : true;
+    const isNewer =
+      !current ||
+      String(row.updated_at || row.created_at) >
+        String(current.updated_at || current.created_at);
     if (
       !current ||
-      (!row.archived_at && current.archived_at) ||
-      String(row.updated_at || row.created_at) >
-        String(current.updated_at || current.created_at)
+      (!rowArchived && currentArchived) ||
+      (rowArchived === currentArchived && isNewer)
     )
       deduplicated.set(row.employee_id, row);
   });
@@ -709,6 +720,23 @@ function OnboardingCard({
           value={`${value.progress} %`}
           accent={value.nok ? "rose" : "emerald"}
         />
+        <HrInfo
+          label="Note décisionnelle"
+          value={
+            value.decisionScore === null
+              ? "Non calculable"
+              : `${value.decisionScore}/10`
+          }
+          accent={
+            value.decisionScore === null
+              ? "slate"
+              : value.decisionScore >= 8
+                ? "emerald"
+                : value.decisionScore >= 6
+                  ? "amber"
+                  : "rose"
+          }
+        />
       </div>
     </article>
   );
@@ -813,7 +841,7 @@ function OnboardingTable({
                   {value.na}
                 </td>
                 <td className="border-b border-slate-100 px-4 py-3 dark:border-slate-600">
-                  {row.decision_score ?? "—"}/10
+                  {value.decisionScore ?? "—"}/10
                 </td>
                 <td
                   className="max-w-72 truncate border-b border-slate-100 px-4 py-3 dark:border-slate-600"
@@ -956,7 +984,7 @@ function OnboardingDrawer({
           <div className="grid gap-3 lg:grid-cols-2">
             <HrInfo
               label="Note décisionnelle"
-              value={`${row.decision_score ?? "—"}/10`}
+              value={`${value.decisionScore ?? "—"}/10`}
               accent="indigo"
             />
             <HrInfo
@@ -1020,7 +1048,6 @@ function OnboardingForm({
       })(),
   );
   const [risk, setRisk] = useState(row?.risk_level || "normal");
-  const [score, setScore] = useState(String(row?.decision_score ?? ""));
   const [comment, setComment] = useState(
     row?.risk_comment || row?.decision_comment || row?.notes || "",
   );
@@ -1050,7 +1077,7 @@ function OnboardingForm({
         status,
         progress_percent: value.progress,
         risk_level: risk,
-        decision_score: score === "" ? null : Number(score),
+        decision_score: value.decisionScore,
         decision_comment: comment || null,
         risk_comment: comment || null,
         notes: comment || null,
@@ -1250,10 +1277,14 @@ function OnboardingForm({
                 type="number"
                 min="0"
                 max="10"
-                value={score}
-                onChange={(event) => setScore(event.target.value)}
-                className={`${hrInputClassName} mt-1 w-full`}
+                value={value.decisionScore ?? ""}
+                readOnly
+                title="Calcul automatique : OK / (OK + NOK), les NA sont exclus."
+                className={`${hrInputClassName} mt-1 w-full bg-slate-50 font-black text-indigo-700 dark:bg-slate-600 dark:text-indigo-200`}
               />
+              <span className="mt-1 block text-[10px] text-slate-400">
+                Calcul automatique : OK ÷ (OK + NOK), hors NA.
+              </span>
             </label>
             <label>
               <span className="text-xs font-bold text-slate-600 dark:text-slate-300">
