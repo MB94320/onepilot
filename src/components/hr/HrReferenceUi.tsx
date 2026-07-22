@@ -187,7 +187,7 @@ export function HrActionMenu({
   );
 }
 
-export type HrChartType = "bar" | "line" | "radar";
+export type HrChartType = "bar" | "line" | "radar" | "donut";
 export type HrChartSeries = { key: string; label: string; color: string };
 export type HrChartExportConfig = { type: HrChartType; data: Array<Record<string, string | number>>; nameKey: string; series: HrChartSeries[]; unit?: string };
 
@@ -218,6 +218,26 @@ function createChartCanvas(title: string, description: string, config: HrChartEx
   const left = 100; const top = 156; const right = 64; const bottom = 132; const chartWidth = width - left - right; const chartHeight = height - top - bottom; const baseY = top + chartHeight;
   const values = data.flatMap((item) => config.series.map((series) => Number(item[series.key] || 0)));
   const maxValue = Math.max(1, ...values);
+  if (config.type === "donut") {
+    const valueKey = config.series[0]?.key || "value";
+    const total = data.reduce((sum, item) => sum + Math.max(0, Number(item[valueKey] || 0)), 0);
+    const cx = width / 2; const cy = 390; const outerRadius = 205; const innerRadius = 112;
+    let startAngle = -Math.PI / 2;
+    data.forEach((item, index) => {
+      const value = Math.max(0, Number(item[valueKey] || 0));
+      const angle = total ? (value / total) * Math.PI * 2 : 0;
+      const endAngle = startAngle + angle;
+      ctx.beginPath(); ctx.arc(cx, cy, outerRadius, startAngle, endAngle); ctx.arc(cx, cy, innerRadius, endAngle, startAngle, true); ctx.closePath();
+      ctx.fillStyle = config.series[index]?.color || ["#818cf8", "#6ee7b7", "#fcd34d", "#fda4af", "#7dd3fc", "#94a3b8"][index % 6]; ctx.fill();
+      if (angle > 0.18) { const middle = startAngle + angle / 2; const labelRadius = (outerRadius + innerRadius) / 2; ctx.fillStyle = "#0f172a"; ctx.font = "800 15px Arial"; ctx.textAlign = "center"; ctx.fillText(`${value}${config.unit || ""}`, cx + Math.cos(middle) * labelRadius, cy + Math.sin(middle) * labelRadius + 5); }
+      startAngle = endAngle;
+    });
+    ctx.fillStyle = "#0f172a"; ctx.font = "900 34px Arial"; ctx.textAlign = "center"; ctx.fillText(`${total}${config.unit || ""}`, cx, cy + 8);
+    ctx.fillStyle = "#64748b"; ctx.font = "14px Arial"; ctx.fillText("Total", cx, cy + 34);
+    const columns = 3; const legendWidth = 360; const startX = 100; const startY = 645;
+    data.forEach((item, index) => { const x = startX + (index % columns) * legendWidth; const y = startY + Math.floor(index / columns) * 30; ctx.fillStyle = config.series[index]?.color || ["#818cf8", "#6ee7b7", "#fcd34d", "#fda4af", "#7dd3fc", "#94a3b8"][index % 6]; roundedRect(ctx, x, y - 12, 18, 12, 4); ctx.fill(); ctx.fillStyle = "#475569"; ctx.font = "13px Arial"; ctx.textAlign = "left"; ctx.fillText(`${truncate(ctx, String(item[config.nameKey] || ""), 220)} : ${Number(item[valueKey] || 0)}${config.unit || ""}`, x + 26, y); });
+    return canvas;
+  }
   ctx.strokeStyle = "#e2e8f0"; ctx.lineWidth = 1;
   for (let index = 0; index <= 5; index += 1) { const y = top + (chartHeight / 5) * index; ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(left + chartWidth, y); ctx.stroke(); const value = Math.round(maxValue * (1 - index / 5)); ctx.fillStyle = "#64748b"; ctx.font = "12px Arial"; ctx.fillText(`${value}${config.unit || ""}`, 48, y + 4); }
   if (config.type === "bar") {
@@ -227,9 +247,11 @@ function createChartCanvas(title: string, description: string, config: HrChartEx
     const step = chartWidth / Math.max(1, data.length - 1);
     config.series.forEach((series) => { ctx.beginPath(); data.forEach((item, index) => { const value = Number(item[series.key] || 0); const x = left + index * step; const y = baseY - (value / maxValue) * chartHeight; if (index === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); }); ctx.strokeStyle = series.color; ctx.lineWidth = 4; ctx.stroke(); data.forEach((item, index) => { const value = Number(item[series.key] || 0); const x = left + index * step; const y = baseY - (value / maxValue) * chartHeight; ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fillStyle = series.color; ctx.fill(); }); }); data.forEach((item, index) => { const x = left + index * step; ctx.save(); ctx.translate(x, baseY + 18); ctx.rotate(-Math.PI / 5); ctx.fillStyle = "#475569"; ctx.font = "12px Arial"; ctx.textAlign = "right"; ctx.fillText(truncate(ctx, String(item[config.nameKey] || ""), 100), 0, 0); ctx.restore(); });
   } else {
-    const cx = left + chartWidth / 2; const cy = top + chartHeight / 2; const radius = Math.min(chartWidth, chartHeight) / 2 - 45; const series = config.series[0];
-    const axes = data.map((item, index) => { const angle = -Math.PI / 2 + (index / Math.max(1, data.length)) * Math.PI * 2; const x = cx + Math.cos(angle) * radius; const y = cy + Math.sin(angle) * radius; const value = Number(item[series.key] || 0); const valueRadius = radius * (value / maxValue); return { item, x, y, vx: cx + Math.cos(angle) * valueRadius, vy: cy + Math.sin(angle) * valueRadius }; });
-    axes.forEach((axis) => { ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(axis.x, axis.y); ctx.strokeStyle = "#cbd5e1"; ctx.stroke(); ctx.fillStyle = "#475569"; ctx.font = "12px Arial"; ctx.textAlign = "center"; ctx.fillText(truncate(ctx, String(axis.item[config.nameKey] || ""), 120), axis.x, axis.y); }); ctx.beginPath(); axes.forEach((axis, index) => index === 0 ? ctx.moveTo(axis.vx, axis.vy) : ctx.lineTo(axis.vx, axis.vy)); ctx.closePath(); ctx.fillStyle = "rgba(99,102,241,0.24)"; ctx.fill(); ctx.strokeStyle = series.color; ctx.lineWidth = 4; ctx.stroke();
+    const cx = left + chartWidth / 2; const cy = top + chartHeight / 2; const radius = Math.min(chartWidth, chartHeight) / 2 - 45;
+    const axes = data.map((item, index) => { const angle = -Math.PI / 2 + (index / Math.max(1, data.length)) * Math.PI * 2; const x = cx + Math.cos(angle) * radius; const y = cy + Math.sin(angle) * radius; return { item, angle, x, y }; });
+    for (let level = 1; level <= 5; level += 1) { ctx.beginPath(); axes.forEach((axis, index) => { const x = cx + Math.cos(axis.angle) * radius * level / 5; const y = cy + Math.sin(axis.angle) * radius * level / 5; index === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); }); ctx.closePath(); ctx.strokeStyle = "#e2e8f0"; ctx.stroke(); }
+    axes.forEach((axis) => { ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(axis.x, axis.y); ctx.strokeStyle = "#cbd5e1"; ctx.stroke(); ctx.fillStyle = "#475569"; ctx.font = "12px Arial"; ctx.textAlign = "center"; ctx.fillText(truncate(ctx, String(axis.item[config.nameKey] || ""), 120), axis.x, axis.y); });
+    config.series.forEach((series, seriesIndex) => { ctx.beginPath(); axes.forEach((axis, index) => { const value = Number(axis.item[series.key] || 0); const valueRadius = radius * (value / maxValue); const x = cx + Math.cos(axis.angle) * valueRadius; const y = cy + Math.sin(axis.angle) * valueRadius; index === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); }); ctx.closePath(); ctx.globalAlpha = 0.16; ctx.fillStyle = series.color; ctx.fill(); ctx.globalAlpha = 1; ctx.strokeStyle = series.color; ctx.lineWidth = seriesIndex === 0 ? 4 : 3; ctx.stroke(); });
   }
   let legendX = 90; const legendY = height - 54; config.series.forEach((series) => { ctx.fillStyle = series.color; roundedRect(ctx, legendX, legendY - 12, 18, 12, 4); ctx.fill(); ctx.fillStyle = "#475569"; ctx.font = "13px Arial"; ctx.textAlign = "left"; ctx.fillText(series.label, legendX + 26, legendY); legendX += 34 + ctx.measureText(series.label).width; });
   return canvas;

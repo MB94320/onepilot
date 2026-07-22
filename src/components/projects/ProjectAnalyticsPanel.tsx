@@ -41,6 +41,7 @@ import {
   HrMetricCard,
   HrSectionCard,
 } from "@/components/hr/HrReferenceUi";
+import { ProjectHealthTable } from "@/components/projects/ProjectReferenceUi";
 
 export type ProjectAnalyticsMode =
   | "portfolio"
@@ -277,6 +278,16 @@ function DonutChart({ data }: { data: ChartRow[] }) {
   );
 }
 
+function RiskMatrixChart({ data }: { data: ChartRow[] }) {
+  const counts = new Map(data.map((row) => [`${row.probability}-${row.impact}`, Number(row.count || 0)]));
+  const probabilities = [1, 2, 3, 4];
+  const impacts = [4, 3, 2, 1];
+  const probabilityLabels = ["Improbable", "Possible", "Probable", "Très probable"];
+  const impactLabels: Record<number, string> = { 4: "Majeur", 3: "Sérieux", 2: "Moyen", 1: "Faible" };
+  const tone = (score: number) => score >= 12 ? "bg-rose-500 text-white" : score >= 6 ? "bg-orange-400 text-white" : score >= 3 ? "bg-amber-300 text-slate-900" : "bg-emerald-400 text-slate-950";
+  return <div className="h-full overflow-auto p-2"><div className="grid min-w-[650px] grid-cols-[92px_repeat(4,minmax(120px,1fr))] gap-1.5"><span />{probabilityLabels.map((label) => <span key={label} className="pb-1 text-center text-xs font-bold text-slate-500 dark:text-slate-300">{label}</span>)}{impacts.flatMap((impact) => [<span key={`label-${impact}`} className="flex items-center text-xs font-bold text-slate-500 dark:text-slate-300">{impactLabels[impact]}</span>, ...probabilities.map((probability) => { const score = impact * probability; const count = counts.get(`${probability}-${impact}`) || 0; return <div key={`${probability}-${impact}`} className={`relative flex h-16 items-center justify-center rounded-xl ${tone(score)}`}><span className="text-lg font-black">{score}</span>{count > 0 && <span className="absolute right-2 top-2 rounded-full bg-white/85 px-2 py-0.5 text-[10px] font-black text-rose-700">{count} risque{count > 1 ? "s" : ""}</span>}</div>; })])}</div><div className="mt-3 flex flex-wrap gap-4 text-[10px] font-bold text-slate-500"><span>Emerald · faible</span><span>Amber · moyen</span><span>Orange · élevé</span><span>Rose · critique</span></div></div>;
+}
+
 function ChartGrid({ children }: { children: React.ReactNode }) {
   return <div className="grid gap-4 xl:grid-cols-2">{children}</div>;
 }
@@ -310,6 +321,11 @@ function PortfolioAnalytics({ data }: { data: ProjectAnalyticsData }) {
   const projects = data.projects || [];
   const health = data.health || [];
   const status = groupCount(projects, ["status"]);
+  const satisfaction = satisfactionData(data.satisfaction || []);
+  const load = assignmentPerformance(data.assignments || []);
+  const orderedTotal = projects.reduce((total, project) => total + numberValue(project, "ordered_budget", "budget_amount"), 0);
+  const consumedTotal = projects.reduce((total, project) => total + numberValue(project, "consumed_budget", "actual_cost_total"), 0);
+  const criticalProjects = projects.filter((project) => numberValue(project, "critical_risks") > 0 || ["red", "blocked"].includes(textValue(project, "health_status", "status"))).length;
   const budgets = projects.slice(0, 14).map((project) => {
     const ordered = numberValue(
       project,
@@ -349,12 +365,18 @@ function PortfolioAnalytics({ data }: { data: ProjectAnalyticsData }) {
       count={projects.length}
       description="Vue consolidée des statuts, engagements financiers et dimensions de santé du portefeuille."
     >
+      <div className="mb-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <HrMetricCard icon={Target} label="Projets analysés" value={projects.length} description="Projets inclus dans le périmètre décisionnel courant." accent="indigo" />
+        <HrMetricCard icon={CircleDollarSign} label="Budget commandé" value={`${Math.round(orderedTotal).toLocaleString("fr-FR")} €`} description={`${Math.round(consumedTotal).toLocaleString("fr-FR")} € consommés à date.`} accent="emerald" />
+        <HrMetricCard icon={Activity} label="TACE moyen" value={load.length ? `${Math.round(load.reduce((total, row) => total + row.TACE, 0) / load.length)} %` : "—"} description="Occupation réelle corrélée à la capacité travaillable." accent="amber" />
+        <HrMetricCard icon={ShieldAlert} label="Projets critiques" value={criticalProjects} description="Projets bloqués, rouges ou exposés à un risque critique." accent="rose" />
+      </div>
       <ChartGrid>
         <HrChartCard
           title="Répartition des projets par statut"
           description="Lecture immédiate du volume de projets ouverts, en cours, clos, bloqués ou annulés."
           exportConfig={{
-            type: "bar",
+            type: "donut",
             data: status,
             nameKey: "name",
             series: [{ key: "value", label: "Projets", color: colors.indigo }],
@@ -369,11 +391,7 @@ function PortfolioAnalytics({ data }: { data: ProjectAnalyticsData }) {
             type: "bar",
             data: budgets,
             nameKey: "name",
-            series: [
-              { key: "ordered", label: "Commandé", color: colors.indigo },
-              { key: "consumed", label: "Consommé", color: colors.rose },
-              { key: "remaining", label: "Restant", color: colors.emerald },
-            ],
+            series: [{ key: "consumed", label: "Consommé", color: colors.rose }, { key: "remaining", label: "Restant", color: colors.emerald }],
             unit: " €",
           }}
         >
@@ -385,9 +403,8 @@ function PortfolioAnalytics({ data }: { data: ProjectAnalyticsData }) {
                 <YAxis />
                 <Tooltip />
                 <Legend />
-                <Bar dataKey="ordered" name="Commandé" fill={colors.indigo} />
-                <Bar dataKey="consumed" name="Consommé" fill={colors.rose} />
-                <Bar dataKey="remaining" name="Restant" fill={colors.emerald} />
+                <Bar stackId="budget" dataKey="consumed" name="Consommé" fill={colors.rose} />
+                <Bar stackId="budget" dataKey="remaining" name="Restant" fill={colors.emerald} />
               </BarChart>
             </ResponsiveContainer>
           ) : (
@@ -420,7 +437,14 @@ function PortfolioAnalytics({ data }: { data: ProjectAnalyticsData }) {
             </RadarChart>
           </ResponsiveContainer>
         </HrChartCard>
+        <HrChartCard title="Satisfaction client" description="Radar des cinq dimensions de satisfaction issues des revues mensuelles." exportConfig={{ type: "radar", data: satisfaction.radar, nameKey: "name", series: [{ key: "score", label: "Satisfaction", color: colors.indigo }] }}>
+          <ResponsiveContainer width="100%" height="100%"><RadarChart data={satisfaction.radar}><PolarGrid /><PolarAngleAxis dataKey="name" /><Radar dataKey="score" name="Satisfaction" stroke={colors.indigo} fill={colors.indigo} fillOpacity={0.24} /><Tooltip /><Legend /></RadarChart></ResponsiveContainer>
+        </HrChartCard>
+        <HrChartCard title="TACE prévisionnel et réel" description="Taux d’activité congés exclus, rapproché des charges et de la capacité Staffing." exportConfig={{ type: "line", data: load, nameKey: "name", series: [{ key: "planned", label: "Prévisionnel", color: colors.sky }, { key: "TACE", label: "Réel", color: colors.amber }] }}>
+          {load.length ? <ResponsiveContainer width="100%" height="100%"><LineChart data={load}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis /><Tooltip /><Legend /><Line type="monotone" dataKey="planned" name="Charge prévisionnelle" stroke={colors.sky} strokeWidth={3} /><Line type="monotone" dataKey="TACE" name="TACE réel" stroke={colors.amber} strokeWidth={3} /></LineChart></ResponsiveContainer> : <EmptyChart label="Aucune donnée Staffing corrélée." />}
+        </HrChartCard>
       </ChartGrid>
+      <div className="mt-5"><h3 className="mb-3 text-sm font-black text-slate-950 dark:text-white">Santé du portefeuille projets</h3><ProjectHealthTable projects={projects} /></div>
     </AnalysisSection>
   );
 }
@@ -458,7 +482,7 @@ function ActionsAnalytics({ data }: { data: ProjectAnalyticsData }) {
       title={title}
       description={description}
       exportConfig={{
-        type: "bar",
+        type: "donut",
         data: rows,
         nameKey: "name",
         series: [{ key: "value", label: "Actions", color: colors.indigo }],
@@ -675,18 +699,17 @@ function satisfactionData(rows: AnyRow[]) {
     name,
     score: Math.round(average(rows, ...keys) * 10) / 10,
   }));
-  const monthly = new Map<string, number[]>();
+  const monthly = new Map<string, Record<string, number[]>>();
   rows.forEach((row) => {
     const date = dateValue(row, "survey_date", "period_date", "month", "created_at");
     if (!date) return;
-    const values = dimensions
-      .map(([, keys]) => optionalNumber(row, ...keys))
-      .filter((value): value is number => value !== null);
-    const global = optionalNumber(row, "overall_score", "global_score", "score");
-    const score = global ?? (values.length ? values.reduce((total, value) => total + value, 0) / values.length : null);
-    if (score === null) return;
     const key = monthKey(date);
-    monthly.set(key, [...(monthly.get(key) || []), score]);
+    const current = monthly.get(key) || Object.fromEntries(dimensions.map(([name]) => [name, []]));
+    dimensions.forEach(([name, keys]) => {
+      const value = optionalNumber(row, ...keys);
+      if (value !== null) current[name].push(value);
+    });
+    monthly.set(key, current);
   });
   return {
     radar,
@@ -694,7 +717,10 @@ function satisfactionData(rows: AnyRow[]) {
       .sort(([left], [right]) => left.localeCompare(right))
       .map(([key, values]) => ({
         name: monthLabel(key),
-        score: Math.round((values.reduce((total, value) => total + value, 0) / values.length) * 10) / 10,
+        ...Object.fromEntries(dimensions.map(([name]) => {
+          const scores = values[name] || [];
+          return [name, scores.length ? Math.round((scores.reduce((total, value) => total + value, 0) / scores.length) * 10) / 10 : 0];
+        })),
       })),
   };
 }
@@ -794,37 +820,14 @@ function PerformanceAnalytics({ data }: { data: ProjectAnalyticsData }) {
             <EmptyChart label="Aucune donnée de valeur acquise disponible." />
           )}
         </HrChartCard>
-        <HrChartCard
-          title="Livrables mensuels, OTD et OQD"
-          description="Volume attendu, ponctualité de livraison et qualité au premier passage par mois."
-          exportConfig={{
-            type: "bar",
-            data: deliveries,
-            nameKey: "name",
-            series: [
-              { key: "deliverables", label: "Livrables", color: colors.indigo },
-              { key: "OTD", label: "OTD (%)", color: colors.emerald },
-              { key: "OQD", label: "OQD (%)", color: colors.sky },
-            ],
-          }}
-        >
-          {deliveries.length ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={deliveries}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
-                <YAxis yAxisId="count" allowDecimals={false} />
-                <YAxis yAxisId="percent" orientation="right" domain={[0, 100]} />
-                <Tooltip />
-                <Legend />
-                <Bar yAxisId="count" dataKey="deliverables" name="Livrables" fill={colors.indigo} />
-                <Line yAxisId="percent" type="monotone" dataKey="OTD" name="OTD (%)" stroke={colors.emerald} strokeWidth={3} />
-                <Line yAxisId="percent" type="monotone" dataKey="OQD" name="OQD (%)" stroke={colors.sky} strokeWidth={3} />
-              </ComposedChart>
-            </ResponsiveContainer>
-          ) : (
-            <EmptyChart label="Aucun livrable daté disponible." />
-          )}
+        <HrChartCard title="Livrables prévus par mois" description="Nombre de livrables devant être remis sur chaque mois du périmètre." exportConfig={{ type: "bar", data: deliveries, nameKey: "name", series: [{ key: "deliverables", label: "Livrables", color: colors.indigo }] }}>
+          {deliveries.length ? <ResponsiveContainer width="100%" height="100%"><BarChart data={deliveries}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis allowDecimals={false} /><Tooltip /><Legend /><Bar dataKey="deliverables" name="Livrables" fill={colors.indigo} radius={[8, 8, 0, 0]} /></BarChart></ResponsiveContainer> : <EmptyChart label="Aucun livrable daté disponible." />}
+        </HrChartCard>
+        <HrChartCard title="Ponctualité des livrables — OTD" description="Part des livrables remis à l’heure par rapport aux livrables dus sur le mois." exportConfig={{ type: "bar", data: deliveries, nameKey: "name", series: [{ key: "OTD", label: "OTD (%)", color: colors.emerald }], unit: " %" }}>
+          {deliveries.length ? <ResponsiveContainer width="100%" height="100%"><BarChart data={deliveries}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis domain={[0, 100]} /><Tooltip /><Legend /><Bar dataKey="OTD" name="OTD (%)" fill={colors.emerald} radius={[8, 8, 0, 0]} /></BarChart></ResponsiveContainer> : <EmptyChart label="Aucune mesure OTD disponible." />}
+        </HrChartCard>
+        <HrChartCard title="Qualité des livrables — OQD" description="Part des livrables acceptés conformes dès la première remise." exportConfig={{ type: "bar", data: deliveries, nameKey: "name", series: [{ key: "OQD", label: "OQD (%)", color: colors.sky }], unit: " %" }}>
+          {deliveries.length ? <ResponsiveContainer width="100%" height="100%"><BarChart data={deliveries}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis domain={[0, 100]} /><Tooltip /><Legend /><Bar dataKey="OQD" name="OQD (%)" fill={colors.sky} radius={[8, 8, 0, 0]} /></BarChart></ResponsiveContainer> : <EmptyChart label="Aucune mesure OQD disponible." />}
         </HrChartCard>
         <HrChartCard
           title="Profondeur de retard — DoD"
@@ -863,17 +866,7 @@ function PerformanceAnalytics({ data }: { data: ProjectAnalyticsData }) {
           }}
         >
           {risks.length ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 10 }}>
-                <CartesianGrid />
-                <XAxis type="number" dataKey="probability" name="Probabilité" domain={[1, 4]} ticks={[1, 2, 3, 4]} />
-                <YAxis type="number" dataKey="impact" name="Impact" domain={[1, 4]} ticks={[1, 2, 3, 4]} />
-                <ZAxis type="number" dataKey="count" range={[100, 900]} name="Risques" />
-                <Tooltip cursor={{ strokeDasharray: "3 3" }} />
-                <Legend />
-                <Scatter name="Risques" data={risks} fill={colors.rose} />
-              </ScatterChart>
-            </ResponsiveContainer>
+            <RiskMatrixChart data={risks} />
           ) : (
             <EmptyChart label="Aucun risque évalué sur la matrice 4 × 4." />
           )}
@@ -966,24 +959,34 @@ function PerformanceAnalytics({ data }: { data: ProjectAnalyticsData }) {
         </HrChartCard>
         <HrChartCard
           title="Satisfaction client mensuelle"
-          description="Évolution de la note globale moyenne de satisfaction client, sur une échelle de 0 à 5."
+          description="Comparaison mensuelle des cinq critères de satisfaction client, sur une échelle de 0 à 5."
           exportConfig={{
-            type: "line",
+            type: "bar",
             data: satisfaction.monthly,
             nameKey: "name",
-            series: [{ key: "score", label: "Satisfaction", color: colors.indigo }],
+            series: [
+              { key: "Écoute client", label: "Écoute client", color: colors.indigo },
+              { key: "Planification", label: "Planification", color: colors.emerald },
+              { key: "Compétences", label: "Compétences", color: colors.amber },
+              { key: "Indicateurs", label: "Indicateurs", color: colors.sky },
+              { key: "Risques", label: "Risques", color: colors.rose },
+            ],
           }}
         >
           {satisfaction.monthly.length ? (
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={satisfaction.monthly}>
+              <BarChart data={satisfaction.monthly}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="name" />
                 <YAxis domain={[0, 5]} />
                 <Tooltip />
                 <Legend />
-                <Line type="monotone" dataKey="score" name="Satisfaction" stroke={colors.indigo} strokeWidth={3} />
-              </LineChart>
+                <Bar dataKey="Écoute client" fill={colors.indigo} radius={[5, 5, 0, 0]} />
+                <Bar dataKey="Planification" fill={colors.emerald} radius={[5, 5, 0, 0]} />
+                <Bar dataKey="Compétences" fill={colors.amber} radius={[5, 5, 0, 0]} />
+                <Bar dataKey="Indicateurs" fill={colors.sky} radius={[5, 5, 0, 0]} />
+                <Bar dataKey="Risques" fill={colors.rose} radius={[5, 5, 0, 0]} />
+              </BarChart>
             </ResponsiveContainer>
           ) : (
             <EmptyChart label="Aucune enquête de satisfaction datée disponible." />
@@ -1183,7 +1186,7 @@ function PlanningAnalytics({ mode, data }: { mode: "timeline" | "gantt"; data: P
             <EmptyChart label="Aucune tâche identifiée sur le chemin critique." />
           )}
         </HrChartCard>
-        {mode === "timeline" && <HrChartCard title="Répartition des projets par statut" description="Équilibre temporel entre projets ouverts, en cours, bloqués, clos et annulés." exportConfig={{ type: "bar", data: projectStatus, nameKey: "name", series: [{ key: "value", label: "Projets", color: colors.indigo }] }}><DonutChart data={projectStatus} /></HrChartCard>}
+        {mode === "timeline" && <HrChartCard title="Répartition des projets par statut" description="Équilibre temporel entre projets ouverts, en cours, bloqués, clos et annulés." exportConfig={{ type: "donut", data: projectStatus, nameKey: "name", series: [{ key: "value", label: "Projets", color: colors.indigo }] }}><DonutChart data={projectStatus} /></HrChartCard>}
         {mode === "timeline" && <HrChartCard title="Démarrages et clôtures par mois" description="Concentration des lancements et fins de projet pour anticiper les périodes d’arbitrage." exportConfig={{ type: "bar", data: startsEnds, nameKey: "name", series: [{ key: "starts", label: "Démarrages", color: colors.sky }, { key: "ends", label: "Clôtures prévues", color: colors.emerald }] }}>{startsEnds.length ? <ResponsiveContainer width="100%" height="100%"><BarChart data={startsEnds}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis allowDecimals={false} /><Tooltip /><Legend /><Bar dataKey="starts" name="Démarrages" fill={colors.sky} /><Bar dataKey="ends" name="Clôtures prévues" fill={colors.emerald} /></BarChart></ResponsiveContainer> : <EmptyChart label="Aucune date projet disponible." />}</HrChartCard>}
       </ChartGrid>
     </AnalysisSection>

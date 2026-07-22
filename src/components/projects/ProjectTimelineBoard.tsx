@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CalendarDays,
   ChevronLeft,
@@ -112,6 +112,11 @@ export default function ProjectTimelineBoard({
     if (!scroller) return;
     scroller.scrollTo({ left: Math.max(0, todayLeft - scroller.clientWidth / 2), behavior: "smooth" });
   }
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(focusToday);
+    return () => window.cancelAnimationFrame(frame);
+  }, [scale, todayLeft]);
 
   return (
     <div className="space-y-4">

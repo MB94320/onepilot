@@ -515,14 +515,42 @@ export default function Topbar({
   const t =
     getTranslations(language);
 
-  function getHref(path: string) {
+  
+function normalizeNavigationPath(path: string) {
+  const normalized = path
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  if ([
+    "/rh/temps-activites",
+    "/rh/temps-et-activites",
+    "/rh/temps-activite",
+    "/rh/temps-et-activite",
+    "/rh/temps-activites-rh",
+    "/rh/pointages",
+    "/rh/pointage",
+    "/rh/temps",
+    "/rh/activites",
+    "/rh/activite",
+    "/rh/temps-activités",
+    "/rh/temps-et-activités",
+  ].includes(normalized)) {
+    return "/rh/temps-activites";
+  }
+
+  return path;
+}
+
+function getHref(path: string) {
     if (!orgId) {
       return "#";
     }
 
     return `/${encodeURIComponent(
       orgId,
-    )}${path}`;
+    )}${normalizeNavigationPath(path)}`;
   }
 
   function getSectionLabel(

@@ -1,1 +1,3 @@
-export { default } from "@/components/hr/HrTalentModulePage";
+import HrTalentModulePage from "@/components/hr/HrTalentModulePage";
+
+export default HrTalentModulePage;

@@ -80,6 +80,8 @@ type Employee = {
   department_free_text?: string | null;
   job_free_text?: string | null;
   function_free_text?: string | null;
+  loaded_hourly_cost?: number | null;
+  hourly_cost?: number | null;
 };
 
 type SkillCatalogItem = {
@@ -177,7 +179,7 @@ function getMonthLabel(value?: string | null) {
   if (!value) return "Non renseigné";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Non renseigné";
-  return new Intl.DateTimeFormat("fr-FR", { month: "long", year: "numeric" }).format(date);
+  return new Intl.DateTimeFormat("fr-FR", { month: "long" }).format(date);
 }
 
 function getDayName(value?: string | null) {
@@ -983,11 +985,67 @@ function formatCurrency(value: unknown) {
 }
 
 function getTimeTotalHours(row: AnyRow) {
-  return Number(row.total_hours ?? row.total_pointage_hours ?? row.duration_hours ?? 0);
+  return [
+    row.avv_hours,
+    row.management_hours,
+    row.production_hours,
+    row.rework_hours,
+    row.training_hours,
+    row.intercontract_hours,
+  ].reduce((sum, value) => sum + Number(value || 0), 0);
+}
+
+function getHourlyRate(row: AnyRow) {
+  const direct = Number(
+    row.loaded_hourly_rate ??
+    row.hourly_loaded_cost ??
+    row.hourly_cost ??
+    row.cost_hourly ??
+    row.employee_loaded_hourly_rate ??
+    0,
+  );
+  if (Number.isFinite(direct) && direct > 0) return direct;
+
+  const pricedHours =
+    Number(row.avv_hours || 0) +
+    Number(row.management_hours || 0) +
+    Number(row.production_hours || 0) +
+    Number(row.rework_hours || 0);
+  const pricedCosts =
+    Number(row.avv_cost || 0) +
+    Number(row.management_cost || 0) +
+    Number(row.production_cost || 0) +
+    Number(row.rework_cost || 0);
+  if (pricedHours > 0 && pricedCosts > 0) return pricedCosts / pricedHours;
+
+  return 0;
+}
+
+function hasMissingHourlyRate(row: AnyRow) {
+  return getTimeTotalHours(row) > 0 && getHourlyRate(row) <= 0;
+}
+
+function getRubricCost(row: AnyRow, costField: string, hourField: string) {
+  const stored = Number(row[costField] ?? 0);
+  if (Number.isFinite(stored) && stored > 0) return stored;
+  const hours = Number(row[hourField] || 0);
+  const rate = getHourlyRate(row);
+  if (hours <= 0) return 0;
+  if (rate <= 0) return 0;
+  return hours * rate;
 }
 
 function getTimeTotalCost(row: AnyRow) {
-  return Number(row.total_cost ?? row.total_pointage_cost ?? row.loaded_cost_total ?? 0);
+  return (
+    getRubricCost(row, "avv_cost", "avv_hours") +
+    getRubricCost(row, "management_cost", "management_hours") +
+    getRubricCost(row, "production_cost", "production_hours") +
+    getRubricCost(row, "rework_cost", "rework_hours") +
+    getRubricCost(row, "training_cost", "training_hours") +
+    getRubricCost(row, "intercontract_cost", "intercontract_hours") +
+    Number(row.purchase_cost || 0) +
+    Number(row.expense_cost ?? row.expense_hours ?? 0)
+  );
 }
 
 
@@ -1009,6 +1067,8 @@ const timeFields = [
   "management_cost",
   "production_cost",
   "rework_cost",
+  "training_cost",
+  "intercontract_cost",
   "purchase_cost",
   "expense_cost",
   "total_hours",
@@ -1058,21 +1118,36 @@ function ProjectTimeDrawer({ summary, onClose }: { summary: TimeProjectSummary; 
   const [resource, setResource] = useState("all");
   const rows = summary.detailRows;
   const years = uniqueValues(rows, (row) => row.activity_date ? String(new Date(row.activity_date).getFullYear()) : null);
-  const months = uniqueValues(rows, (row) => row.month_label || getMonthLabel(row.activity_date));
-  const weeks = uniqueValues(rows, (row) => String(row.week_number || getWeekNumber(row.activity_date)));
-  const resources = uniqueValues(rows, (row) => fullName(row));
-  const isIntercontract = String(summary.project_number || "").startsWith("IC-");
-  const filtered = rows.filter((row) => {
+  const months = uniqueValues(rows.filter((row) => year === "all" || (row.activity_date && String(new Date(row.activity_date).getFullYear()) === year)), (row) => row.month_label || getMonthLabel(row.activity_date));
+  const weeks = uniqueValues(rows.filter((row) => {
     const rowYear = row.activity_date ? String(new Date(row.activity_date).getFullYear()) : "";
     const rowMonth = row.month_label || getMonthLabel(row.activity_date);
-    const rowWeek = String(row.week_number || getWeekNumber(row.activity_date));
-    if (year !== "all" && rowYear !== year) return false;
-    if (month !== "all" && rowMonth !== month) return false;
-    if (week !== "all" && rowWeek !== week) return false;
-    if (resource !== "all" && fullName(row) !== resource) return false;
-    return true;
-  });
+    return (year === "all" || rowYear === year) && (month === "all" || rowMonth === month);
+  }), (row) => String(row.week_number || getWeekNumber(row.activity_date)));
+  const resources = uniqueValues(rows, (row) => fullName(row));
+  const isIntercontract = String(summary.project_number || "").startsWith("IC-");
+  const filtered = rows
+    .filter((row) => {
+      const rowYear = row.activity_date ? String(new Date(row.activity_date).getFullYear()) : "";
+      const rowMonth = row.month_label || getMonthLabel(row.activity_date);
+      const rowWeek = String(row.week_number || getWeekNumber(row.activity_date));
+      if (year !== "all" && rowYear !== year) return false;
+      if (month !== "all" && rowMonth !== month) return false;
+      if (week !== "all" && rowWeek !== week) return false;
+      if (resource !== "all" && fullName(row) !== resource) return false;
+      const hasActivity = getTimeTotalHours(row) > 0 || Number(row.purchase_cost || 0) > 0 || Number(row.expense_cost || 0) > 0;
+      const hasAbsence = Boolean(row.absence_label || row.absence_type || row.unavailability_reason);
+      return hasActivity || hasAbsence;
+    })
+    .sort((a, b) => {
+      const nameCompare = fullName(a).localeCompare(fullName(b), "fr", { sensitivity: "base" });
+      if (nameCompare !== 0) return nameCompare;
+      return String(a.activity_date || "").localeCompare(String(b.activity_date || ""));
+    });
   const total = (field: string) => filtered.reduce((sum, row) => sum + Number(row[field] || 0), 0);
+  const totalCost = (costField: string, hourField: string) => filtered.reduce((sum, row) => sum + getRubricCost(row, costField, hourField), 0);
+  const totalHours = filtered.reduce((sum, row) => sum + getTimeTotalHours(row), 0);
+  const totalCosts = filtered.reduce((sum, row) => sum + getTimeTotalCost(row), 0);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4" onClick={onClose}>
@@ -1100,22 +1175,25 @@ function ProjectTimeDrawer({ summary, onClose }: { summary: TimeProjectSummary; 
             <select value={resource} onChange={(event) => setResource(event.target.value)} className={selectClassName}><option value="all">Toutes les ressources</option>{resources.map((item) => <option key={item} value={item}>{item}</option>)}</select>
           </div>
           <div className="max-h-[360px] overflow-auto rounded-2xl border border-slate-200 shadow-sm dark:border-slate-600/70">
-            <table className="w-full min-w-[1800px] border-separate border-spacing-0 bg-white text-sm dark:bg-slate-700/65">
+            <table className="w-full min-w-[2520px] border-separate border-spacing-0 bg-white text-sm dark:bg-slate-700/65">
               <thead className="sticky top-0 z-20 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-700 dark:text-slate-300">
-                <tr><th className="sticky left-0 z-30 bg-slate-50 px-4 py-3 text-left dark:bg-slate-700">Équipe</th><th className="px-4 py-3 text-left">Jour de semaine</th><th className="px-4 py-3 text-left">Date</th><th className="px-4 py-3 text-right">AVV (h)</th><th className="px-4 py-3 text-right">Management (h)</th><th className="px-4 py-3 text-right">Production (h)</th><th className="px-4 py-3 text-right">Reprise (h)</th><th className="px-4 py-3 text-right">Formation (h)</th><th className="px-4 py-3 text-right">Intercontrat (h)</th><th className="px-4 py-3 text-right">AVV (€)</th><th className="px-4 py-3 text-right">Management (€)</th><th className="px-4 py-3 text-right">Production (€)</th><th className="px-4 py-3 text-right">Reprise (€)</th><th className="px-4 py-3 text-right">Achat (€)</th><th className="px-4 py-3 text-right">Frais (€)</th><th className="px-4 py-3 text-right">Total pointage (h)</th><th className="px-4 py-3 text-right">Total coûts (€)</th></tr>
+                <tr><th className="sticky left-0 z-30 bg-slate-50 px-4 py-3 text-left dark:bg-slate-700">Équipe</th><th className="px-4 py-3 text-right">Coût horaire</th><th className="px-4 py-3 text-left">Jour</th><th className="px-4 py-3 text-left">Date</th><th className="px-4 py-3 text-left">Semaine</th><th className="px-4 py-3 text-left">Absence / indispo</th><th className="px-4 py-3 text-right">AVV (h)</th><th className="px-4 py-3 text-right">Management (h)</th><th className="px-4 py-3 text-right">Production (h)</th><th className="px-4 py-3 text-right">Reprise (h)</th><th className="px-4 py-3 text-right">Formation (h)</th><th className="px-4 py-3 text-right">Intercontrat (h)</th><th className="px-4 py-3 text-right">AVV (€)</th><th className="px-4 py-3 text-right">Management (€)</th><th className="px-4 py-3 text-right">Production (€)</th><th className="px-4 py-3 text-right">Reprise (€)</th><th className="px-4 py-3 text-right">Formation (€)</th><th className="px-4 py-3 text-right">Intercontrat (€)</th><th className="px-4 py-3 text-right">Achat (€)</th><th className="px-4 py-3 text-right">Frais (€)</th><th className="px-4 py-3 text-right">Total pointage (h)</th><th className="px-4 py-3 text-right">Total coûts (€)</th></tr>
               </thead>
               <tbody>
                 {filtered.map((row) => (
                   <tr key={row.id} className="hover:bg-indigo-50/45 dark:hover:bg-indigo-900/20">
                     <td className="sticky left-0 z-10 bg-white px-4 py-3 font-bold text-slate-950 dark:bg-slate-700 dark:text-slate-100">{fullName(row)}</td>
-                    <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{getDayName(row.activity_date)} · S{row.week_number || getWeekNumber(row.activity_date)}</td>
+                    <td className={`px-4 py-3 text-right font-bold ${hasMissingHourlyRate(row) ? "text-rose-600 dark:text-rose-300" : "text-slate-700 dark:text-slate-200"}`}>{getHourlyRate(row) > 0 ? formatCurrency(getHourlyRate(row)) : "Coût manquant"}</td>
+                    <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{getDayName(row.activity_date)}</td>
                     <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{formatDate(row.activity_date)}</td>
-                    <td className="px-4 py-3 text-right">{formatHours(row.avv_hours)}</td><td className="px-4 py-3 text-right">{formatHours(row.management_hours)}</td><td className="px-4 py-3 text-right">{formatHours(row.production_hours)}</td><td className="px-4 py-3 text-right">{formatHours(row.rework_hours)}</td><td className="px-4 py-3 text-right">{formatHours(row.training_hours)}</td><td className="px-4 py-3 text-right">{formatHours(row.intercontract_hours)}</td><td className="px-4 py-3 text-right">{formatCurrency(row.avv_cost)}</td><td className="px-4 py-3 text-right">{formatCurrency(row.management_cost)}</td><td className="px-4 py-3 text-right">{formatCurrency(row.production_cost)}</td><td className="px-4 py-3 text-right">{formatCurrency(row.rework_cost)}</td><td className="px-4 py-3 text-right">{formatCurrency(row.purchase_cost)}</td><td className="px-4 py-3 text-right">{formatCurrency(row.expense_cost)}</td><td className="px-4 py-3 text-right font-bold text-emerald-700 dark:text-emerald-300">{formatHours(getTimeTotalHours(row))}</td><td className="px-4 py-3 text-right font-bold text-indigo-700 dark:text-indigo-300">{formatCurrency(getTimeTotalCost(row))}</td>
+                    <td className="px-4 py-3 text-slate-600 dark:text-slate-300">S{row.week_number || getWeekNumber(row.activity_date)}</td>
+                    <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{row.absence_label || row.absence_type || row.unavailability_reason || "—"}</td>
+                    <td className="px-4 py-3 text-right">{formatHours(row.avv_hours)}</td><td className="px-4 py-3 text-right">{formatHours(row.management_hours)}</td><td className="px-4 py-3 text-right">{formatHours(row.production_hours)}</td><td className="px-4 py-3 text-right">{formatHours(row.rework_hours)}</td><td className="px-4 py-3 text-right">{formatHours(row.training_hours)}</td><td className="px-4 py-3 text-right">{formatHours(row.intercontract_hours)}</td><td className="px-4 py-3 text-right">{formatCurrency(getRubricCost(row, "avv_cost", "avv_hours"))}</td><td className="px-4 py-3 text-right">{formatCurrency(getRubricCost(row, "management_cost", "management_hours"))}</td><td className="px-4 py-3 text-right">{formatCurrency(getRubricCost(row, "production_cost", "production_hours"))}</td><td className="px-4 py-3 text-right">{formatCurrency(getRubricCost(row, "rework_cost", "rework_hours"))}</td><td className="px-4 py-3 text-right">{formatCurrency(getRubricCost(row, "training_cost", "training_hours"))}</td><td className="px-4 py-3 text-right">{formatCurrency(getRubricCost(row, "intercontract_cost", "intercontract_hours"))}</td><td className="px-4 py-3 text-right">{formatCurrency(row.purchase_cost)}</td><td className="px-4 py-3 text-right">{formatCurrency(row.expense_cost)}</td><td className="px-4 py-3 text-right font-bold text-emerald-700 dark:text-emerald-300">{formatHours(getTimeTotalHours(row))}</td><td className="px-4 py-3 text-right font-bold text-indigo-700 dark:text-indigo-300">{formatCurrency(getTimeTotalCost(row))}</td>
                   </tr>
                 ))}
               </tbody>
               <tfoot className="sticky bottom-0 bg-slate-50 text-sm font-black text-slate-900 dark:bg-slate-700 dark:text-white">
-                <tr><td className="sticky left-0 bg-slate-50 px-4 py-3 dark:bg-slate-700" colSpan={3}>Total</td><td className="px-4 py-3 text-right">{formatHours(total("avv_hours"))}</td><td className="px-4 py-3 text-right">{formatHours(total("management_hours"))}</td><td className="px-4 py-3 text-right">{formatHours(total("production_hours"))}</td><td className="px-4 py-3 text-right">{formatHours(total("rework_hours"))}</td><td className="px-4 py-3 text-right">{formatHours(total("training_hours"))}</td><td className="px-4 py-3 text-right">{formatHours(total("intercontract_hours"))}</td><td className="px-4 py-3 text-right">{formatCurrency(total("avv_cost"))}</td><td className="px-4 py-3 text-right">{formatCurrency(total("management_cost"))}</td><td className="px-4 py-3 text-right">{formatCurrency(total("production_cost"))}</td><td className="px-4 py-3 text-right">{formatCurrency(total("rework_cost"))}</td><td className="px-4 py-3 text-right">{formatCurrency(total("purchase_cost"))}</td><td className="px-4 py-3 text-right">{formatCurrency(total("expense_cost"))}</td><td className="px-4 py-3 text-right">{formatHours(total("total_hours"))}</td><td className="px-4 py-3 text-right">{formatCurrency(total("total_cost"))}</td></tr>
+                <tr><td className="sticky left-0 bg-slate-50 px-4 py-3 dark:bg-slate-700" colSpan={6}>Total</td><td className="px-4 py-3 text-right">{formatHours(total("avv_hours"))}</td><td className="px-4 py-3 text-right">{formatHours(total("management_hours"))}</td><td className="px-4 py-3 text-right">{formatHours(total("production_hours"))}</td><td className="px-4 py-3 text-right">{formatHours(total("rework_hours"))}</td><td className="px-4 py-3 text-right">{formatHours(total("training_hours"))}</td><td className="px-4 py-3 text-right">{formatHours(total("intercontract_hours"))}</td><td className="px-4 py-3 text-right">{formatCurrency(totalCost("avv_cost", "avv_hours"))}</td><td className="px-4 py-3 text-right">{formatCurrency(totalCost("management_cost", "management_hours"))}</td><td className="px-4 py-3 text-right">{formatCurrency(totalCost("production_cost", "production_hours"))}</td><td className="px-4 py-3 text-right">{formatCurrency(totalCost("rework_cost", "rework_hours"))}</td><td className="px-4 py-3 text-right">{formatCurrency(totalCost("training_cost", "training_hours"))}</td><td className="px-4 py-3 text-right">{formatCurrency(totalCost("intercontract_cost", "intercontract_hours"))}</td><td className="px-4 py-3 text-right">{formatCurrency(total("purchase_cost"))}</td><td className="px-4 py-3 text-right">{formatCurrency(total("expense_cost"))}</td><td className="px-4 py-3 text-right">{formatHours(totalHours)}</td><td className="px-4 py-3 text-right">{formatCurrency(totalCosts)}</td></tr>
               </tfoot>
             </table>
           </div>
@@ -1129,13 +1207,13 @@ function TimeProjectCard({ summary, onArchive, onRestore }: { summary: TimeProje
   const [selected, setSelected] = useState<TimeProjectSummary | null>(null);
   const isArchived = Boolean(summary.archived_at) || summary.status === "archived";
   const labels = { view: "Voir le pointage", edit: "Modifier le pointage", archive: "Archiver le pointage", restore: "Réactiver le pointage" };
-  return (<><article onClick={() => setSelected(summary)} className="group cursor-pointer rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-indigo-200 hover:bg-indigo-50/25 hover:shadow-md dark:border-slate-600/60 dark:bg-slate-700/70 dark:hover:bg-indigo-900/20"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><h3 className="truncate text-sm font-black text-slate-950 dark:text-slate-100">{summary.project_number} · {summary.project_designation}</h3><p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500 dark:text-slate-300">{summary.resourcesCount} ressource(s) · {formatDate(summary.firstDate)} → {formatDate(summary.lastDate)} · validation {summary.validation_manager_status || labelStatus("time", summary.status)}</p></div><ActionMenu labels={labels} canRestore={isArchived} onView={() => setSelected(summary)} onEdit={() => setSelected(summary)} onArchive={onArchive} onRestore={onRestore} /></div><div className="mt-4 grid gap-2 sm:grid-cols-4"><Info label="AVV" value={formatHours(summary.avv_hours)} accent="amber" /><Info label="Management" value={formatHours(summary.management_hours)} accent="indigo" /><Info label="Production" value={formatHours(summary.production_hours)} accent="emerald" /><Info label="Reprise" value={formatHours(summary.rework_hours)} accent="rose" /><Info label="Formation" value={formatHours(summary.training_hours)} accent="sky" /><Info label="Intercontrat" value={formatHours(summary.intercontract_hours)} accent="slate" /><Info label="Total heures" value={formatHours(summary.total_hours)} accent="emerald" /><Info label="Total coûts" value={formatCurrency(summary.total_cost)} accent="indigo" /></div></article>{selected && <ProjectTimeDrawer summary={selected} onClose={() => setSelected(null)} />}</>);
+  return (<><article onClick={() => setSelected(summary)} className="group cursor-pointer rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-indigo-200 hover:bg-indigo-50/25 hover:shadow-md dark:border-slate-600/60 dark:bg-slate-700/70 dark:hover:bg-indigo-900/20"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><h3 className="truncate text-sm font-black text-slate-950 dark:text-slate-100">{summary.project_number} · {summary.project_designation}</h3><p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500 dark:text-slate-300">{summary.resourcesCount} ressource(s) · {formatDate(summary.firstDate)} → {formatDate(summary.lastDate)} · validation {summary.validation_manager_status || labelStatus("time", summary.status)}</p></div><ActionMenu labels={labels} canRestore={isArchived} onView={() => setSelected(summary)} onEdit={() => setSelected(summary)} onArchive={onArchive} onRestore={onRestore} /></div><div className="mt-4 flex flex-wrap gap-2"><span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">Total heures : {formatHours(getTimeTotalHours(summary))}</span><span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-black text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">Total coûts : {formatCurrency(getTimeTotalCost(summary))}</span></div><div className="mt-3 grid gap-2 sm:grid-cols-4"><Info label="AVV" value={formatHours(summary.avv_hours)} accent="amber" /><Info label="Management" value={formatHours(summary.management_hours)} accent="indigo" /><Info label="Production" value={formatHours(summary.production_hours)} accent="emerald" /><Info label="Reprise" value={formatHours(summary.rework_hours)} accent="rose" /><Info label="Formation" value={formatHours(summary.training_hours)} accent="sky" /><Info label="Intercontrat" value={formatHours(summary.intercontract_hours)} accent="slate" /><Info label="Achats" value={formatCurrency(summary.purchase_cost)} accent="amber" /><Info label="Frais" value={formatCurrency(summary.expense_cost)} accent="rose" /></div></article>{selected && <ProjectTimeDrawer summary={selected} onClose={() => setSelected(null)} />}</>);
 }
 
 function TimeProjectTable({ rows, onArchive, onRestore }: { rows: TimeProjectSummary[]; onArchive: (row: TimeProjectSummary) => void; onRestore: (row: TimeProjectSummary) => void }) {
   const [selected, setSelected] = useState<TimeProjectSummary | null>(null);
   const labels = { view: "Voir le pointage", edit: "Modifier le pointage", archive: "Archiver le pointage", restore: "Réactiver le pointage" };
-  return (<>{selected && <ProjectTimeDrawer summary={selected} onClose={() => setSelected(null)} />}<div className="max-h-[330px] overflow-auto rounded-2xl border border-slate-200 shadow-sm dark:border-slate-600/70"><table className="w-full min-w-[2100px] border-separate border-spacing-0 bg-white text-sm dark:bg-slate-700/65"><thead className="sticky top-0 z-20 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-700 dark:text-slate-300"><tr><th className="sticky left-0 z-30 bg-slate-50 px-4 py-3 text-left dark:bg-slate-700">N° projet</th><th className="px-4 py-3 text-left">Désignation projet</th><th className="px-4 py-3 text-right">AVV (h)</th><th className="px-4 py-3 text-right">Management (h)</th><th className="px-4 py-3 text-right">Production (h)</th><th className="px-4 py-3 text-right">Reprise (h)</th><th className="px-4 py-3 text-right">Formation (h)</th><th className="px-4 py-3 text-right">Intercontrat (h)</th><th className="px-4 py-3 text-right">Achat (€)</th><th className="px-4 py-3 text-right">Frais (€)</th><th className="px-4 py-3 text-right">Total pointage (h)</th><th className="px-4 py-3 text-right">Total coûts (€)</th><th className="px-4 py-3 text-left">Validation N+1</th><th className="sticky right-0 z-30 bg-slate-50 px-4 py-3 text-right dark:bg-slate-700">Actions</th></tr></thead><tbody>{rows.map((row) => { const isArchived = Boolean(row.archived_at) || row.status === "archived"; return <tr key={row.id} onClick={() => setSelected(row)} className="cursor-pointer hover:bg-indigo-50/45 dark:hover:bg-indigo-900/20"><td className="sticky left-0 z-10 bg-white px-4 py-3 font-bold text-slate-950 dark:bg-slate-700 dark:text-slate-100">{row.project_number}</td><td className="px-4 py-3 text-slate-700 dark:text-slate-200">{row.project_designation}</td><td className="px-4 py-3 text-right">{formatHours(row.avv_hours)}</td><td className="px-4 py-3 text-right">{formatHours(row.management_hours)}</td><td className="px-4 py-3 text-right">{formatHours(row.production_hours)}</td><td className="px-4 py-3 text-right">{formatHours(row.rework_hours)}</td><td className="px-4 py-3 text-right">{formatHours(row.training_hours)}</td><td className="px-4 py-3 text-right">{formatHours(row.intercontract_hours)}</td><td className="px-4 py-3 text-right">{formatCurrency(row.purchase_cost)}</td><td className="px-4 py-3 text-right">{formatCurrency(row.expense_cost)}</td><td className="px-4 py-3 text-right font-bold text-emerald-700 dark:text-emerald-300">{formatHours(row.total_hours)}</td><td className="px-4 py-3 text-right font-bold text-indigo-700 dark:text-indigo-300">{formatCurrency(row.total_cost)}</td><td className="px-4 py-3"><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${row.validation_manager_status === "approved" ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300" : row.validation_manager_status === "rejected" ? "bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300" : "bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"}`}>{row.validation_manager_status || labelStatus("time", row.status)}</span></td><td className="sticky right-0 z-10 bg-white px-4 py-3 text-right dark:bg-slate-700"><ActionMenu labels={labels} canRestore={isArchived} onView={() => setSelected(row)} onEdit={() => setSelected(row)} onArchive={() => onArchive(row)} onRestore={() => onRestore(row)} /></td></tr>; })}</tbody></table></div></>);
+  return (<>{selected && <ProjectTimeDrawer summary={selected} onClose={() => setSelected(null)} />}<div className="max-h-[330px] overflow-auto rounded-2xl border border-slate-200 shadow-sm dark:border-slate-600/70"><table className="w-full min-w-[2100px] border-separate border-spacing-0 bg-white text-sm dark:bg-slate-700/65"><thead className="sticky top-0 z-20 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-700 dark:text-slate-300"><tr><th className="sticky left-0 z-30 bg-slate-50 px-4 py-3 text-left dark:bg-slate-700">N° projet</th><th className="px-4 py-3 text-left">Désignation projet</th><th className="px-4 py-3 text-right">AVV (h)</th><th className="px-4 py-3 text-right">Management (h)</th><th className="px-4 py-3 text-right">Production (h)</th><th className="px-4 py-3 text-right">Reprise (h)</th><th className="px-4 py-3 text-right">Formation (h)</th><th className="px-4 py-3 text-right">Intercontrat (h)</th><th className="px-4 py-3 text-right">Achat (€)</th><th className="px-4 py-3 text-right">Frais (€)</th><th className="px-4 py-3 text-right">Total pointage (h)</th><th className="px-4 py-3 text-right">Total coûts (€)</th><th className="px-4 py-3 text-left">Validation N+1</th><th className="sticky right-0 z-30 bg-slate-50 px-4 py-3 text-right dark:bg-slate-700">Actions</th></tr></thead><tbody>{rows.map((row) => { const isArchived = Boolean(row.archived_at) || row.status === "archived"; return <tr key={row.id} onClick={() => setSelected(row)} className="cursor-pointer hover:bg-indigo-50/45 dark:hover:bg-indigo-900/20"><td className="sticky left-0 z-10 bg-white px-4 py-3 font-bold text-slate-950 dark:bg-slate-700 dark:text-slate-100">{row.project_number}</td><td className="px-4 py-3 text-slate-700 dark:text-slate-200">{row.project_designation}</td><td className="px-4 py-3 text-right">{formatHours(row.avv_hours)}</td><td className="px-4 py-3 text-right">{formatHours(row.management_hours)}</td><td className="px-4 py-3 text-right">{formatHours(row.production_hours)}</td><td className="px-4 py-3 text-right">{formatHours(row.rework_hours)}</td><td className="px-4 py-3 text-right">{formatHours(row.training_hours)}</td><td className="px-4 py-3 text-right">{formatHours(row.intercontract_hours)}</td><td className="px-4 py-3 text-right">{formatCurrency(row.purchase_cost)}</td><td className="px-4 py-3 text-right">{formatCurrency(row.expense_cost)}</td><td className="px-4 py-3 text-right font-bold text-emerald-700 dark:text-emerald-300">{formatHours(getTimeTotalHours(row))}</td><td className="px-4 py-3 text-right font-bold text-indigo-700 dark:text-indigo-300">{formatCurrency(getTimeTotalCost(row))}</td><td className="px-4 py-3"><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${row.validation_manager_status === "approved" ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300" : row.validation_manager_status === "rejected" ? "bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300" : "bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"}`}>{row.validation_manager_status || labelStatus("time", row.status)}</span></td><td className="sticky right-0 z-10 bg-white px-4 py-3 text-right dark:bg-slate-700"><ActionMenu labels={labels} canRestore={isArchived} onView={() => setSelected(row)} onEdit={() => setSelected(row)} onArchive={() => onArchive(row)} onRestore={() => onRestore(row)} /></td></tr>; })}</tbody></table></div></>);
 }
 
 function TimeEntryCard({ row, onArchive, onRestore }: { row: AnyRow; onArchive: () => void; onRestore: () => void }) {
@@ -1169,7 +1247,7 @@ function TimeEntryTable({ rows, onArchive, onRestore }: { rows: AnyRow[]; onArch
   const labels = { view: "Voir le pointage", edit: "Modifier le pointage", archive: "Archiver le pointage", restore: "Réactiver le pointage" };
   return (
     <div className="max-h-[430px] overflow-auto rounded-2xl border border-slate-200 shadow-sm dark:border-slate-600/70">
-      <table className="w-full min-w-[2400px] border-separate border-spacing-0 bg-white text-sm dark:bg-slate-700/65">
+      <table className="w-full min-w-[2520px] border-separate border-spacing-0 bg-white text-sm dark:bg-slate-700/65">
         <thead className="sticky top-0 z-20 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-700 dark:text-slate-300">
           <tr>
             <th className="sticky left-0 z-30 bg-slate-50 px-4 py-3 text-left dark:bg-slate-700">N° projet</th>
@@ -1335,11 +1413,12 @@ function WorkCardsAndTable({ moduleKey, rows, employees, onArchive, onRestore }:
 
 function ChartCard({ title, description, children }: { title: string; description: string; children: ReactNode }) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const chartRef = useRef<HTMLDivElement | null>(null);
 
   async function copy() {
     const canvas = document.createElement("canvas");
     canvas.width = 1400;
-    canvas.height = 720;
+    canvas.height = 820;
     const context = canvas.getContext("2d");
     if (!context) return;
     context.fillStyle = "#ffffff";
@@ -1350,9 +1429,31 @@ function ChartCard({ title, description, children }: { title: string; descriptio
     context.fillStyle = "#475569";
     context.font = "22px Arial";
     context.fillText(description, 48, 114);
-    context.fillStyle = "#6366f1";
-    context.font = "700 24px Arial";
-    context.fillText("Graphique ONEPILOT — export depuis le périmètre filtré", 48, 184);
+
+    const svg = chartRef.current?.querySelector("svg");
+    if (svg) {
+      const serialized = new XMLSerializer().serializeToString(svg);
+      const image = new Image();
+      const svgBlob = new Blob([serialized], { type: "image/svg+xml;charset=utf-8" });
+      const url = URL.createObjectURL(svgBlob);
+      await new Promise<void>((resolve) => {
+        image.onload = () => {
+          context.drawImage(image, 48, 150, 1304, 610);
+          URL.revokeObjectURL(url);
+          resolve();
+        };
+        image.onerror = () => {
+          URL.revokeObjectURL(url);
+          resolve();
+        };
+        image.src = url;
+      });
+    } else {
+      context.fillStyle = "#6366f1";
+      context.font = "700 24px Arial";
+      context.fillText("Graphique ONEPILOT — export depuis le périmètre filtré", 48, 184);
+    }
+
     canvas.toBlob(async (blob) => {
       if (!blob) return;
       try {
@@ -1381,7 +1482,7 @@ function ChartCard({ title, description, children }: { title: string; descriptio
           <button type="button" onClick={() => setIsExpanded(true)} title="Agrandir le graphique" className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700 dark:border-slate-600 dark:hover:bg-indigo-900/30"><Expand className="h-3.5 w-3.5" /></button>
         </div>
       </div>
-      <div className={height}>{children}</div>
+      <div ref={chartRef} className={height}>{children}</div>
     </>
   );
 
@@ -1471,10 +1572,10 @@ function GraphsPanel({ moduleKey, rows, catalog }: { moduleKey: HrTalentModuleKe
               <ResponsiveContainer width="100%" height="100%"><LineChart data={monthlyTimeData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="month" /><YAxis allowDecimals={false} /><Tooltip /><Legend /><Line type="monotone" dataKey="heures" name="Heures" stroke={chartPalette[2]} strokeWidth={3} /></LineChart></ResponsiveContainer>
             </ChartCard>
             <ChartCard title="Rubriques par mois" description="Production, AVV, management, formation, intercontrat et reprise sur le même graphique.">
-              <ResponsiveContainer width="100%" height="100%"><LineChart data={monthlyTimeData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="month" /><YAxis allowDecimals={false} /><Tooltip /><Legend /><Line type="monotone" dataKey="production" name="Production" stroke="#10b981" strokeWidth={3} /><Line type="monotone" dataKey="avv" name="AVV" stroke="#f59e0b" strokeWidth={3} /><Line type="monotone" dataKey="management" name="Management" stroke="#6366f1" strokeWidth={3} /><Line type="monotone" dataKey="formation" name="Formation" stroke="#0ea5e9" strokeWidth={3} /><Line type="monotone" dataKey="intercontrat" name="IC" stroke="#f43f5e" strokeWidth={3} /><Line type="monotone" dataKey="reprise" name="Reprise" stroke="#dc2626" strokeWidth={3} /></LineChart></ResponsiveContainer>
+              <ResponsiveContainer width="100%" height="100%"><LineChart data={monthlyTimeData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="month" /><YAxis allowDecimals={false} /><Tooltip /><Legend /><Line type="monotone" dataKey="production" name="Production" stroke="#10b981" strokeWidth={3} /><Line type="monotone" dataKey="avv" name="AVV" stroke="#f59e0b" strokeWidth={3} /><Line type="monotone" dataKey="management" name="Management" stroke="#6366f1" strokeWidth={3} /><Line type="monotone" dataKey="formation" name="Formation" stroke="#0ea5e9" strokeWidth={3} /><Line type="monotone" dataKey="intercontrat" name="IC" stroke="#64748b" strokeWidth={3} /><Line type="monotone" dataKey="reprise" name="Reprise" stroke="#dc2626" strokeWidth={3} /></LineChart></ResponsiveContainer>
             </ChartCard>
             <ChartCard title="Intercontrat par mois" description="Heures d’intercontrat à suivre pour capacité et staffing.">
-              <ResponsiveContainer width="100%" height="100%"><LineChart data={monthlyTimeData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="month" /><YAxis allowDecimals={false} /><Tooltip /><Legend /><Line type="monotone" dataKey="intercontrat" name="Intercontrat" stroke={chartPalette[3]} strokeWidth={3} /></LineChart></ResponsiveContainer>
+              <ResponsiveContainer width="100%" height="100%"><LineChart data={monthlyTimeData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="month" /><YAxis allowDecimals={false} /><Tooltip /><Legend /><Line type="monotone" dataKey="intercontrat" name="Intercontrat" stroke="#64748b" strokeWidth={3} /></LineChart></ResponsiveContainer>
             </ChartCard>
             <ChartCard title="Reprises par mois" description="Suivi des reprises à analyser par projet et par ressource.">
               <ResponsiveContainer width="100%" height="100%"><LineChart data={monthlyTimeData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="month" /><YAxis allowDecimals={false} /><Tooltip /><Legend /><Line type="monotone" dataKey="reprise" name="Reprise" stroke={chartPalette[4]} strokeWidth={3} /></LineChart></ResponsiveContainer>
@@ -1537,6 +1638,13 @@ function AlertsPanel({ moduleKey, rows }: { moduleKey: HrTalentModuleKey; rows: 
         <DecisionPanel icon={Lightbulb} title="Recommandations" accent="emerald"><Insight title="Relier compétences et entretiens" description="Capitaliser écarts, objectifs, formations et retours projet dans le plan de développement." level="info" /><Insight title="Prioriser les risques" description="Traiter d’abord checklists NOK, objectifs non validés, compétences critiques et saisies en attente." level="success" /></DecisionPanel>
       </div>
       <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {moduleKey === "time" && (<>
+          <AlertMetric icon={BriefcaseBusiness} title="Heures AVV" value={formatHours(rows.reduce((sum, row) => sum + Number(row.avv_hours || 0), 0))} description="Temps avant-vente à suivre." accent="amber" />
+          <AlertMetric icon={Users} title="Heures management" value={formatHours(rows.reduce((sum, row) => sum + Number(row.management_hours || 0), 0))} description="Temps de pilotage et coordination." accent="indigo" />
+          <AlertMetric icon={CheckCircle2} title="Heures production" value={formatHours(rows.reduce((sum, row) => sum + Number(row.production_hours || 0), 0))} description="Production réalisée sur projets." accent="emerald" />
+          <AlertMetric icon={GraduationCap} title="Heures formation" value={formatHours(rows.reduce((sum, row) => sum + Number(row.training_hours || 0), 0))} description="Montée en compétence déclarée." accent="sky" />
+          <AlertMetric icon={Clock3} title="Heures IC" value={formatHours(rows.reduce((sum, row) => sum + Number(row.intercontract_hours || 0), 0))} description="Intercontrat suivi par mois." accent="slate" />
+        </>)}
         <AlertMetric icon={ShieldAlert} title="Actions à traiter" value={actionNeeded} description="Risque opérationnel ou RH à arbitrer." accent={actionNeeded > 0 ? "amber" : "emerald"} />
         <AlertMetric icon={CheckCircle2} title="OK" value={ok} description="Éléments validés ou exploitables." accent="emerald" />
         <AlertMetric icon={AlertTriangle} title="NOK" value={nok} description="Éléments bloquants ou insuffisants." accent={nok > 0 ? "rose" : "emerald"} />
@@ -1614,7 +1722,9 @@ function buildExportColumns(moduleKey: HrTalentModuleKey): ExportColumn<AnyRow>[
     { key: "avv_cost", label: "AVV (€)", value: (row) => row.avv_cost },
     { key: "management_cost", label: "Management (€)", value: (row) => row.management_cost },
     { key: "production_cost", label: "Production (€)", value: (row) => row.production_cost },
-    { key: "rework_cost", label: "Reprise (€)", value: (row) => row.rework_cost },
+    { key: "rework_cost", label: "Reprise (€)", value: (row) => getRubricCost(row, "rework_cost", "rework_hours") },
+    { key: "training_cost", label: "Formation (€)", value: (row) => getRubricCost(row, "training_cost", "training_hours") },
+    { key: "intercontract_cost", label: "Intercontrat (€)", value: (row) => getRubricCost(row, "intercontract_cost", "intercontract_hours") },
     { key: "purchase_cost", label: "Achat (€)", value: (row) => row.purchase_cost },
     { key: "expense_cost", label: "Frais (€)", value: (row) => row.expense_cost ?? row.expense_hours },
     { key: "total_hours", label: "Total pointage (h)", value: (row) => getTimeTotalHours(row) },
@@ -1695,7 +1805,8 @@ function CreateModal({ moduleKey, organizationId, employees, catalog, onClose }:
         const { error } = await (supabase.from("hr_review_items" as never) as any).insert({ organization_id: organizationId, cycle_id: cycleId, employee_id: employeeId, manager_employee_id: employees.find((item) => item.id === employeeId)?.manager_employee_id || null, status: "employee_input", objective_count: 4, completed_objective_count: 0, global_rating: null, employee_comment: "Auto-évaluation à compléter.", manager_comment: "Évaluation manager à compléter.", review_details: reviewDetails });
         if (error) throw error;
       } else {
-        const hourlyCost = 75;
+        const selectedEmployee = employees.find((item) => item.id === employeeId);
+        const hourlyCost = Number(selectedEmployee?.loaded_hourly_cost ?? selectedEmployee?.hourly_cost ?? 0);
         const avv = Number(avvHours || 0);
         const management = Number(managementHours || 0);
         const production = Number(productionHours || 0);
@@ -1704,8 +1815,10 @@ function CreateModal({ moduleKey, organizationId, employees, catalog, onClose }:
         const intercontract = Number(intercontractHours || 0);
         const expenses = Number(expenseCost || 0);
         const purchase = Number(purchaseCost || 0);
-        const totalHours = avv + management + production + rework + training + intercontract + expenses;
-        const totalCost = (avv + management + production + rework + training + intercontract) * hourlyCost + purchase;
+        const totalHours = avv + management + production + rework + training + intercontract;
+        const totalCost = hourlyCost > 0
+          ? totalHours * hourlyCost + purchase + expenses
+          : purchase + expenses;
         const { error } = await (supabase.from("hr_time_activity_entries" as never) as any).insert({
           organization_id: organizationId,
           employee_id: employeeId,
@@ -1725,6 +1838,9 @@ function CreateModal({ moduleKey, organizationId, employees, catalog, onClose }:
           management_cost: management * hourlyCost,
           production_cost: production * hourlyCost,
           rework_cost: rework * hourlyCost,
+          training_cost: training * hourlyCost,
+          intercontract_cost: intercontract * hourlyCost,
+          loaded_hourly_rate: hourlyCost || null,
           purchase_cost: purchase,
           expense_cost: expenses,
           expense_hours: 0,
