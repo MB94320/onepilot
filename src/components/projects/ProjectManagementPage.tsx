@@ -52,13 +52,23 @@ import { createClient } from "@/lib/supabase/client";
 import ProjectAnalyticsPanel from "@/components/projects/ProjectAnalyticsPanel";
 import ProjectGanttBoard from "@/components/projects/ProjectGanttBoard";
 import ProjectTimelineBoard from "@/components/projects/ProjectTimelineBoard";
+import {
+  ActionPortfolioSummary,
+  BulkTaskForm,
+  PerformanceDetailsDrawer,
+  PerformancePilotage,
+  SatisfactionForm,
+  WbsTable,
+  priorityLabels,
+  statusLabels,
+} from "@/components/projects/ProjectSpecializedUi";
 
 const supabase = createClient();
 
 type AnyRow = Record<string, any>;
 type PageParams = { orgId: string };
 export type ProjectPageMode = "portfolio" | "timeline" | "gantt" | "actions" | "performance";
-type TabKey = "pilotage" | "analyses" | "alerts" | "summary" | "history";
+type TabKey = "pilotage" | "analyses" | "alerts" | "wbs" | "gantt" | "critical";
 type ViewMode = "cards" | "table";
 
 type ProjectData = {
@@ -78,6 +88,7 @@ type ProjectData = {
   health: AnyRow[];
   deliverables: AnyRow[];
   risks: AnyRow[];
+  nonconformities: AnyRow[];
   skillRequirements: AnyRow[];
   financials: AnyRow[];
   satisfaction: AnyRow[];
@@ -163,6 +174,20 @@ function statusLabel(value?: unknown) {
   } as Record<string, string>)[key] || String(value || "Non renseigné");
 }
 
+function priorityLabel(value?: unknown) {
+  return priorityLabels[String(value || "").toLowerCase()] || String(value || "Non renseignée");
+}
+
+function originLabel(value?: unknown) {
+  const key = String(value || "").toLowerCase();
+  return ({ project: "Projet", risk: "Risque", nonconformity: "Non-conformité", non_conformity: "Non-conformité", audit: "Audit", quality: "Qualité", customer: "Client", finance: "Finance", management: "Management", generic: "Générique" } as Record<string, string>)[key] || String(value || "Non renseignée");
+}
+
+function projectTypeLabel(value?: unknown) {
+  const key = String(value || "").toLowerCase();
+  return ({ delivery: "Projet client", internal: "Projet interne", transformation: "Transformation", research: "Recherche et développement", support: "Support", fixed_price: "Forfait", time_and_materials: "Régie" } as Record<string, string>)[key] || String(value || "Non renseigné");
+}
+
 function badgeStatus(value?: unknown) {
   const key = String(value || "").toLowerCase();
   if (["open", "todo", "planned"].includes(key)) return "planned";
@@ -189,7 +214,7 @@ async function loadProjectData(slugOrId: string): Promise<ProjectData> {
     "project_projects", "project_portfolios", "project_programs", "project_clients", "hr_employee_overview",
     "project_work_packages", "project_tasks", "project_staffing_assignments", "project_task_assignments",
     "project_milestones", "project_dependencies", "project_actions", "project_health_snapshots",
-    "project_deliverables", "project_risks", "project_skill_requirements", "project_financial_performance",
+    "project_deliverables", "project_risks", "project_nonconformities", "project_skill_requirements", "project_financial_performance",
     "project_satisfaction_surveys", "project_commerce_links", "project_audit_events",
   ];
   const results = await Promise.all(names.map(table));
@@ -201,8 +226,8 @@ async function loadProjectData(slugOrId: string): Promise<ProjectData> {
     projects: value(0), portfolios: value(1), programs: value(2), clients: value(3), employees: value(4),
     workPackages: value(5), tasks: value(6), staffingAssignments: value(7), taskAssignments: value(8),
     milestones: value(9), dependencies: value(10), actions: value(11), health: value(12), deliverables: value(13),
-    risks: value(14), skillRequirements: value(15), financials: value(16), satisfaction: value(17),
-    commerceLinks: value(18), audit: value(19),
+    risks: value(14), nonconformities: value(15), skillRequirements: value(16), financials: value(17), satisfaction: value(18),
+    commerceLinks: value(19), audit: value(20),
   };
 }
 
@@ -229,6 +254,13 @@ function enrich(data: ProjectData) {
     const assignments = data.taskAssignments.filter((item) => item.project_id === row.id && !item.archived_at);
     const plannedHours = assignments.reduce((sum, item) => sum + number(item.planned_hours), 0);
     const actualHours = assignments.reduce((sum, item) => sum + number(item.actual_hours), 0);
+    const deliveries = data.deliverables.filter((item) => item.project_id === row.id && !item.archived_at);
+    const delivered = deliveries.filter((item) => item.actual_delivery_date);
+    const dueDeliveries = deliveries.filter((item) => item.planned_date && item.planned_date <= today());
+    const onTime = delivered.filter((item) => item.actual_delivery_date <= (item.replanned_date || item.planned_date)).length;
+    const firstTimeGood = delivered.filter((item) => item.first_time_right === true).length;
+    const nonconformities = data.nonconformities.filter((item) => item.project_id === row.id && !item.archived_at);
+    const marginRate = finance.margin_rate ?? (number(finance.production_amount) ? (number(finance.production_amount) - number(finance.ac || finance.actual_cost)) / number(finance.production_amount) : 0);
     return {
       ...row,
       client_name: row.client_name || clientMap.get(row.client_id)?.name || commerceMap.get(row.id)?.client_name || "Interne",
@@ -244,8 +276,25 @@ function enrich(data: ProjectData) {
       spi: finance.spi ?? health.spi,
       cpi: finance.cpi ?? health.cpi,
       eac: finance.estimate_at_completion ?? health.estimate_at_completion,
+      bac: finance.bac ?? row.baseline_budget ?? ordered,
+      planned_value: finance.pv ?? row.planned_value,
+      earned_value: finance.ev ?? row.earned_value,
+      actual_cost_total: finance.ac ?? row.actual_cost_total ?? consumed,
+      production_amount: finance.production_amount,
+      invoiced_amount: finance.invoiced_amount,
+      collected_amount: finance.collected_amount,
+      fae: finance.fae,
+      pca: finance.pca,
+      margin_rate: marginRate,
       satisfaction_score: satisfaction.overall_score,
       tace: plannedHours > 0 ? Math.min(100, (actualHours / plannedHours) * 100) : 0,
+      planned_hours: plannedHours,
+      actual_hours: actualHours,
+      deliverable_count: deliveries.length,
+      otd: dueDeliveries.length ? (onTime / dueDeliveries.length) * 100 : 0,
+      oqd: delivered.length ? (firstTimeGood / delivered.length) * 100 : 0,
+      dod: delivered.reduce((sum, item) => sum + number(item.delay_business_days), 0),
+      nonconformities: nonconformities.length,
       critical_risks: data.risks.filter((risk) => risk.project_id === row.id && !risk.archived_at && number(risk.inherent_score || number(risk.probability) * number(risk.impact)) >= 12).length,
       late_deliverables: data.deliverables.filter((delivery) => delivery.project_id === row.id && !delivery.archived_at && !["accepted", "cancelled"].includes(delivery.status) && String(delivery.replanned_date || delivery.planned_date || "") < today()).length,
     };
@@ -276,14 +325,15 @@ function RowStatus({ row, mode }: { row: AnyRow; mode: ProjectPageMode }) {
   return <HrStatusBadge status={badgeStatus(status)} label={statusLabel(status)} />;
 }
 
-function Filters({ data, values, onChange, count, total }: {
+function Filters({ mode, data, values, onChange, count, total }: {
+  mode: ProjectPageMode;
   data: ProjectData;
   values: Record<string, string>;
   onChange: (key: string, value: string) => void;
   count: number;
   total: number;
 }) {
-  const active = Object.entries(values).some(([key, value]) => key === "search" ? Boolean(value.trim()) : value !== "all");
+  const active = Object.values(values).some((value) => value !== "" && value !== "all");
   return <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-600/60 dark:bg-slate-700/70">
     <div className="border-b border-slate-100 bg-gradient-to-r from-sky-50/70 via-white to-indigo-50/60 px-5 py-4 dark:border-slate-600/55 dark:from-sky-900/25 dark:via-slate-700/85 dark:to-indigo-900/25">
       <div className="flex items-center justify-between gap-3"><div className="flex items-center gap-3"><div className="rounded-xl bg-sky-100 p-2.5 text-sky-700 dark:bg-sky-900/45 dark:text-sky-200"><SlidersHorizontal className="h-4 w-4" /></div><div><h2 className="text-sm font-bold text-slate-950 dark:text-white">Périmètre d’analyse</h2><p className="mt-1 text-xs text-slate-500 dark:text-slate-300">Les filtres pilotent réellement KPI, cartes, tableaux, graphiques, alertes, synthèses et export.</p></div></div><span className="rounded-full border border-indigo-100 bg-white px-3 py-1.5 text-xs font-semibold text-indigo-700 shadow-sm dark:border-indigo-800 dark:bg-slate-700 dark:text-indigo-200">{count} résultats sur {total}</span></div>
@@ -292,10 +342,18 @@ function Filters({ data, values, onChange, count, total }: {
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <select value={values.status} onChange={(event) => onChange("status", event.target.value)} className={hrSelectClassName}><option value="all">Tous les statuts</option>{["draft","planned","active","in_progress","on_hold","blocked","completed","cancelled","archived"].map((item) => <option key={item} value={item}>{statusLabel(item)}</option>)}</select>
         <select value={values.project} onChange={(event) => onChange("project", event.target.value)} className={hrSelectClassName}><option value="all">Tous les projets</option>{data.projects.map((row) => <option key={row.id} value={row.id}>{row.code} · {row.name}</option>)}</select>
-        <select value={values.client} onChange={(event) => onChange("client", event.target.value)} className={hrSelectClassName}><option value="all">Tous les clients</option>{data.clients.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select>
-        <select value={values.manager} onChange={(event) => onChange("manager", event.target.value)} className={hrSelectClassName}><option value="all">Tous les responsables</option>{data.employees.map((row) => <option key={row.id} value={row.id}>{person(row)}</option>)}</select>
+        {mode === "actions" ? <>
+          <select value={values.priority} onChange={(event) => onChange("priority", event.target.value)} className={hrSelectClassName}><option value="all">Toutes les priorités</option>{["low","normal","high","critical"].map((item) => <option key={item} value={item}>{priorityLabel(item)}</option>)}</select>
+          <select value={values.origin} onChange={(event) => onChange("origin", event.target.value)} className={hrSelectClassName}><option value="all">Toutes les origines</option>{["project","risk","nonconformity","audit","quality","customer","management","generic"].map((item) => <option key={item} value={item}>{originLabel(item)}</option>)}</select>
+          <select value={values.effectiveness} onChange={(event) => onChange("effectiveness", event.target.value)} className={hrSelectClassName}><option value="all">Toutes les efficacités</option><option value="compliant">Conforme</option><option value="partially_compliant">Partiellement conforme</option><option value="non_compliant">Non conforme</option><option value="not_reviewed">Non évaluée</option></select>
+        </> : <>
+          <select value={values.client} onChange={(event) => onChange("client", event.target.value)} className={hrSelectClassName}><option value="all">Tous les clients</option>{data.clients.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select>
+          <select value={values.manager} onChange={(event) => onChange("manager", event.target.value)} className={hrSelectClassName}><option value="all">Tous les responsables</option>{data.employees.map((row) => <option key={row.id} value={row.id}>{person(row)}</option>)}</select>
+        </>}
+        {(mode === "actions" || mode === "gantt") && <><label><span className="mb-1 block text-[10px] font-black uppercase text-slate-500">Début de période</span><input type="date" value={values.start} onChange={(event) => onChange("start", event.target.value)} className={`${hrInputClassName} w-full`} /></label><label><span className="mb-1 block text-[10px] font-black uppercase text-slate-500">Fin de période</span><input type="date" value={values.end} onChange={(event) => onChange("end", event.target.value)} className={`${hrInputClassName} w-full`} /></label></>}
+        {mode === "gantt" && <><select value={values.risk} onChange={(event) => onChange("risk", event.target.value)} className={hrSelectClassName}><option value="all">Tous les niveaux de risque</option><option value="yes">Avec risque</option><option value="no">Sans risque</option></select><select value={values.critical} onChange={(event) => onChange("critical", event.target.value)} className={hrSelectClassName}><option value="all">Toutes les tâches</option><option value="yes">Chemin critique</option><option value="no">Hors chemin critique</option></select></>}
       </div>
-      {active && <div className="flex justify-end"><button type="button" onClick={() => ["search","status","project","client","manager"].forEach((key) => onChange(key, key === "search" ? "" : "all"))} className="inline-flex h-9 items-center gap-2 rounded-lg px-3 text-xs font-semibold text-slate-500 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-600"><X className="h-4 w-4" />Réinitialiser les filtres</button></div>}
+      {active && <div className="flex justify-end"><button type="button" onClick={() => Object.keys(values).forEach((key) => onChange(key, ["search","start","end"].includes(key) ? "" : "all"))} className="inline-flex h-9 items-center gap-2 rounded-lg px-3 text-xs font-semibold text-slate-500 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-600"><X className="h-4 w-4" />Réinitialiser les filtres</button></div>}
     </div>
   </section>;
 }
@@ -309,7 +367,7 @@ function ProjectCard({ mode, row, onView, onEdit, onArchive, onRestore }: { mode
   const info: Array<[string, ReactNode, any]> = mode === "portfolio"
     ? [["Client", row.client_name, "sky"], ["Chef de projet", row.manager_name, "indigo"], ["Avancement", percent(row.progress_percent), "amber"], ["Budget restant", money(row.remaining_budget), row.remaining_budget < 0 ? "rose" : "emerald"]]
     : mode === "actions"
-      ? [["Origine", row.origin_type || row.action_type, "sky"], ["Responsable", row.owner_name, "indigo"], ["Échéance", formatDate(row.replanned_due_date || row.due_date), "amber"], ["Avancement", percent(row.progress_percent), "emerald"]]
+      ? [["Origine", originLabel(row.origin_type || row.action_type), "sky"], ["Responsable", row.owner_name, "indigo"], ["Échéance", formatDate(row.replanned_due_date || row.due_date), "amber"], ["Avancement", percent(row.progress_percent), "emerald"]]
       : mode === "performance"
         ? [["Satisfaction", row.satisfaction_score == null ? "—" : `${number(row.satisfaction_score).toFixed(1)}/5`, "sky"], ["TACE", percent(row.tace), "indigo"], ["SPI / CPI", `${number(row.spi).toFixed(2)} / ${number(row.cpi).toFixed(2)}`, "amber"], ["Santé", statusLabel(row.health_status), row.health_status === "red" ? "rose" : row.health_status === "amber" ? "amber" : "emerald"]]
         : [["Responsable", row.owner_name, "indigo"], ["Début", formatDate(row.start_date || row.planned_date), "sky"], ["Fin", formatDate(row.due_date || row.forecast_date), "amber"], ["Avancement", percent(row.progress_percent), "emerald"]];
@@ -325,22 +383,34 @@ type Column = { label: string; value: (row: AnyRow) => ReactNode; className?: st
 function columnsFor(mode: ProjectPageMode, onCommerce: (row: AnyRow) => void): Column[] {
   if (mode === "portfolio") return [
     { label: "N° projet", value: (row) => row.code }, { label: "Désignation du projet", value: (row) => row.name },
-    { label: "Client", value: (row) => row.client_name }, { label: "Chef de projet", value: (row) => row.manager_name },
+    { label: "Client", value: (row) => row.client_name }, { label: "Secteur d’activité", value: (row) => row.sector_name || "Non renseigné" },
+    { label: "Entité / unité d’affaires", value: (row) => row.business_unit_name || "Non renseignée" }, { label: "Chef de projet", value: (row) => row.manager_name },
     { label: "AVV source", value: (row) => <button type="button" onClick={(event) => { event.stopPropagation(); onCommerce(row); }} className="font-bold text-sky-700 hover:underline dark:text-sky-300">{row.commerce_reference}</button> },
+    { label: "Référence PTF", value: (row) => row.ptf_reference || "—" }, { label: "Type de projet", value: (row) => projectTypeLabel(row.project_type) },
+    { label: "Priorité", value: (row) => priorityLabel(row.priority) },
     { label: "Date de début", value: (row) => formatDate(row.start_date) }, { label: "Date de fin", value: (row) => formatDate(row.end_date) },
-    { label: "Avancement", value: (row) => percent(row.progress_percent) }, { label: "Statut", value: (row) => <RowStatus mode={mode} row={row} /> },
+    { label: "Avancement planning", value: (row) => percent(row.schedule_progress_percent) }, { label: "Avancement physique", value: (row) => percent(row.progress_percent) }, { label: "Statut", value: (row) => <RowStatus mode={mode} row={row} /> },
     { label: "Budget commandé", value: (row) => money(row.ordered_budget) }, { label: "Budget consommé", value: (row) => money(row.consumed_budget) },
     { label: "Budget restant", value: (row) => <span className={row.remaining_budget < 0 ? "font-black text-rose-700" : "font-black text-emerald-700"}>{money(row.remaining_budget)}</span> },
+    { label: "Marge prévisionnelle", value: (row) => percent(number(row.target_margin_rate) * (Math.abs(number(row.target_margin_rate)) <= 1 ? 100 : 1)) },
+    { label: "Marge réelle", value: (row) => percent(number(row.margin_rate) * (Math.abs(number(row.margin_rate)) <= 1 ? 100 : 1)) },
+    { label: "Risques critiques", value: (row) => row.critical_risks }, { label: "Livrables", value: (row) => row.deliverable_count },
+    { label: "Livrables en retard", value: (row) => row.late_deliverables }, { label: "Non-conformités", value: (row) => row.nonconformities },
+    { label: "Satisfaction client", value: (row) => row.satisfaction_score == null ? "—" : `${Math.round(number(row.satisfaction_score) * 20)}/100` },
+    { label: "Charge prévue", value: (row) => `${number(row.planned_hours)} h` }, { label: "Charge consommée", value: (row) => `${number(row.actual_hours)} h` },
+    { label: "CPI", value: (row) => number(row.cpi).toFixed(2) }, { label: "SPI", value: (row) => number(row.spi).toFixed(2) },
+    { label: "Fiabilité du reporting", value: (row) => percent(row.reporting_reliability_percent || 60) }, { label: "Dernière mise à jour", value: (row) => formatDate(row.last_reporting_at || row.updated_at) },
     { label: "Commentaires", value: (row) => row.executive_comment || row.description || "—" },
   ];
   if (mode === "actions") return [
     { label: "ID action", value: (row) => row.code }, { label: "N° projet", value: (row) => row.project_code }, { label: "Désignation projet", value: (row) => row.project_name },
-    { label: "Origine", value: (row) => row.origin_type || row.action_type }, { label: "Référence origine", value: (row) => row.origin_reference || "—" },
+    { label: "Origine", value: (row) => originLabel(row.origin_type || row.action_type) }, { label: "Référence origine", value: (row) => row.origin_reference || "—" },
     { label: "Description de l’action", value: (row) => row.title }, { label: "Responsable", value: (row) => row.owner_name },
-    { label: "Priorité", value: (row) => row.priority }, { label: "Fin prévisionnelle", value: (row) => formatDate(row.due_date) },
+    { label: "Priorité", value: (row) => priorityLabel(row.priority) }, { label: "Fin prévisionnelle", value: (row) => formatDate(row.due_date) },
     { label: "Date replanifiée", value: (row) => formatDate(row.replanned_due_date) }, { label: "Résultat attendu", value: (row) => row.expected_result || "—" },
+    { label: "Impact métier", value: (row) => row.impact || "—" }, { label: "Cause racine", value: (row) => row.root_cause || "—" },
     { label: "Avancement", value: (row) => percent(row.progress_percent) }, { label: "Statut", value: (row) => <RowStatus mode={mode} row={row} /> },
-    { label: "Fin réelle", value: (row) => formatDate(row.actual_completion_date || row.closed_at) }, { label: "Efficacité", value: (row) => statusLabel(row.effectiveness_status) },
+    { label: "Fin réelle", value: (row) => formatDate(row.actual_completion_date || row.closed_at) }, { label: "Efficacité", value: (row) => statusLabel(row.effectiveness_status) }, { label: "Preuve", value: (row) => row.proof_reference || row.evidence_url || "—" },
     { label: "Commentaires", value: (row) => row.comments || row.effectiveness_comment || "—" },
   ];
   if (mode === "performance") return [
@@ -376,7 +446,7 @@ function Drawer({ mode, row, onClose, onEdit }: { mode: ProjectPageMode; row: An
 
 function Form({ mode, data, row, onClose, onSaved }: { mode: ProjectPageMode; data: ProjectData; row?: AnyRow | null; onClose: () => void; onSaved: () => void }) {
   const [values, setValues] = useState<Record<string, string>>({
-    project_id: row?.project_id || (mode === "portfolio" || mode === "performance" ? row?.id : "") || data.projects[0]?.id || "",
+    project_id: row?.project_id || (mode === "portfolio" || mode === "performance" ? row?.id : "") || (mode === "actions" ? "" : data.projects[0]?.id || ""),
     code: row?.code || "", name: row?.name || row?.title || "", description: row?.description || row?.executive_comment || "",
     status: row?.status || (mode === "performance" ? row?.health_status || "green" : mode === "portfolio" || mode === "timeline" ? "planned" : "todo"),
     start_date: row?.start_date || row?.planned_date || row?.opened_at || row?.snapshot_date || today(),
@@ -384,6 +454,8 @@ function Form({ mode, data, row, onClose, onSaved }: { mode: ProjectPageMode; da
     amount: String(row?.ordered_budget || row?.budget_amount || row?.planned_hours || row?.progress_percent || ""),
     priority: row?.priority || "normal", origin: row?.origin_type || row?.action_type || "project", origin_reference: row?.origin_reference || "",
     expected_result: row?.expected_result || "", replanned_due_date: row?.replanned_due_date || "", effectiveness_status: row?.effectiveness_status || "",
+    sector_name: row?.sector_name || "", business_unit_name: row?.business_unit_name || "", ptf_reference: row?.ptf_reference || "", project_type: row?.project_type || "delivery",
+    impact: row?.impact || "", root_cause: row?.root_cause || "", proof_reference: row?.proof_reference || row?.evidence_url || "", effectiveness_review_date: row?.effectiveness_review_date || "",
   });
   const [saving, setSaving] = useState(false);
   const set = (key: string, value: string) => setValues((current) => ({ ...current, [key]: value }));
@@ -399,10 +471,10 @@ function Form({ mode, data, row, onClose, onSaved }: { mode: ProjectPageMode; da
     try {
       let table = "project_projects";
       let payload: AnyRow;
-      if (mode === "portfolio") payload = { organization_id: data.organization.id, code: await generatedCode("P"), name: values.name.trim(), description: values.description || null, status: values.status, start_date: values.start_date || null, end_date: values.end_date || null, client_id: values.client_id || null, project_manager_employee_id: values.manager_id || null, ordered_budget: number(values.amount), budget_amount: number(values.amount), priority: values.priority, project_type: "delivery", source_type: values.origin_reference ? "commerce" : "manual", source_reference: values.origin_reference || null, updated_at: new Date().toISOString() };
+      if (mode === "portfolio") payload = { organization_id: data.organization.id, code: await generatedCode("P"), name: values.name.trim(), description: values.description || null, status: values.status, start_date: values.start_date || null, end_date: values.end_date || null, client_id: values.client_id || null, project_manager_employee_id: values.manager_id || null, ordered_budget: number(values.amount), budget_amount: number(values.amount), priority: values.priority, project_type: values.project_type, sector_name: values.sector_name || null, business_unit_name: values.business_unit_name || null, ptf_reference: values.ptf_reference || null, source_type: values.origin_reference ? "commerce" : "manual", source_reference: values.origin_reference || null, updated_at: new Date().toISOString() };
       else if (mode === "timeline") { table = "project_milestones"; payload = { organization_id: data.organization.id, project_id: values.project_id, code: await generatedCode("J"), name: values.name.trim(), description: values.description || null, status: values.status, planned_date: values.start_date, forecast_date: values.end_date || null, owner_employee_id: values.manager_id || null, milestone_type: "delivery", updated_at: new Date().toISOString() }; }
       else if (mode === "gantt") { table = "project_tasks"; payload = { organization_id: data.organization.id, project_id: values.project_id, code: await generatedCode("T"), name: values.name.trim(), description: values.description || null, status: values.status, start_date: values.start_date || null, due_date: values.end_date || null, assignee_employee_id: values.manager_id || null, planned_hours: number(values.amount), remaining_hours: row ? number(row.remaining_hours) : number(values.amount), progress_percent: number(row?.progress_percent), priority: values.priority, task_type: "delivery", task_kind: "task", updated_at: new Date().toISOString() }; }
-      else if (mode === "actions") { table = "project_actions"; payload = { organization_id: data.organization.id, project_id: values.project_id, code: await generatedCode("A"), title: values.name.trim(), description: values.description || null, status: values.status, opened_at: values.start_date, due_date: values.end_date || null, replanned_due_date: values.replanned_due_date || null, owner_employee_id: values.manager_id || null, owner_name: person(data.employees.find((item) => item.id === values.manager_id)), priority: values.priority, origin_type: values.origin, origin_reference: values.origin_reference || null, expected_result: values.expected_result || null, effectiveness_status: values.effectiveness_status || null, progress_percent: number(values.amount), comments: values.description || null, updated_at: new Date().toISOString() }; }
+      else if (mode === "actions") { table = "project_actions"; payload = { organization_id: data.organization.id, project_id: values.project_id || null, code: await generatedCode("ACT"), title: values.name.trim(), description: values.description || null, status: values.status, opened_at: values.start_date, due_date: values.end_date || null, replanned_due_date: values.replanned_due_date || null, owner_employee_id: values.manager_id || null, owner_name: person(data.employees.find((item) => item.id === values.manager_id)), priority: values.priority, origin_type: values.origin, origin_reference: values.origin_reference || null, expected_result: values.expected_result || null, impact: values.impact || null, root_cause: values.root_cause || null, proof_reference: values.proof_reference || null, effectiveness_status: values.effectiveness_status || null, effectiveness_review_date: values.effectiveness_review_date || null, progress_percent: number(values.amount), comments: values.description || null, generic_reason: values.project_id ? null : values.description || "Action transverse", updated_at: new Date().toISOString() }; }
       else { table = "project_health_snapshots"; payload = { organization_id: data.organization.id, project_id: values.project_id, snapshot_date: values.start_date, progress_percent: number(values.amount), health_status: values.status, schedule_score: 100, cost_score: 100, scope_score: 100, quality_score: 100, resource_score: 100, risk_score: 100, executive_comment: values.description || null, updated_at: new Date().toISOString() }; }
       const query = supabase.from(table as never) as any;
       const result = row && mode !== "performance" ? await query.update(payload).eq("id", row.id).eq("organization_id", data.organization.id) : await query.insert(payload);
@@ -413,32 +485,49 @@ function Form({ mode, data, row, onClose, onSaved }: { mode: ProjectPageMode; da
   }
   const statuses = mode === "performance" ? ["green","amber","red"] : mode === "portfolio" || mode === "timeline" ? ["planned","active","on_hold","blocked","completed","cancelled"] : ["todo","in_progress","pending","blocked","review","done","cancelled"];
   return <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4"><div className="max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-600 dark:bg-slate-800"><div className="sticky top-0 z-20 flex items-center justify-between border-b border-slate-100 bg-gradient-to-r from-sky-50 via-white to-indigo-50 px-5 py-4 dark:border-slate-600 dark:from-sky-900/25 dark:via-slate-800 dark:to-indigo-900/25"><div><h2 className="text-sm font-black text-slate-950 dark:text-white">{row ? "Modifier" : "Nouveau"} {config[mode].entity}</h2><p className="mt-1 text-xs text-slate-500 dark:text-slate-300">Formulaire métier relié aux projets, clients, ressources, budgets et objets transverses.</p></div><button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-white dark:hover:bg-slate-700"><X className="h-4 w-4" /></button></div><div className="grid gap-4 p-5 sm:grid-cols-2 xl:grid-cols-4">
-    {mode !== "portfolio" && <label className="sm:col-span-2"><span className="text-xs font-bold text-slate-600 dark:text-slate-300">Projet</span><select value={values.project_id} onChange={(event) => set("project_id", event.target.value)} className={`${hrSelectClassName} mt-1 w-full`}>{data.projects.map((item) => <option key={item.id} value={item.id}>{item.code} · {item.name}</option>)}</select></label>}
+    {mode !== "portfolio" && <label className="sm:col-span-2"><span className="text-xs font-bold text-slate-600 dark:text-slate-300">Projet</span><select value={values.project_id} onChange={(event) => set("project_id", event.target.value)} className={`${hrSelectClassName} mt-1 w-full`}>{mode === "actions" && <option value="">NA — Action générique non rattachée</option>}{data.projects.map((item) => <option key={item.id} value={item.id}>{item.code} · {item.name}</option>)}</select></label>}
     {mode !== "performance" && <><label><span className="text-xs font-bold text-slate-600 dark:text-slate-300">Code</span><input value={values.code} onChange={(event) => set("code", event.target.value)} placeholder="Généré automatiquement" className={`${hrInputClassName} mt-1 w-full`} /></label><label className="sm:col-span-2"><span className="text-xs font-bold text-slate-600 dark:text-slate-300">Nom / titre</span><input value={values.name} onChange={(event) => set("name", event.target.value)} className={`${hrInputClassName} mt-1 w-full`} /></label></>}
     <label><span className="text-xs font-bold text-slate-600 dark:text-slate-300">Statut / santé</span><select value={values.status} onChange={(event) => set("status", event.target.value)} className={`${hrSelectClassName} mt-1 w-full`}>{statuses.map((item) => <option key={item} value={item}>{statusLabel(item)}</option>)}</select></label>
     {mode === "portfolio" && <label><span className="text-xs font-bold text-slate-600 dark:text-slate-300">Client</span><select value={values.client_id} onChange={(event) => set("client_id", event.target.value)} className={`${hrSelectClassName} mt-1 w-full`}><option value="">Projet interne</option>{data.clients.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}
+    {mode === "portfolio" && <><label><span className="text-xs font-bold text-slate-600 dark:text-slate-300">Secteur d’activité</span><input value={values.sector_name} onChange={(event) => set("sector_name", event.target.value)} className={`${hrInputClassName} mt-1 w-full`} /></label><label><span className="text-xs font-bold text-slate-600 dark:text-slate-300">Entité / unité d’affaires</span><input value={values.business_unit_name} onChange={(event) => set("business_unit_name", event.target.value)} className={`${hrInputClassName} mt-1 w-full`} /></label><label><span className="text-xs font-bold text-slate-600 dark:text-slate-300">Référence PTF</span><input value={values.ptf_reference} onChange={(event) => set("ptf_reference", event.target.value)} className={`${hrInputClassName} mt-1 w-full`} /></label><label><span className="text-xs font-bold text-slate-600 dark:text-slate-300">Type de projet</span><select value={values.project_type} onChange={(event) => set("project_type", event.target.value)} className={`${hrSelectClassName} mt-1 w-full`}><option value="delivery">Projet client</option><option value="internal">Projet interne</option><option value="transformation">Transformation</option><option value="research">Recherche et développement</option><option value="support">Support</option></select></label></>}
     {mode !== "performance" && <label><span className="text-xs font-bold text-slate-600 dark:text-slate-300">Responsable</span><select value={values.manager_id} onChange={(event) => set("manager_id", event.target.value)} className={`${hrSelectClassName} mt-1 w-full`}><option value="">Non renseigné</option>{data.employees.map((item) => <option key={item.id} value={item.id}>{person(item)}</option>)}</select></label>}
     <label><span className="text-xs font-bold text-slate-600 dark:text-slate-300">Date / début</span><input type="date" value={values.start_date} onChange={(event) => set("start_date", event.target.value)} className={`${hrInputClassName} mt-1 w-full`} /></label>
     {mode !== "performance" && <label><span className="text-xs font-bold text-slate-600 dark:text-slate-300">Fin / échéance</span><input type="date" value={values.end_date} onChange={(event) => set("end_date", event.target.value)} className={`${hrInputClassName} mt-1 w-full`} /></label>}
     <label><span className="text-xs font-bold text-slate-600 dark:text-slate-300">{mode === "portfolio" ? "Budget commandé (€)" : mode === "gantt" ? "Charge planifiée (h)" : "Avancement (%)"}</span><input type="number" value={values.amount} onChange={(event) => set("amount", event.target.value)} className={`${hrInputClassName} mt-1 w-full`} /></label>
-    {mode === "actions" && <><label><span className="text-xs font-bold text-slate-600 dark:text-slate-300">Origine</span><select value={values.origin} onChange={(event) => set("origin", event.target.value)} className={`${hrSelectClassName} mt-1 w-full`}>{["project","risk","nonconformity","audit","quality","customer","finance"].map((item) => <option key={item} value={item}>{item}</option>)}</select></label><label><span className="text-xs font-bold text-slate-600 dark:text-slate-300">Référence origine</span><input value={values.origin_reference} onChange={(event) => set("origin_reference", event.target.value)} className={`${hrInputClassName} mt-1 w-full`} /></label><label><span className="text-xs font-bold text-slate-600 dark:text-slate-300">Date replanifiée</span><input type="date" value={values.replanned_due_date} onChange={(event) => set("replanned_due_date", event.target.value)} className={`${hrInputClassName} mt-1 w-full`} /></label><label className="sm:col-span-2"><span className="text-xs font-bold text-slate-600 dark:text-slate-300">Résultat attendu</span><input value={values.expected_result} onChange={(event) => set("expected_result", event.target.value)} className={`${hrInputClassName} mt-1 w-full`} /></label></>}
+    {mode === "actions" && <><label><span className="text-xs font-bold text-slate-600 dark:text-slate-300">Origine</span><select value={values.origin} onChange={(event) => set("origin", event.target.value)} className={`${hrSelectClassName} mt-1 w-full`}>{["project","risk","nonconformity","audit","quality","customer","finance","management","generic"].map((item) => <option key={item} value={item}>{originLabel(item)}</option>)}</select></label><label><span className="text-xs font-bold text-slate-600 dark:text-slate-300">Référence origine</span><input value={values.origin_reference} onChange={(event) => set("origin_reference", event.target.value)} className={`${hrInputClassName} mt-1 w-full`} /></label><label><span className="text-xs font-bold text-slate-600 dark:text-slate-300">Date replanifiée</span><input type="date" value={values.replanned_due_date} onChange={(event) => set("replanned_due_date", event.target.value)} className={`${hrInputClassName} mt-1 w-full`} /></label><label><span className="text-xs font-bold text-slate-600 dark:text-slate-300">Revue d’efficacité</span><input type="date" value={values.effectiveness_review_date} onChange={(event) => set("effectiveness_review_date", event.target.value)} className={`${hrInputClassName} mt-1 w-full`} /></label><label className="sm:col-span-2"><span className="text-xs font-bold text-slate-600 dark:text-slate-300">Résultat attendu</span><input value={values.expected_result} onChange={(event) => set("expected_result", event.target.value)} className={`${hrInputClassName} mt-1 w-full`} /></label><label className="sm:col-span-2"><span className="text-xs font-bold text-slate-600 dark:text-slate-300">Impact métier</span><input value={values.impact} onChange={(event) => set("impact", event.target.value)} className={`${hrInputClassName} mt-1 w-full`} /></label><label className="sm:col-span-2"><span className="text-xs font-bold text-slate-600 dark:text-slate-300">Cause racine</span><input value={values.root_cause} onChange={(event) => set("root_cause", event.target.value)} className={`${hrInputClassName} mt-1 w-full`} /></label><label className="sm:col-span-2"><span className="text-xs font-bold text-slate-600 dark:text-slate-300">Preuve de réalisation</span><input value={values.proof_reference} onChange={(event) => set("proof_reference", event.target.value)} className={`${hrInputClassName} mt-1 w-full`} /></label></>}
     {mode === "portfolio" && <label><span className="text-xs font-bold text-slate-600 dark:text-slate-300">Référence AVV / Commerce</span><input value={values.origin_reference} onChange={(event) => set("origin_reference", event.target.value)} className={`${hrInputClassName} mt-1 w-full`} /></label>}
     <label className="sm:col-span-2 xl:col-span-4"><span className="text-xs font-bold text-slate-600 dark:text-slate-300">Description / commentaire exécutif</span><textarea value={values.description} onChange={(event) => set("description", event.target.value)} className="mt-1 min-h-28 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-400 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200" /></label>
   </div><div className="flex justify-end gap-2 border-t border-slate-100 p-5 dark:border-slate-600"><button type="button" onClick={onClose} className="rounded-xl border border-rose-200 bg-white px-4 py-2.5 text-sm font-bold text-rose-700">Annuler</button><button type="button" onClick={() => void save()} disabled={saving || (mode !== "performance" && !values.name.trim())} className="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-indigo-700 disabled:opacity-50">{saving ? "Enregistrement…" : "Enregistrer"}</button></div></div></div>;
 }
 
-function Alerts({ data }: { data: ProjectData }) {
+function Alerts({ data, mode }: { data: ProjectData; mode: ProjectPageMode }) {
   const now = today();
   const lateTasks = data.tasks.filter((row) => !row.archived_at && row.due_date && row.due_date < now && !["done","cancelled","archived"].includes(row.status));
   const criticalRisks = data.risks.filter((row) => !row.archived_at && number(row.inherent_score || number(row.probability) * number(row.impact)) >= 12);
   const lateActions = data.actions.filter((row) => !row.archived_at && (row.replanned_due_date || row.due_date) < now && !["done","closed","cancelled","archived"].includes(row.status));
   const lateDeliverables = data.deliverables.filter((row) => !row.archived_at && (row.replanned_date || row.planned_date) < now && !["accepted","cancelled"].includes(row.status));
-  const items = [
+  const baseItems = [
     { label: "Tâches en retard", count: lateTasks.length, impact: "Dérive délai, charge et engagements client.", action: "Recalculer le chemin critique et le reste à faire." },
     { label: "Risques critiques", count: criticalRisks.length, impact: "Exposition forte sur CA, coût, délai ou qualité.", action: "Arbitrer la réponse, le responsable et le plan de réduction." },
     { label: "Actions échues", count: lateActions.length, impact: "Décisions non exécutées et causes non traitées.", action: "Relancer, replanifier avec justification ou escalader." },
     { label: "Livrables en retard", count: lateDeliverables.length, impact: "Dégradation OTD, facturation et satisfaction.", action: "Sécuriser acceptation, preuve et nouvelle prévision." },
   ];
+  const items = mode === "actions" ? [
+    { label: "Actions en retard", count: lateActions.length, impact: "Stock ancien, décision non exécutée et cause non traitée.", action: "Relancer le responsable, justifier toute replanification et escalader les priorités hautes." },
+    { label: "Sans responsable", count: data.actions.filter((row) => !row.archived_at && !row.owner_employee_id && !row.owner_name).length, impact: "Aucune responsabilité opposable ni délai de traitement fiable.", action: "Affecter un responsable et un suppléant avant validation de l’action." },
+    { label: "Efficacité non évaluée", count: data.actions.filter((row) => ["done","closed","completed"].includes(row.status) && !row.effectiveness_status).length, impact: "Clôture administrative sans preuve de résolution durable.", action: "Planifier une revue différée et documenter preuve, résultat et récidive." },
+    { label: "Clôtures sans preuve", count: data.actions.filter((row) => ["done","closed","completed"].includes(row.status) && !row.evidence_url && !row.proof_reference).length, impact: "Traçabilité ISO 9001 et robustesse de clôture insuffisantes.", action: "Exiger une preuve et la validation de clôture avant passage au statut clos." },
+  ] : mode === "performance" ? [
+    { label: "CPI inférieur à 1", count: data.financials.filter((row) => number(row.cpi) > 0 && number(row.cpi) < 1).length, impact: "Le coût réel dépasse la valeur du travail acquis.", action: "Réestimer le reste à faire, analyser les causes et sécuriser la marge à terminaison." },
+    { label: "SPI inférieur à 1", count: data.financials.filter((row) => number(row.spi) > 0 && number(row.spi) < 1).length, impact: "Retard de production par rapport à la valeur planifiée.", action: "Recalculer le chemin critique et arbitrer charge, périmètre ou échéance." },
+    { label: "Satisfaction faible", count: data.satisfaction.filter((row) => number(row.overall_score) * 20 < 60).length, impact: "Risque de réclamation, non-renouvellement ou dégradation de la relation client.", action: "Analyser le critère dégradé et convenir d’un plan d’amélioration avec le client." },
+    { label: "Reporting peu fiable", count: data.health.filter((row) => number(row.data_reliability_score || row.reporting_reliability_percent) > 0 && number(row.data_reliability_score || row.reporting_reliability_percent) < 70).length, impact: "Décision managériale prise sur une donnée incomplète ou obsolète.", action: "Compléter les sources, justifier les écarts et faire valider le snapshot mensuel." },
+  ] : mode === "timeline" || mode === "gantt" ? [
+    { label: "Échéances en retard", count: lateTasks.length, impact: "Dérive de la trajectoire portefeuille et conflits de jalons.", action: "Recalculer dépendances, marge totale et date de fin prévisionnelle." },
+    { label: "Jalons critiques dépassés", count: data.milestones.filter((row) => !row.archived_at && row.critical && (row.forecast_date || row.planned_date) < now && !row.actual_date).length, impact: "Engagement contractuel ou décisionnel non tenu.", action: "Escalader au chef de projet et tracer une nouvelle date avec justification." },
+    { label: "Projets bloqués", count: data.projects.filter((row) => !row.archived_at && row.status === "blocked").length, impact: "Absence de progression malgré la consommation de capacité.", action: "Identifier le verrou, son propriétaire et la décision d’arbitrage attendue." },
+    { label: "Planning non actualisé", count: data.projects.filter((row) => !row.archived_at && row.updated_at && String(row.updated_at).slice(0, 10) < new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10)).length, impact: "Dates et avancement insuffisamment fiables pour une revue portefeuille.", action: "Mettre à jour tâches, reste à faire, dépendances et prévision de fin." },
+  ] : baseItems;
   return <HrSectionCard icon={AlertTriangle} title="Alertes qualité" description="Synthèse, alertes et recommandations issues des données réelles du portefeuille."><div className="grid gap-4 xl:grid-cols-3"><div className="rounded-2xl border border-sky-100 bg-gradient-to-br from-sky-50/75 to-white p-4 dark:border-sky-800/50 dark:from-sky-900/20 dark:to-slate-700"><h3 className="text-sm font-black text-sky-900 dark:text-sky-200">Synthèse</h3><div className="mt-3 grid grid-cols-2 gap-2">{items.map((item) => <HrInfo key={item.label} label={item.label} value={item.count} accent={item.count ? "rose" : "emerald"} />)}</div></div><div className="rounded-2xl border border-rose-100 bg-gradient-to-br from-rose-50/70 to-white p-4 dark:border-rose-800/50 dark:from-rose-900/20 dark:to-slate-700"><h3 className="text-sm font-black text-rose-900 dark:text-rose-200">Alertes</h3><div className="mt-3 space-y-2">{items.filter((item) => item.count).map((item) => <div key={item.label} className="rounded-xl bg-white/80 p-3 text-xs dark:bg-slate-700"><p className="font-black text-rose-700 dark:text-rose-200">{item.count} · {item.label}</p><p className="mt-1 text-slate-500 dark:text-slate-300">{item.impact}</p></div>)}{!items.some((item) => item.count) && <p className="text-xs font-bold text-emerald-700">Aucune alerte critique sur ce périmètre.</p>}</div></div><div className="rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50/70 to-white p-4 dark:border-emerald-800/50 dark:from-emerald-900/20 dark:to-slate-700"><h3 className="text-sm font-black text-emerald-900 dark:text-emerald-200">Recommandations</h3><div className="mt-3 space-y-2">{items.filter((item) => item.count).map((item) => <div key={item.label} className="flex gap-2 rounded-xl bg-white/80 p-3 text-xs text-slate-600 dark:bg-slate-700 dark:text-slate-200"><Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" /><span>{item.action}</span></div>)}</div></div></div></HrSectionCard>;
 }
 
@@ -464,14 +553,18 @@ const exportColumns: ExportColumn<AnyRow>[] = [
   { key: "project_code", label: "N° projet", value: (row) => row.project_code || row.code }, { key: "project_name", label: "Désignation projet", value: (row) => row.project_name || row.name },
   { key: "client", label: "Client", value: (row) => row.client_name }, { key: "manager", label: "Chef de projet / responsable", value: (row) => row.manager_name || row.owner_name },
   { key: "commerce", label: "AVV / Commerce source", value: (row) => row.commerce_reference || row.origin_reference }, { key: "description", label: "Description", value: (row) => row.description || row.title || row.executive_comment },
-  { key: "status", label: "Statut", value: (row) => row.status || row.health_status }, { key: "priority", label: "Priorité", value: (row) => row.priority },
-  { key: "origin", label: "Origine", value: (row) => row.origin_type || row.action_type }, { key: "start", label: "Début", value: (row) => row.start_date || row.opened_at || row.planned_date || row.snapshot_date },
+  { key: "sector", label: "Secteur d’activité", value: (row) => row.sector_name }, { key: "business_unit", label: "Entité / unité d’affaires", value: (row) => row.business_unit_name },
+  { key: "ptf", label: "Référence PTF", value: (row) => row.ptf_reference }, { key: "project_type", label: "Type de projet", value: (row) => projectTypeLabel(row.project_type) },
+  { key: "status", label: "Statut", value: (row) => statusLabel(row.status || row.health_status) }, { key: "priority", label: "Priorité", value: (row) => priorityLabel(row.priority) },
+  { key: "origin", label: "Origine", value: (row) => originLabel(row.origin_type || row.action_type) }, { key: "start", label: "Début", value: (row) => row.start_date || row.opened_at || row.planned_date || row.snapshot_date },
   { key: "end", label: "Fin / échéance", value: (row) => row.end_date || row.replanned_due_date || row.due_date || row.forecast_date },
   { key: "progress", label: "Avancement (%)", value: (row) => row.progress_percent }, { key: "ordered", label: "Budget commandé", value: (row) => row.ordered_budget },
   { key: "consumed", label: "Budget consommé", value: (row) => row.consumed_budget }, { key: "remaining", label: "Budget restant", value: (row) => row.remaining_budget },
   { key: "pv", label: "Valeur planifiée", value: (row) => row.planned_value }, { key: "ev", label: "Valeur acquise", value: (row) => row.earned_value },
   { key: "ac", label: "Coûts réels", value: (row) => row.actual_cost_total || row.actual_cost }, { key: "spi", label: "SPI", value: (row) => row.spi }, { key: "cpi", label: "CPI", value: (row) => row.cpi },
-  { key: "effectiveness", label: "Efficacité", value: (row) => row.effectiveness_status }, { key: "comment", label: "Commentaires", value: (row) => row.comments || row.executive_comment },
+  { key: "effectiveness", label: "Efficacité", value: (row) => statusLabel(row.effectiveness_status) }, { key: "comment", label: "Commentaires", value: (row) => row.comments || row.executive_comment },
+  { key: "expected_result", label: "Résultat attendu", value: (row) => row.expected_result }, { key: "impact", label: "Impact métier", value: (row) => row.impact },
+  { key: "root_cause", label: "Cause racine", value: (row) => row.root_cause }, { key: "proof", label: "Preuve de réalisation", value: (row) => row.proof_reference || row.evidence_url },
   { key: "created", label: "Créé le", value: (row) => row.created_at }, { key: "updated", label: "Mis à jour le", value: (row) => row.updated_at }, { key: "archived", label: "Archivé le", value: (row) => row.archived_at },
 ];
 
@@ -480,10 +573,11 @@ export default function ProjectManagementPage({ params, mode }: { params: Promis
   const router = useRouter();
   const queryClient = useQueryClient();
   const page = config[mode];
-  const [tab, setTab] = useState<TabKey>("pilotage");
+  const [tab, setTab] = useState<TabKey>(mode === "gantt" ? "wbs" : "pilotage");
   const [view, setView] = useState<ViewMode>("cards");
-  const [filters, setFilters] = useState({ search: "", status: "all", project: "all", client: "all", manager: "all" });
+  const [filters, setFilters] = useState({ search: "", status: "all", project: "all", client: "all", manager: "all", priority: "all", origin: "all", effectiveness: "all", start: "", end: "", risk: "all", critical: "all" });
   const [selected, setSelected] = useState<AnyRow | null>(null);
+  const [performanceDetails, setPerformanceDetails] = useState<AnyRow | null>(null);
   const [editing, setEditing] = useState<AnyRow | null | undefined>(undefined);
   const query = useQuery({ queryKey: ["project-management-v2", orgId], queryFn: () => loadProjectData(orgId) });
   const refresh = () => void queryClient.invalidateQueries({ queryKey: ["project-management-v2", orgId] });
@@ -508,7 +602,14 @@ export default function ProjectManagementPage({ params, mode }: { params: Promis
       && (filters.status === "all" || rowStatus === filters.status)
       && (filters.project === "all" || row.id === filters.project || row.project_id === filters.project)
       && (filters.client === "all" || parent.client_id === filters.client)
-      && (filters.manager === "all" || parent.project_manager_employee_id === filters.manager || row.owner_employee_id === filters.manager || row.assignee_employee_id === filters.manager);
+      && (filters.manager === "all" || parent.project_manager_employee_id === filters.manager || row.owner_employee_id === filters.manager || row.assignee_employee_id === filters.manager)
+      && (filters.priority === "all" || row.priority === filters.priority)
+      && (filters.origin === "all" || row.origin_type === filters.origin || row.action_type === filters.origin)
+      && (filters.effectiveness === "all" || (filters.effectiveness === "not_reviewed" ? !row.effectiveness_status : row.effectiveness_status === filters.effectiveness))
+      && (!filters.start || String(row.end_date || row.replanned_due_date || row.due_date || row.forecast_date || "") >= filters.start)
+      && (!filters.end || String(row.start_date || row.opened_at || row.planned_date || row.snapshot_date || "") <= filters.end)
+      && (filters.risk === "all" || (filters.risk === "yes" ? ["high","critical"].includes(row.priority) : !["high","critical"].includes(row.priority)))
+      && (filters.critical === "all" || Boolean(row.is_critical) === (filters.critical === "yes"));
   });
   const projectScope = enriched.projects.filter((row) => filters.project === "all" || row.id === filters.project).filter((row) => filters.client === "all" || row.client_id === filters.client).filter((row) => filters.manager === "all" || row.project_manager_employee_id === filters.manager);
   const totalBudget = projectScope.reduce((sum, row) => sum + number(row.ordered_budget), 0);
@@ -517,32 +618,35 @@ export default function ProjectManagementPage({ params, mode }: { params: Promis
   const critical = data.risks.filter((row) => !row.archived_at && number(row.inherent_score || number(row.probability) * number(row.impact)) >= 12).length;
   const columns = columnsFor(mode, (row) => row.source_id ? router.push(`/${encodeURIComponent(orgId)}/avant-vente/${row.source_id}`) : router.push(`/${encodeURIComponent(orgId)}/avant-vente`));
   const openRow = (row: AnyRow) => mode === "portfolio" ? router.push(`/${encodeURIComponent(orgId)}/projects/${row.id}`) : setSelected(row);
-  const analyticsData = { projects: projectScope, tasks: data.tasks, actions: data.actions, health: data.health, deliverables: data.deliverables, risks: data.risks, financials: data.financials, satisfaction: data.satisfaction, assignments: data.taskAssignments, employees: data.employees };
-  const tabs: Array<{ key: TabKey; label: string; icon: ComponentType<{ className?: string }>; active: string }> = [
+  const analyticsData = { projects: projectScope, tasks: data.tasks, milestones: data.milestones, actions: data.actions, health: data.health, deliverables: data.deliverables, risks: data.risks, nonconformities: data.nonconformities, financials: data.financials, satisfaction: data.satisfaction, assignments: data.taskAssignments, employees: data.employees };
+  const tabs: Array<{ key: TabKey; label: string; icon: ComponentType<{ className?: string }>; active: string }> = mode === "gantt" ? [
+    { key: "wbs", label: "WBS", icon: Network, active: "bg-indigo-600 text-white" },
+    { key: "gantt", label: "Gantt", icon: CalendarDays, active: "bg-emerald-600 text-white" },
+    { key: "critical", label: "Chemin critique", icon: GitBranch, active: "bg-amber-500 text-white" },
+    { key: "alerts", label: "Alertes", icon: AlertTriangle, active: "bg-rose-600 text-white" },
+  ] : [
     { key: "pilotage", label: "Pilotage", icon: page.icon, active: "bg-indigo-600 text-white" },
-    { key: "analyses", label: "Analyses", icon: BarChart3, active: "bg-emerald-600 text-white" },
-    { key: "alerts", label: "Alertes", icon: AlertTriangle, active: "bg-amber-500 text-white" },
-    { key: "summary", label: "Synthèses", icon: BriefcaseBusiness, active: "bg-rose-600 text-white" },
-    { key: "history", label: "Historique", icon: History, active: "bg-sky-600 text-white" },
+    { key: "analyses", label: mode === "timeline" ? "Analyse" : "Analyses", icon: BarChart3, active: "bg-emerald-600 text-white" },
+    { key: "alerts", label: mode === "portfolio" ? "Alertes, synthèses et recommandations" : mode === "performance" ? "Alertes qualité" : "Alertes", icon: AlertTriangle, active: "bg-amber-500 text-white" },
   ];
   return <div className="space-y-6">
-    <PageHeader title={page.title} subtitle={page.subtitle} actions={<><DataExportMenu data={rows} columns={exportColumns} fileName={`onepilot_${mode}`} sheetName={page.title} disabled={!rows.length} /><button type="button" onClick={() => setEditing(null)} className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-4 text-sm font-bold text-white shadow-sm hover:bg-indigo-700"><Plus className="h-4 w-4" />Nouveau {page.entity}</button></>} />
+    <PageHeader title={page.title} subtitle={page.subtitle} actions={<><DataExportMenu data={rows} columns={exportColumns} fileName={`onepilot_${mode}`} sheetName={page.title} disabled={!rows.length} />{mode !== "timeline" && <button type="button" onClick={() => setEditing(null)} className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-4 text-sm font-bold text-white shadow-sm hover:bg-indigo-700"><Plus className="h-4 w-4" />{mode === "gantt" ? "Nouvelles tâches" : mode === "performance" ? "Satisfaction client" : `Nouveau ${page.entity}`}</button>}</>} />
     <PageTutorial title="Guide de la page" description={page.guide} objectives={["Piloter délais, coûts, périmètre, qualité, ressources, risques, valeur client et conformité depuis une source de vérité commune.", "Permettre une utilisation autonome du module Projets tout en exploitant Commerce, RH, Staffing, Finance et Qualité lorsqu’ils sont activés."]} steps={[{ title: "Cadrer", description: "Créer l’objet, ses responsabilités, sa baseline, son budget, ses jalons, livrables, compétences et critères d’acceptation." }, { title: "Exécuter", description: "Mettre à jour travail réalisé, reste à faire, charge, coûts, dépendances, actions, risques, preuves et satisfaction." }, { title: "Arbitrer", description: "Comparer prévision et réalisé, analyser les alertes et tracer les décisions avant toute replanification." }]} analyses={[{ title: "Pilotage intégré", description: "Comparer avancement physique, SPI, CPI, EAC, charge, capacité, OTD, OQD, DoD, risques, satisfaction, TACE et marge." }]} recommendations={["Mesurer l’avancement sur le travail réellement achevé, jamais sur le seul temps écoulé.", "Baseliner tout engagement client et conserver la preuve des changements et arbitrages.", "Relier chaque action à sa cause, son résultat attendu, son responsable et son contrôle d’efficacité."]} />
-    <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><HrMetricCard icon={FolderKanban} label="Projets actifs" value={projectScope.filter((row) => ["planned","active"].includes(row.status)).length} description="Projets ouverts, planifiés ou en cours dans le périmètre." accent="indigo" /><HrMetricCard icon={CircleDollarSign} label="Budget restant" value={money(totalBudget - consumed)} description={`${money(totalBudget)} commandés et ${money(consumed)} consommés.`} accent="emerald" /><HrMetricCard icon={Target} label="Avancement moyen" value={percent(projectScope.length ? projectScope.reduce((sum, row) => sum + number(row.progress_percent), 0) / projectScope.length : 0)} description="Avancement physique pondéré du travail réellement achevé." accent="amber" /><HrMetricCard icon={AlertTriangle} label="Points critiques" value={late + critical} description={`${late} tâche(s) en retard et ${critical} risque(s) critique(s).`} accent="rose" /></section>
-    <Filters data={data} values={filters} onChange={(key, value) => setFilters((current) => ({ ...current, [key]: value }))} count={rows.length} total={rawRows.length} />
+    {mode === "performance" ? <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><HrMetricCard icon={Activity} label="TACE moyen" value={percent(projectScope.length ? projectScope.reduce((sum, row) => sum + number(row.tace), 0) / projectScope.length : 0)} description="Taux d’activité congés exclus du périmètre sélectionné." accent="indigo" /><HrMetricCard icon={CheckCircle2} label="Satisfaction moyenne" value={`${Math.round(projectScope.length ? projectScope.reduce((sum, row) => sum + number(row.satisfaction_score) * 20, 0) / projectScope.length : 0)}/100`} description="Note mensuelle moyenne issue des cinq critères clients." accent="emerald" /><HrMetricCard icon={ShieldAlert} label="Projets à risque" value={projectScope.filter((row) => ["amber","red"].includes(row.health_status) || row.critical_risks > 0).length} description="Projets à surveiller ou critiques selon le score de santé." accent="amber" /><HrMetricCard icon={AlertTriangle} label="Actions en retard" value={data.actions.filter((row) => !row.archived_at && (row.replanned_due_date || row.due_date) < today() && !["done","closed","cancelled"].includes(row.status)).length} description="Actions échues nécessitant arbitrage ou escalade." accent="rose" /></section> : mode === "gantt" ? <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><HrMetricCard icon={FolderKanban} label="Projets actifs" value={projectScope.filter((row) => ["planned","active"].includes(row.status)).length} description="Projets ouverts ou en cours avec une planification exploitable." accent="indigo" /><HrMetricCard icon={ListChecks} label="Nombre de tâches" value={rows.length} description="Tâches et jalons présents dans le périmètre sélectionné." accent="emerald" /><HrMetricCard icon={Target} label="Avancement" value={percent(rows.length ? rows.reduce((sum, row) => sum + number(row.progress_percent), 0) / rows.length : 0)} description="Avancement physique moyen des tâches filtrées." accent="amber" /><HrMetricCard icon={AlertTriangle} label="Risques" value={critical} description="Risques critiques et tâches sensibles à traiter." accent="rose" /></section> : <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><HrMetricCard icon={FolderKanban} label="Projets actifs" value={projectScope.filter((row) => ["planned","active"].includes(row.status)).length} description="Projets ouverts, planifiés ou en cours dans le périmètre." accent="indigo" /><HrMetricCard icon={CircleDollarSign} label="Budget restant" value={money(totalBudget - consumed)} description={`${money(totalBudget)} commandés et ${money(consumed)} consommés.`} accent="emerald" /><HrMetricCard icon={Target} label="Avancement moyen" value={percent(projectScope.length ? projectScope.reduce((sum, row) => sum + number(row.progress_percent), 0) / projectScope.length : 0)} description="Avancement physique pondéré du travail réellement achevé." accent="amber" /><HrMetricCard icon={AlertTriangle} label="Points critiques" value={late + critical} description={`${late} tâche(s) en retard et ${critical} risque(s) critique(s).`} accent="rose" /></section>}
+    <Filters mode={mode} data={data} values={filters} onChange={(key, value) => setFilters((current) => ({ ...current, [key]: value }))} count={rows.length} total={rawRows.length} />
     <div className="flex justify-center"><div className="inline-flex max-w-full gap-1 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm dark:border-slate-600 dark:bg-slate-700/70">{tabs.map((item) => { const Icon = item.icon; return <button key={item.key} type="button" onClick={() => setTab(item.key)} className={`inline-flex h-10 shrink-0 items-center gap-2 rounded-xl px-5 text-sm font-bold transition ${tab === item.key ? item.active : "text-slate-500 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-600"}`}><Icon className="h-4 w-4" />{item.label}</button>; })}</div></div>
     {tab === "pilotage" && <div className="space-y-5">
-      {mode === "timeline" && <HrSectionCard icon={Route} title="Timeline décisionnelle" description="Chronologie navigable des projets et jalons, avec repère Aujourd’hui, retards, échelles et accès au cockpit projet."><ProjectTimelineBoard projects={projectScope} milestones={rows} onOpenProject={(row) => router.push(`/${encodeURIComponent(orgId)}/projects/${row.id}`)} /></HrSectionCard>}
-      {mode === "gantt" && <HrSectionCard icon={CalendarDays} title="Gantt multi-projet" description="WBS, ressources, dates, durée, charge, avancement, jalons, dépendances, float, chemin critique et Aujourd’hui."><ProjectGanttBoard tasks={rows} dependencies={data.dependencies} employeeMap={enriched.employeeMap} /></HrSectionCard>}
-      <HrSectionCard icon={page.icon} title={page.title} description="Cards et tableau complets avec données métier, statut, indicateurs et actions contextuelles." right={<ViewSwitch value={view} onChange={setView} />}>
+      {mode === "timeline" ? <HrSectionCard icon={Route} title="Timeline décisionnelle" description="Trajectoire commune des projets et jalons majeurs, avec avancement, retards, criticité, replanifications et accès au cockpit projet."><ProjectTimelineBoard projects={projectScope} milestones={rows} onOpenProject={(row) => router.push(`/${encodeURIComponent(orgId)}/projects/${row.id}`)} /></HrSectionCard> : mode === "actions" ? <><ActionPortfolioSummary actions={rows} projects={projectScope} /><HrSectionCard icon={ListChecks} title="Détail des actions" description="Actions projet et génériques, responsabilités, échéances, preuves et contrôle d’efficacité." right={<ViewSwitch value={view} onChange={setView} />}>{view === "cards" ? <div className="grid gap-4 xl:grid-cols-2">{rows.map((row) => <ProjectCard key={row.id} mode={mode} row={row} onView={() => openRow(row)} onEdit={() => setEditing(row)} onArchive={() => archive.mutate({ row, restore: false })} onRestore={() => archive.mutate({ row, restore: true })} />)}</div> : <DataTable mode={mode} rows={rows} columns={columns} onView={openRow} onEdit={setEditing} onArchive={(row) => archive.mutate({ row, restore: false })} onRestore={(row) => archive.mutate({ row, restore: true })} />}</HrSectionCard></> : mode === "performance" ? <PerformancePilotage projects={projectScope} onOpen={setPerformanceDetails} /> : <HrSectionCard icon={page.icon} title={page.title} description="Cartes et tableau complets avec données métier, statut, indicateurs et actions contextuelles." right={<ViewSwitch value={view} onChange={setView} />}>
         {!rows.length ? <p className="rounded-xl bg-slate-50 px-4 py-7 text-center text-sm font-bold text-slate-500 dark:bg-slate-600 dark:text-slate-200">Aucune donnée dans ce périmètre.</p> : view === "cards" ? <div className="grid gap-4 xl:grid-cols-2">{rows.map((row) => <ProjectCard key={row.id} mode={mode} row={row} onView={() => openRow(row)} onEdit={() => setEditing(row)} onArchive={() => archive.mutate({ row, restore: false })} onRestore={() => archive.mutate({ row, restore: true })} />)}</div> : <DataTable mode={mode} rows={rows} columns={columns} onView={openRow} onEdit={setEditing} onArchive={(row) => archive.mutate({ row, restore: false })} onRestore={(row) => archive.mutate({ row, restore: true })} />}
-      </HrSectionCard>
+      </HrSectionCard>}
     </div>}
+    {tab === "wbs" && <HrSectionCard icon={Network} title="Structure WBS" description="Décomposition du projet du niveau portefeuille aux lots, livrables, tâches et jalons avec charge, avancement et reste à faire."><WbsTable tasks={rows} /></HrSectionCard>}
+    {tab === "gantt" && <HrSectionCard icon={CalendarDays} title="Gantt multi-projet" description="Planning opérationnel avec ressources, dépendances, avancement, jalons, baseline, marges et repère Aujourd’hui."><ProjectGanttBoard tasks={rows} dependencies={data.dependencies} employeeMap={enriched.employeeMap} /></HrSectionCard>}
+    {tab === "critical" && <HrSectionCard icon={GitBranch} title="Chemin critique" description="Tâches sans marge pilotant la date de fin, dépendances structurantes et risques calendaires à sécuriser."><ProjectGanttBoard tasks={rows.filter((row) => row.is_critical)} dependencies={data.dependencies} employeeMap={enriched.employeeMap} /></HrSectionCard>}
     {tab === "analyses" && <ProjectAnalyticsPanel mode={mode} data={analyticsData} />}
-    {tab === "alerts" && <Alerts data={data} />}
-    {tab === "summary" && <Summary projects={projectScope} />}
-    {tab === "history" && <Audit rows={data.audit} />}
+    {tab === "alerts" && <Alerts data={data} mode={mode} />}
     {selected && <Drawer mode={mode} row={selected} onClose={() => setSelected(null)} onEdit={() => { setEditing(selected); setSelected(null); }} />}
-    {editing !== undefined && <Form mode={mode} data={data} row={editing} onClose={() => setEditing(undefined)} onSaved={refresh} />}
+    {performanceDetails && <PerformanceDetailsDrawer project={performanceDetails} surveys={data.satisfaction} onClose={() => setPerformanceDetails(null)} />}
+    {editing !== undefined && (mode === "gantt" ? <BulkTaskForm organizationId={data.organization.id} projects={projectScope} employees={data.employees} onClose={() => setEditing(undefined)} onSaved={refresh} /> : mode === "performance" ? <SatisfactionForm organizationId={data.organization.id} projects={projectScope} row={editing} onClose={() => setEditing(undefined)} onSaved={refresh} /> : <Form mode={mode} data={data} row={editing} onClose={() => setEditing(undefined)} onSaved={refresh} />)}
   </div>;
 }

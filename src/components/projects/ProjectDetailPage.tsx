@@ -117,6 +117,7 @@ async function loadProject(orgId: string, projectId: string) {
     actions,
     deliverables,
     risks,
+    nonconformities,
     assignments,
     skills,
     financials,
@@ -132,6 +133,7 @@ async function loadProject(orgId: string, projectId: string) {
     table("project_actions").eq("project_id", projectId),
     table("project_deliverables").eq("project_id", projectId),
     table("project_risks").eq("project_id", projectId),
+    table("project_nonconformities").eq("project_id", projectId),
     table("project_task_assignments").eq("project_id", projectId),
     table("project_skill_requirements").eq("project_id", projectId),
     table("project_financial_metrics").eq("project_id", projectId).order("period_start"),
@@ -139,7 +141,7 @@ async function loadProject(orgId: string, projectId: string) {
     table("project_health_snapshots").eq("project_id", projectId).order("snapshot_date"),
     table("project_audit_events").eq("project_id", projectId).order("created_at", { ascending: false }).limit(300),
   ]);
-  const results = [clients, employees, tasks, dependencies, milestones, actions, deliverables, risks, assignments, skills, financials, satisfaction, health, audit];
+  const results = [clients, employees, tasks, dependencies, milestones, actions, deliverables, risks, nonconformities, assignments, skills, financials, satisfaction, health, audit];
   const failure = results.find((result) => result.error)?.error;
   if (failure) throw new Error(failure.message);
   const employeeMap = new Map<string, AnyRow>((employees.data || []).map((row: AnyRow) => [String(row.id), row]));
@@ -166,6 +168,7 @@ async function loadProject(orgId: string, projectId: string) {
     actions: (actions.data || []).map((row: AnyRow) => ({ ...row, owner_name: employeeName(employeeMap.get(row.owner_employee_id)) })),
     deliverables: (deliverables.data || []).map((row: AnyRow) => ({ ...row, owner_name: row.owner_name || employeeName(employeeMap.get(row.owner_employee_id)) })),
     risks: (risks.data || []).map((row: AnyRow) => ({ ...row, owner_name: row.owner_name || employeeName(employeeMap.get(row.owner_employee_id)) })),
+    nonconformities: (nonconformities.data || []).map((row: AnyRow) => ({ ...row, owner_name: row.owner_name || employeeName(employeeMap.get(row.owner_employee_id)) })),
     assignments: (assignments.data || []).map((row: AnyRow) => ({ ...row, resource_name: row.resource_name || employeeName(employeeMap.get(row.employee_id)), task_name: taskMap.get(row.task_id)?.name || "—" })),
     skills: skills.data || [],
     financials: financials.data || [],

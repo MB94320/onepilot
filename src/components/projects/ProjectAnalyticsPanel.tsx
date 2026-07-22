@@ -59,10 +59,12 @@ export type ProjectAnalyticsData = {
   health?: AnyRow[];
   deliverables?: AnyRow[];
   risks?: AnyRow[];
+  nonconformities?: AnyRow[];
   financials?: AnyRow[];
   satisfaction?: AnyRow[];
   assignments?: AnyRow[];
   employees?: AnyRow[];
+  milestones?: AnyRow[];
 };
 
 type ProjectAnalyticsPanelProps = {
@@ -154,6 +156,21 @@ function statusLabel(value: string) {
     compliant: "Conforme",
     partially_compliant: "Partiellement conforme",
     non_compliant: "Non conforme",
+    todo: "Ouverte",
+    pending: "En attente",
+    review: "En revue",
+    done: "Clôturée",
+    archived: "Archivée",
+    project: "Projet",
+    risk: "Risque",
+    nonconformity: "Non-conformité",
+    non_conformity: "Non-conformité",
+    audit: "Audit",
+    quality: "Qualité",
+    customer: "Client",
+    finance: "Finance",
+    management: "Management",
+    generic: "Générique",
   };
   return labels[value.toLowerCase()] || value || "Non renseigné";
 }
@@ -413,8 +430,8 @@ function ActionsAnalytics({ data }: { data: ProjectAnalyticsData }) {
   const lookup = projectLookup(data.projects || []);
   const status = groupCount(actions, ["status"]);
   const priorities = groupCount(actions, ["priority"]);
-  const effectiveness = groupCount(actions, ["effectiveness", "efficiency_status"]);
-  const origins = groupCount(actions, ["origin", "source_module", "source_type"]);
+  const effectiveness = groupCount(actions, ["effectiveness_status", "effectiveness", "efficiency_status"]);
+  const origins = groupCount(actions, ["origin_type", "origin", "source_module", "source_type"]);
   const enriched = actions.map((action) => {
     const project = lookup.get(textValue(action, "project_id"));
     return {
@@ -427,6 +444,14 @@ function ActionsAnalytics({ data }: { data: ProjectAnalyticsData }) {
   const projects = groupCount(enriched, ["resolved_project"]);
   const clients = groupCount(enriched, ["resolved_client"]);
   const sectors = groupCount(enriched, ["resolved_sector"]);
+  const monthlyMap = new Map<string, { created: number; closed: number; late: number }>();
+  actions.forEach((action) => {
+    const created = dateValue(action, "opened_at", "created_at");
+    const closed = dateValue(action, "actual_completion_date", "closed_at");
+    if (created) { const key = monthKey(created); const current = monthlyMap.get(key) || { created: 0, closed: 0, late: 0 }; current.created += 1; monthlyMap.set(key, current); }
+    if (closed) { const key = monthKey(closed); const current = monthlyMap.get(key) || { created: 0, closed: 0, late: 0 }; current.closed += 1; monthlyMap.set(key, current); }
+  });
+  const monthly = [...monthlyMap.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([key, value]) => ({ name: monthLabel(key), ...value }));
 
   const donut = (title: string, description: string, rows: ChartRow[]) => (
     <HrChartCard
@@ -493,10 +518,13 @@ function ActionsAnalytics({ data }: { data: ProjectAnalyticsData }) {
         {donut("Répartition par statut", "Équilibre des actions ouvertes, en cours, closes, en attente ou bloquées.", status)}
         {donut("Répartition par priorité", "Volume d’actions selon leur niveau de priorité opérationnelle.", priorities)}
         {donut("Répartition par efficacité", "Conformité et efficacité vérifiée des actions réalisées.", effectiveness)}
-        {bars("Volume par origine", "Actions issues des risques, non-conformités, audits, projets ou autres modules.", origins, false)}
+        {donut("Répartition par origine", "Actions issues des risques, non-conformités, audits, projets ou autres modules.", origins)}
         {bars("Volume par projet", "Concentration des actions par projet pour identifier les zones de dérive.", projects, false)}
         {bars("Volume par client", "Exposition des clients au volume d’actions correctives ou préventives.", clients)}
         {bars("Volume par secteur d’activité", "Comparaison des volumes d’actions selon les secteurs servis.", sectors)}
+        <HrChartCard title="Créations et clôtures par mois" description="Évolution mensuelle du flux entrant et du débit de clôture pour détecter une croissance du stock." exportConfig={{ type: "line", data: monthly, nameKey: "name", series: [{ key: "created", label: "Créées", color: colors.indigo }, { key: "closed", label: "Clôturées", color: colors.emerald }] }}>
+          {monthly.length ? <ResponsiveContainer width="100%" height="100%"><LineChart data={monthly}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis allowDecimals={false} /><Tooltip /><Legend /><Line type="monotone" dataKey="created" name="Créées" stroke={colors.indigo} strokeWidth={3} /><Line type="monotone" dataKey="closed" name="Clôturées" stroke={colors.emerald} strokeWidth={3} /></LineChart></ResponsiveContainer> : <EmptyChart label="Aucun historique d’action disponible." />}
+        </HrChartCard>
       </ChartGrid>
     </AnalysisSection>
   );
@@ -993,7 +1021,7 @@ function PerformanceAnalytics({ data }: { data: ProjectAnalyticsData }) {
 }
 
 function PlanningAnalytics({ mode, data }: { mode: "timeline" | "gantt"; data: ProjectAnalyticsData }) {
-  const tasks = data.tasks || [];
+  const tasks = mode === "timeline" ? [...(data.tasks || []), ...(data.milestones || [])] : data.tasks || [];
   const now = new Date();
   const milestones = tasks.filter((task) => {
     const type = textValue(task, "task_type", "type", "kind").toLowerCase();
@@ -1030,6 +1058,15 @@ function PlanningAnalytics({ mode, data }: { mode: "timeline" | "gantt"; data: P
   const criticalRows = [...criticalByProject.entries()]
     .map(([name, value]) => ({ name, value }))
     .sort((left, right) => right.value - left.value);
+  const projectStatus = groupCount(data.projects || [], ["status"]);
+  const startsEndsMap = new Map<string, { starts: number; ends: number }>();
+  (data.projects || []).forEach((project) => {
+    const start = dateValue(project, "start_date");
+    const end = dateValue(project, "end_date", "forecast_end_date");
+    if (start) { const key = monthKey(start); const current = startsEndsMap.get(key) || { starts: 0, ends: 0 }; current.starts += 1; startsEndsMap.set(key, current); }
+    if (end) { const key = monthKey(end); const current = startsEndsMap.get(key) || { starts: 0, ends: 0 }; current.ends += 1; startsEndsMap.set(key, current); }
+  });
+  const startsEnds = [...startsEndsMap.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([key, value]) => ({ name: monthLabel(key), ...value }));
 
   return (
     <AnalysisSection
@@ -1146,6 +1183,8 @@ function PlanningAnalytics({ mode, data }: { mode: "timeline" | "gantt"; data: P
             <EmptyChart label="Aucune tâche identifiée sur le chemin critique." />
           )}
         </HrChartCard>
+        {mode === "timeline" && <HrChartCard title="Répartition des projets par statut" description="Équilibre temporel entre projets ouverts, en cours, bloqués, clos et annulés." exportConfig={{ type: "bar", data: projectStatus, nameKey: "name", series: [{ key: "value", label: "Projets", color: colors.indigo }] }}><DonutChart data={projectStatus} /></HrChartCard>}
+        {mode === "timeline" && <HrChartCard title="Démarrages et clôtures par mois" description="Concentration des lancements et fins de projet pour anticiper les périodes d’arbitrage." exportConfig={{ type: "bar", data: startsEnds, nameKey: "name", series: [{ key: "starts", label: "Démarrages", color: colors.sky }, { key: "ends", label: "Clôtures prévues", color: colors.emerald }] }}>{startsEnds.length ? <ResponsiveContainer width="100%" height="100%"><BarChart data={startsEnds}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis allowDecimals={false} /><Tooltip /><Legend /><Bar dataKey="starts" name="Démarrages" fill={colors.sky} /><Bar dataKey="ends" name="Clôtures prévues" fill={colors.emerald} /></BarChart></ResponsiveContainer> : <EmptyChart label="Aucune date projet disponible." />}</HrChartCard>}
       </ChartGrid>
     </AnalysisSection>
   );
@@ -1160,15 +1199,17 @@ export default function ProjectAnalyticsPanel({ mode, data }: ProjectAnalyticsPa
       health: data.health || [],
       deliverables: data.deliverables || [],
       risks: data.risks || [],
+      nonconformities: data.nonconformities || [],
       financials: data.financials || [],
       satisfaction: data.satisfaction || [],
       assignments: data.assignments || [],
       employees: data.employees || [],
+      milestones: data.milestones || [],
     }),
     [data],
   );
 
-  if (mode === "portfolio") return <PortfolioAnalytics data={normalized} />;
+  if (mode === "portfolio") return <div className="space-y-5"><PortfolioAnalytics data={normalized} /><PerformanceAnalytics data={normalized} /></div>;
   if (mode === "actions") return <ActionsAnalytics data={normalized} />;
   if (mode === "performance") return <PerformanceAnalytics data={normalized} />;
   return <PlanningAnalytics mode={mode} data={normalized} />;
