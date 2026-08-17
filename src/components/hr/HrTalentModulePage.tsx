@@ -93,6 +93,9 @@ type SkillCatalogItem = {
   description?: string | null;
   criticality?: string | null;
   level_expectations?: Record<string, string> | null;
+  chapter_code?: string | null;
+  subchapter_code?: string | null;
+  level_evidence?: Record<string, string> | null;
   is_active?: boolean | null;
 };
 
@@ -328,7 +331,7 @@ async function loadData(slugOrId: string, moduleKey: HrTalentModuleKey): Promise
       .eq("organization_id", organization.id)
       .limit(500),
     (supabase.from("hr_skill_catalog" as never) as any)
-      .select("id, code, name, family, category, description, criticality, level_expectations, is_active, archived_at")
+      .select("id, code, name, family, category, description, criticality, level_expectations, chapter_code, subchapter_code, level_evidence, is_active, archived_at")
       .eq("organization_id", organization.id)
       .is("archived_at", null)
       .order("family", { ascending: true })
@@ -721,7 +724,7 @@ function FiltersPanel({ moduleKey, rows, catalog, employees, value, onChange, re
           </select>
           {moduleKey === "skills" ? (
             <select value={value.module} onChange={(event) => update("module", event.target.value)} className={selectClassName}>
-              <option value="all">Tous les modules</option>
+              <option value="all">Tous les chapitres</option>
               {modules.map((module) => <option key={module} value={module}>{module}</option>)}
             </select>
           ) : (
@@ -734,7 +737,7 @@ function FiltersPanel({ moduleKey, rows, catalog, employees, value, onChange, re
           {moduleKey === "skills" && (
             <>
               <select value={value.submodule} onChange={(event) => update("submodule", event.target.value)} className={selectClassName}>
-                <option value="all">Tous les sous-modules</option>
+                <option value="all">Tous les sous-chapitres</option>
                 {submodules.map((submodule) => <option key={submodule} value={submodule}>{submodule}</option>)}
               </select>
               <select value={value.level} onChange={(event) => update("level", event.target.value)} className={selectClassName}>
@@ -854,8 +857,8 @@ function SkillResourceTable({ rows, onArchive }: { rows: AnyRow[]; onArchive: (r
         <thead className="sticky top-0 z-20 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-700 dark:text-slate-300">
           <tr>
             <th className="sticky left-0 z-30 bg-slate-50 px-4 py-3 text-left dark:bg-slate-700">Ressource</th>
-            <th className="px-4 py-3 text-left">Module</th>
-            <th className="px-4 py-3 text-left">Sous-module</th>
+            <th className="px-4 py-3 text-left">Chapitre</th>
+            <th className="px-4 py-3 text-left">Sous-chapitre</th>
             <th className="px-4 py-3 text-left">Compétence</th>
             <th className="px-4 py-3 text-left">Niveau actuel</th>
             <th className="px-4 py-3 text-left">Niveau cible</th>
@@ -889,13 +892,13 @@ function SkillResourceTable({ rows, onArchive }: { rows: AnyRow[]; onArchive: (r
 function LibraryPanel({ catalog, rows }: { catalog: SkillCatalogItem[]; rows: AnyRow[] }) {
   const employees = uniqueValues(rows, (row) => fullName(row));
   return (
-    <SectionCard icon={BookOpen} title="Bibliothèque de compétences" description="Référentiel complet : modules, sous-modules, compétences, attendus de niveau et auto-évaluations par ressource.">
+    <SectionCard icon={BookOpen} title="Bibliothèque de compétences" description="Référentiel complet : chapitres, sous-chapitres, compétences, attendus de niveau et auto-évaluations par ressource.">
       <div className="max-h-[620px] overflow-auto rounded-2xl border border-slate-200 shadow-sm dark:border-slate-600/70">
         <table className="w-full min-w-[1720px] border-separate border-spacing-0 bg-white text-sm dark:bg-slate-700/65">
           <thead className="sticky top-0 z-20 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-700 dark:text-slate-300">
             <tr>
-              <th className="sticky left-0 z-30 bg-slate-50 px-4 py-3 text-left dark:bg-slate-700">Module</th>
-              <th className="px-4 py-3 text-left">Sous-module</th>
+              <th className="sticky left-0 z-30 bg-slate-50 px-4 py-3 text-left dark:bg-slate-700">Chapitre</th>
+              <th className="px-4 py-3 text-left">Sous-chapitre</th>
               <th className="px-4 py-3 text-left">Compétence</th>
               <th className="px-4 py-3 text-left">Criticité</th>
               <th className="px-4 py-3 text-left">Description Niveau 0</th>
@@ -912,9 +915,9 @@ function LibraryPanel({ catalog, rows }: { catalog: SkillCatalogItem[]; rows: An
               const expectations = skill.level_expectations || {};
               return (
                 <tr key={skill.id} className="hover:bg-indigo-50/45 dark:hover:bg-indigo-900/20">
-                  <td className="sticky left-0 z-10 bg-white px-4 py-3 font-bold text-slate-950 dark:bg-slate-700 dark:text-slate-100">{skill.family || "—"}</td>
-                  <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{skill.category || "—"}</td>
-                  <td className="px-4 py-3 font-semibold text-slate-700 dark:text-slate-200">{skill.name}</td>
+                  <td className="sticky left-0 z-10 bg-white px-4 py-3 font-bold text-slate-950 dark:bg-slate-700 dark:text-slate-100">{skill.chapter_code ? `${skill.chapter_code} · ` : ""}{skill.family || "—"}</td>
+                  <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{skill.subchapter_code ? `${skill.subchapter_code} · ` : ""}{skill.category || "—"}</td>
+                  <td className="px-4 py-3 font-semibold text-slate-700 dark:text-slate-200">{skill.code ? `${skill.code} · ` : ""}{skill.name}</td>
                   <td className="px-4 py-3"><span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-700 dark:bg-indigo-900/35 dark:text-indigo-300">{skill.criticality || "standard"}</span></td>
                   {[0, 1, 2, 3, 4].map((level) => <td key={level} className="px-4 py-3 text-xs leading-5 text-slate-600 dark:text-slate-300">{expectations[String(level)] || "—"}</td>)}
                   {employees.slice(0, 12).map((employee) => {
@@ -1705,7 +1708,7 @@ function buildExportColumns(moduleKey: HrTalentModuleKey): ExportColumn<AnyRow>[
     { key: "status", label: "Statut", value: (row) => labelStatus(moduleKey, row.status) },
   ];
 
-  if (moduleKey === "skills") return [...base, { key: "family", label: "Module", value: (row) => row.family }, { key: "category", label: "Sous-module", value: (row) => row.category }, { key: "skill", label: "Compétence", value: (row) => row.skill_name }, { key: "current_level", label: "Niveau actuel", value: (row) => clampLevel(row.current_level) }, { key: "target_level", label: "Niveau cible", value: (row) => clampLevel(row.target_level) }, { key: "gap", label: "Écart", value: (row) => row.gap }, { key: "criticality", label: "Criticité", value: (row) => row.criticality }, { key: "project_context", label: "Projet / besoin", value: (row) => row.project_context }, { key: "evidence", label: "Preuve", value: (row) => row.evidence }];
+  if (moduleKey === "skills") return [...base, { key: "family", label: "Chapitre", value: (row) => row.family }, { key: "category", label: "Sous-chapitre", value: (row) => row.category }, { key: "skill", label: "Compétence", value: (row) => row.skill_name }, { key: "current_level", label: "Niveau actuel", value: (row) => clampLevel(row.current_level) }, { key: "target_level", label: "Niveau cible", value: (row) => clampLevel(row.target_level) }, { key: "gap", label: "Écart", value: (row) => row.gap }, { key: "criticality", label: "Criticité", value: (row) => row.criticality }, { key: "project_context", label: "Projet / besoin", value: (row) => row.project_context }, { key: "evidence", label: "Preuve", value: (row) => row.evidence }];
   if (moduleKey === "onboarding") return [...base, { key: "start_date", label: "Début", value: (row) => row.start_date }, { key: "target_end_date", label: "Fin cible", value: (row) => row.target_end_date }, { key: "progress", label: "Progression", value: (row) => row.progress_percent }, { key: "risk", label: "Risque", value: (row) => row.risk_level }, { key: "checklist", label: "Checklist", value: (row) => JSON.stringify(row.checklist_items ?? []) }, { key: "notes", label: "Notes", value: (row) => row.notes }];
   if (moduleKey === "reviews") return [...base, { key: "cycle", label: "Campagne", value: (row) => row.cycle_name }, { key: "objectives", label: "Objectifs", value: (row) => row.objective_count }, { key: "completed", label: "Objectifs complétés", value: (row) => row.completed_objective_count }, { key: "rating", label: "Note globale", value: (row) => row.global_rating }, { key: "employee_comment", label: "Commentaire collaborateur", value: (row) => row.employee_comment }, { key: "manager_comment", label: "Commentaire manager", value: (row) => row.manager_comment }, { key: "details", label: "Détail entretien", value: (row) => JSON.stringify(row.review_details ?? {}) }];
   return [
@@ -1762,6 +1765,8 @@ function CreateModal({ moduleKey, organizationId, employees, catalog, onClose }:
   const firstSkill = catalog[0]?.id || "";
   const [employeeId, setEmployeeId] = useState(firstEmployee);
   const [skillId, setSkillId] = useState(firstSkill);
+  const [skillChapter, setSkillChapter] = useState(catalog[0]?.family || "");
+  const [skillSubchapter, setSkillSubchapter] = useState(catalog[0]?.category || "");
   const [level, setLevel] = useState("1");
   const [projectNumber, setProjectNumber] = useState(`P-${new Date().getFullYear()}-0001`);
   const [projectDesignation, setProjectDesignation] = useState("Projet client / mission affectée");
@@ -1776,6 +1781,9 @@ function CreateModal({ moduleKey, organizationId, employees, catalog, onClose }:
   const [expenseCost, setExpenseCost] = useState("0");
   const [comments, setComments] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const skillChapters = uniqueValues(catalog, (skill) => skill.family);
+  const skillSubchapters = uniqueValues(catalog.filter((skill) => !skillChapter || skill.family === skillChapter), (skill) => skill.category);
+  const availableSkills = catalog.filter((skill) => (!skillChapter || skill.family === skillChapter) && (!skillSubchapter || skill.category === skillSubchapter));
 
   async function save() {
     if (!employeeId) return;
@@ -1870,7 +1878,7 @@ function CreateModal({ moduleKey, organizationId, employees, catalog, onClose }:
         </div>
         <div className="max-h-[72vh] space-y-4 overflow-auto p-5">
           <label className="block"><span className="text-xs font-bold text-slate-600 dark:text-slate-300">Ressource</span><select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} className={`${selectClassName} mt-1 w-full`}>{employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.full_name || employee.employee_number || employee.id}</option>)}</select></label>
-          {moduleKey === "skills" && <><label className="block"><span className="text-xs font-bold text-slate-600 dark:text-slate-300">Compétence</span><select value={skillId} onChange={(e) => setSkillId(e.target.value)} className={`${selectClassName} mt-1 w-full`}>{catalog.map((skill) => <option key={skill.id} value={skill.id}>{skill.family} / {skill.category} / {skill.name}</option>)}</select></label><label className="block"><span className="text-xs font-bold text-slate-600 dark:text-slate-300">Niveau actuel</span><select value={level} onChange={(e) => setLevel(e.target.value)} className={`${selectClassName} mt-1 w-full`}>{[0, 1, 2, 3, 4].map((item) => <option key={item} value={item}>Niveau {item}</option>)}</select></label></>}
+          {moduleKey === "skills" && <div className="grid gap-4 sm:grid-cols-2"><label className="block"><span className="text-xs font-bold text-slate-600 dark:text-slate-300">Chapitre</span><select value={skillChapter} onChange={(event) => { const chapter = event.target.value; const subchapter = uniqueValues(catalog.filter((skill) => skill.family === chapter), (skill) => skill.category)[0] || ""; const skill = catalog.find((item) => item.family === chapter && item.category === subchapter); setSkillChapter(chapter); setSkillSubchapter(subchapter); setSkillId(skill?.id || ""); }} className={`${selectClassName} mt-1 w-full`}>{skillChapters.map((chapter) => { const sample = catalog.find((skill) => skill.family === chapter); return <option key={chapter} value={chapter}>{sample?.chapter_code ? `${sample.chapter_code} · ` : ""}{chapter}</option>; })}</select></label><label className="block"><span className="text-xs font-bold text-slate-600 dark:text-slate-300">Sous-chapitre</span><select value={skillSubchapter} onChange={(event) => { const subchapter = event.target.value; const skill = catalog.find((item) => item.family === skillChapter && item.category === subchapter); setSkillSubchapter(subchapter); setSkillId(skill?.id || ""); }} className={`${selectClassName} mt-1 w-full`}>{skillSubchapters.map((subchapter) => { const sample = catalog.find((skill) => skill.family === skillChapter && skill.category === subchapter); return <option key={subchapter} value={subchapter}>{sample?.subchapter_code ? `${sample.subchapter_code} · ` : ""}{subchapter}</option>; })}</select></label><label className="block sm:col-span-2"><span className="text-xs font-bold text-slate-600 dark:text-slate-300">Compétence</span><select value={skillId} onChange={(event) => setSkillId(event.target.value)} className={`${selectClassName} mt-1 w-full`}>{availableSkills.map((skill) => <option key={skill.id} value={skill.id}>{skill.code ? `${skill.code} · ` : ""}{skill.name}</option>)}</select></label><label className="block sm:col-span-2"><span className="text-xs font-bold text-slate-600 dark:text-slate-300">Niveau actuel</span><select value={level} onChange={(event) => setLevel(event.target.value)} className={`${selectClassName} mt-1 w-full`}>{[0, 1, 2, 3, 4].map((item) => <option key={item} value={item}>N{item} / 4</option>)}</select></label></div>}
           {moduleKey === "time" && <div className="space-y-4">
             <div className="rounded-2xl border border-indigo-100 bg-indigo-50/50 p-3 text-xs font-semibold text-indigo-700 dark:border-indigo-900/60 dark:bg-indigo-950/25 dark:text-indigo-300">Sélectionne la date de pointage puis renseigne les rubriques du projet. Pour un projet IC-AAAA-0001, seule la colonne Intercontrat doit être utilisée ; pour un projet P-AAAA-XXXX, la colonne IC reste à zéro.</div>
             <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-600">
@@ -1882,7 +1890,7 @@ function CreateModal({ moduleKey, organizationId, employees, catalog, onClose }:
             <label className="block"><span className="text-xs font-bold text-slate-600 dark:text-slate-300">Commentaires</span><textarea value={comments} onChange={(e)=>setComments(e.target.value)} className="mt-1 min-h-24 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300" /></label>
           </div>}
           {moduleKey === "onboarding" && <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 text-xs leading-5 text-slate-600 dark:border-slate-600 dark:bg-slate-900/30 dark:text-slate-300">Le parcours sera créé avec une checklist complète RH / IT / manager / qualité / collaborateur : livret, PC, mail, accès outils, projet, fiche poste, matrice compétences, formations, points manager et période d’essai.</div>}
-          <div className="flex justify-end gap-2"><button type="button" onClick={onClose} className="inline-flex h-10 items-center rounded-xl border border-slate-200 px-4 text-sm font-bold text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300">Annuler</button><button type="button" onClick={() => void save()} disabled={isSaving || !employeeId || (moduleKey === "skills" && !skillId)} className="inline-flex h-10 items-center rounded-xl bg-indigo-600 px-4 text-sm font-bold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-50">Enregistrer</button></div>
+          <div className="flex justify-end gap-2"><button type="button" onClick={onClose} className="inline-flex h-10 items-center rounded-xl border border-rose-200 bg-white px-4 text-sm font-bold text-rose-700 shadow-sm hover:bg-rose-50 dark:border-rose-800 dark:bg-slate-800 dark:text-rose-300">Annuler</button><button type="button" onClick={() => void save()} disabled={isSaving || !employeeId || (moduleKey === "skills" && !skillId)} className="inline-flex h-10 items-center rounded-xl bg-indigo-600 px-4 text-sm font-bold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-50">Enregistrer</button></div>
         </div>
       </div>
     </div>

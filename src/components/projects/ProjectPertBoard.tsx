@@ -93,7 +93,7 @@ export default function ProjectPertBoard({ tasks, dependencies, onEditTask }: { 
   const critical = network.nodes.filter((node) => node.critical);
   const projectNumber = String(tasks[0]?.project_code || "Projet non renseigné");
   return (
-    <div className="flex flex-col gap-4">
+    <section ref={captureRef} className="flex flex-col gap-4 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 p-4 shadow-sm fullscreen:overflow-auto dark:border-slate-600 dark:bg-slate-800">
       <div className="order-1 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <HrInfo label="N° projet" value={projectNumber} accent="sky" />
         <HrInfo label="Durée calculée du projet" value={`${network.projectDuration} j ouvrés`} accent="indigo" />
@@ -101,7 +101,7 @@ export default function ProjectPertBoard({ tasks, dependencies, onEditTask }: { 
         <HrInfo label="Tâches critiques" value={critical.length} accent={critical.length ? "rose" : "emerald"} />
         <HrInfo label="Marge moyenne" value={`${network.nodes.length ? (network.nodes.reduce((sum, node) => sum + node.float, 0) / network.nodes.length).toFixed(1) : 0} j`} accent="amber" />
       </div>
-      <section ref={captureRef} className="order-3 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm fullscreen:overflow-auto dark:border-slate-600 dark:bg-slate-700/70">
+      <section className="order-4 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-600 dark:bg-slate-700/70">
         <div className="flex items-center gap-3 border-b border-slate-100 bg-gradient-to-r from-sky-50/70 via-white to-indigo-50/60 px-5 py-4 dark:border-slate-600 dark:from-sky-900/25 dark:via-slate-700 dark:to-indigo-900/25"><span className="rounded-xl bg-rose-100 p-2.5 text-rose-700 dark:bg-rose-900/45 dark:text-rose-200"><Route className="h-4 w-4" /></span><div><h3 className="text-sm font-bold text-slate-950 dark:text-white">Réseau PERT et chemin critique calculé</h3><p className="mt-1 text-xs text-slate-500 dark:text-slate-300">Les liaisons roses composent la plus longue séquence sans marge qui pilote la date de fin.</p></div></div>
         <div className="flex justify-end border-b border-slate-100 bg-white px-4 py-2 dark:border-slate-600 dark:bg-slate-700"><ProjectVisualActions targetRef={captureRef} fileName={`onepilot-pert-${projectNumber}`} label="le réseau PERT" /></div>
         <div className="max-h-[560px] overflow-auto bg-slate-50/45 p-4 dark:bg-slate-800/30">
@@ -116,7 +116,7 @@ export default function ProjectPertBoard({ tasks, dependencies, onEditTask }: { 
         <div className="flex items-center gap-3 border-b border-slate-100 bg-gradient-to-r from-sky-50/70 via-white to-indigo-50/60 px-5 py-4 dark:border-slate-600 dark:from-sky-900/25 dark:via-slate-700 dark:to-indigo-900/25"><GitBranch className="h-4 w-4 text-rose-600" /><div><h3 className="text-sm font-bold text-slate-950 dark:text-white">Séquence critique</h3><p className="mt-1 text-xs text-slate-500 dark:text-slate-300">Ordre des tâches à sécuriser pour ne pas décaler la date de fin calculée.</p></div></div>
         <div className="flex flex-wrap items-center gap-2 p-5">{critical.map((node, index) => <span key={node.id} className="inline-flex items-center gap-2"><button type="button" onClick={() => onEditTask?.(taskMap.get(node.id)!)} className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-black text-rose-700 hover:bg-rose-100 dark:border-rose-800 dark:bg-rose-900/25 dark:text-rose-200">{node.code} · {node.duration} j</button>{index < critical.length - 1 && <span className="text-rose-400">→</span>}</span>)}{!critical.length && <HrStatusBadge status="completed" label="Aucun chemin critique calculable" />}</div>
       </section>
-      <section className="order-4 rounded-2xl border border-slate-200 bg-gradient-to-r from-sky-50/60 via-white to-indigo-50/50 p-5 shadow-sm dark:border-slate-600 dark:from-sky-900/20 dark:via-slate-700 dark:to-indigo-900/20"><h3 className="text-sm font-black text-slate-950 dark:text-white">Analyse et recommandation planning</h3><p className="mt-2 text-xs leading-5 text-slate-600 dark:text-slate-300">Le chemin critique comporte {critical.length} tâche(s) sans marge sur une durée calculée de {network.projectDuration} jours ouvrés. Sécuriser en priorité les responsables, dépendances et livrables de cette séquence ; toute dérive doit déclencher une replanification tracée ou un arbitrage de périmètre, charge et capacité.</p></section>
-    </div>
+      <section className="order-3 rounded-2xl border border-slate-200 bg-gradient-to-r from-sky-50/60 via-white to-indigo-50/50 p-5 shadow-sm dark:border-slate-600 dark:from-sky-900/20 dark:via-slate-700 dark:to-indigo-900/20"><h3 className="text-sm font-black text-slate-950 dark:text-white">Analyse et recommandation planning</h3><p className="mt-2 text-xs leading-5 text-slate-600 dark:text-slate-300">Le chemin critique comporte {critical.length} tâche(s) sans marge sur une durée calculée de {network.projectDuration} jours ouvrés. Sécuriser en priorité les responsables, dépendances et livrables de cette séquence ; toute dérive doit déclencher une replanification tracée ou un arbitrage de périmètre, charge et capacité.</p></section>
+    </section>
   );
 }

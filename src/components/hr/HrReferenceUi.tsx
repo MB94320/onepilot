@@ -322,7 +322,7 @@ export function HrChartCard({ title, description, exportConfig, children }: { ti
           <button type="button" onClick={() => containerRef.current?.requestFullscreen?.()} title="Agrandir" aria-label={`Agrandir ${title}`} className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-indigo-100 bg-white text-indigo-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-indigo-50 dark:border-indigo-800/70 dark:bg-slate-600/65 dark:text-indigo-200 dark:hover:bg-indigo-900/35"><Expand className="h-4 w-4" /></button>
         </div>
       </div>
-      <div className="h-[330px] p-4">{children}</div>
+      <div className="h-[330px] min-h-[330px] min-w-0 w-full p-4">{children}</div>
     </article>
   );
 }

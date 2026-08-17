@@ -59,7 +59,7 @@ function money(value: unknown) {
 }
 
 function percent(value: unknown) {
-  return `${new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 1 }).format(number(value))} %`;
+  return `${new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 1 }).format(number(value))}\u00a0%`;
 }
 
 function formatDate(value?: string | null) {

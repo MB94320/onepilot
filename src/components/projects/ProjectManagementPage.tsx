@@ -223,7 +223,7 @@ async function loadProjectData(slugOrId: string): Promise<ProjectData> {
     "project_projects", "project_portfolios", "project_programs", "project_clients", "hr_employee_overview",
     "project_work_packages", "project_tasks", "project_staffing_assignments", "project_task_assignments",
     "project_milestones", "project_dependencies", "project_actions", "project_health_snapshots",
-    "project_deliverables", "project_risks", "project_nonconformities", "project_skill_requirements", "project_financial_performance",
+    "project_deliverables", "project_risks", "project_nonconformities", "project_skill_requirements", "project_financial_metrics",
     "project_satisfaction_surveys", "project_commerce_links", "project_audit_events",
   ];
   const results = await Promise.all(names.map(table));
@@ -421,11 +421,11 @@ function columnsFor(mode: ProjectPageMode, onCommerce: (row: AnyRow) => void): C
     { label: "ID action", value: (row) => row.code }, { label: "N° projet", value: (row) => row.project_code }, { label: "Désignation projet", value: (row) => row.project_name },
     { label: "Origine", value: (row) => <ProjectOriginBadge origin={row.origin_type || row.action_type} /> }, { label: "Référence origine", value: (row) => row.origin_reference || "—" },
     { label: "Description de l’action", value: (row) => row.title }, { label: "Responsable", value: (row) => row.owner_name },
-    { label: "Priorité", value: (row) => priorityLabel(row.priority) }, { label: "Fin prévisionnelle", value: (row) => formatDate(row.due_date) },
+    { label: "Priorité", value: (row) => <ProjectPriorityBadge priority={row.priority} /> }, { label: "Fin prévisionnelle", value: (row) => formatDate(row.due_date) },
     { label: "Date replanifiée", value: (row) => formatDate(row.replanned_due_date) }, { label: "Résultat attendu", value: (row) => row.expected_result || "—" },
     { label: "Impact métier", value: (row) => row.impact || "—" }, { label: "Cause racine", value: (row) => row.root_cause || "—" },
     { label: "Avancement", value: (row) => percent(row.progress_percent) }, { label: "Statut", value: (row) => <RowStatus mode={mode} row={row} /> },
-    { label: "Fin réelle", value: (row) => formatDate(row.actual_completion_date || row.closed_at) }, { label: "Efficacité", value: (row) => statusLabel(row.effectiveness_status) }, { label: "Preuve", value: (row) => row.proof_reference || row.evidence_url || "—" },
+    { label: "Fin réelle", value: (row) => formatDate(row.actual_completion_date || row.closed_at) }, { label: "Efficacité", value: (row) => <HrStatusBadge status={row.effectiveness_status === "compliant" ? "completed" : row.effectiveness_status === "partially_compliant" ? "in_progress" : row.effectiveness_status === "non_compliant" ? "blocked" : "archived"} label={statusLabel(row.effectiveness_status) || "Non évaluée"} /> }, { label: "Preuve", value: (row) => <HrStatusBadge status={row.proof_reference || row.evidence_url ? "completed" : "blocked"} label={row.proof_reference || row.evidence_url ? "Disponible" : "Manquante"} /> },
     { label: "Commentaires", value: (row) => row.comments || row.effectiveness_comment || "—" },
   ];
   if (mode === "performance") return [

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, type ComponentProps } from "react";
 import {
   Activity,
   BarChart3,
@@ -27,14 +27,22 @@ import {
   PolarGrid,
   Radar,
   RadarChart,
-  ResponsiveContainer,
+  ResponsiveContainer as RechartsResponsiveContainer,
   Scatter,
   ScatterChart,
   Tooltip,
-  XAxis,
+  XAxis as RechartsXAxis,
   YAxis,
   ZAxis,
 } from "recharts";
+
+function ResponsiveContainer(props: ComponentProps<typeof RechartsResponsiveContainer>) {
+  return <RechartsResponsiveContainer minWidth={1} minHeight={1} initialDimension={{ width: 640, height: 300 }} {...props} />;
+}
+
+function XAxis(props: ComponentProps<typeof RechartsXAxis>) {
+  return <RechartsXAxis interval={0} minTickGap={0} {...props} />;
+}
 
 import {
   HrChartCard,
@@ -320,7 +328,6 @@ function AnalysisSection({
 function PortfolioAnalytics({ data }: { data: ProjectAnalyticsData }) {
   const projects = data.projects || [];
   const status = groupCount(projects, ["status"]);
-  const satisfaction = satisfactionData(data.satisfaction || []);
   const load = assignmentPerformance(data.assignments || []);
   const orderedTotal = projects.reduce((total, project) => total + numberValue(project, "ordered_budget", "budget_amount"), 0);
   const consumedTotal = projects.reduce((total, project) => total + numberValue(project, "consumed_budget", "actual_cost_total"), 0);
@@ -373,7 +380,7 @@ function PortfolioAnalytics({ data }: { data: ProjectAnalyticsData }) {
         <HrMetricCard icon={Gauge} label="Satisfaction client" value={satisfactionAverage ? `${Math.round(satisfactionAverage)}/100` : "—"} description="Note moyenne des cinq critères de satisfaction mensuelle." accent="amber" />
         <HrMetricCard icon={ListChecks} label="Fiabilité des données" value={reportingAverage ? `${Math.round(reportingAverage)} %` : "—"} description="Complétude et actualité des reportings servant aux arbitrages." accent="rose" />
       </div>
-      <div><h3 className="mb-3 text-sm font-black text-slate-950 dark:text-white">Trajectoire et santé du portefeuille</h3>
+      <div className="py-2"><h3 className="mb-5 mt-2 text-sm font-black text-slate-950 dark:text-white">Trajectoire et santé du portefeuille</h3>
       <ChartGrid>
         <HrChartCard
           title="Répartition des projets par statut"
@@ -439,9 +446,6 @@ function PortfolioAnalytics({ data }: { data: ProjectAnalyticsData }) {
               <Legend />
             </RadarChart>
           </ResponsiveContainer>
-        </HrChartCard>
-        <HrChartCard title="Satisfaction client" description="Radar des cinq dimensions de satisfaction issues des revues mensuelles." exportConfig={{ type: "radar", data: satisfaction.radar, nameKey: "name", series: [{ key: "score", label: "Satisfaction", color: colors.indigo }] }}>
-          <ResponsiveContainer width="100%" height="100%"><RadarChart data={satisfaction.radar}><PolarGrid /><PolarAngleAxis dataKey="name" /><Radar dataKey="score" name="Satisfaction" stroke={colors.indigo} fill={colors.indigo} fillOpacity={0.24} /><Tooltip /><Legend /></RadarChart></ResponsiveContainer>
         </HrChartCard>
         <HrChartCard title="TACE prévisionnel et réel" description="Taux d’activité congés exclus, rapproché des charges et de la capacité Staffing." exportConfig={{ type: "line", data: load, nameKey: "name", series: [{ key: "planned", label: "Prévisionnel", color: colors.sky }, { key: "TACE", label: "Réel", color: colors.amber }] }}>
           {load.length ? <ResponsiveContainer width="100%" height="100%"><LineChart data={load}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis /><Tooltip /><Legend /><Line type="monotone" dataKey="planned" name="Charge prévisionnelle" stroke={colors.sky} strokeWidth={3} /><Line type="monotone" dataKey="TACE" name="TACE réel" stroke={colors.amber} strokeWidth={3} /></LineChart></ResponsiveContainer> : <EmptyChart label="Aucune donnée Staffing corrélée." />}
@@ -563,7 +567,7 @@ function monthlyFinancialData(financials: AnyRow[]) {
     { planned: number; earned: number; actual: number; production: number; invoiced: number }
   >();
   financials.forEach((row) => {
-    const date = dateValue(row, "period_date", "month", "snapshot_date", "date");
+    const date = dateValue(row, "period_start", "period_date", "month", "snapshot_date", "date");
     if (!date) return;
     const key = monthKey(date);
     const current = grouped.get(key) || {
@@ -803,7 +807,7 @@ function PerformanceAnalytics({ data, showMetrics = true }: { data: ProjectAnaly
           accent="indigo"
         />
       </div>}
-      <div><h3 className="mb-3 text-sm font-black text-slate-950 dark:text-white">Valeur acquise, délais, qualité, charge et finance</h3>
+      <div className="py-2"><h3 className="mb-5 mt-2 text-sm font-black text-slate-950 dark:text-white">Finance, délais, qualité, charge et performance</h3>
       <ChartGrid>
         <HrChartCard
           title="Courbe en S — VP, VA et CR"
@@ -896,10 +900,10 @@ function PerformanceAnalytics({ data, showMetrics = true }: { data: ProjectAnaly
             data: load,
             nameKey: "name",
             series: [
-              { key: "planned", label: "Charge prévisionnelle", color: colors.indigo },
-              { key: "actual", label: "Charge réelle", color: colors.emerald },
-              { key: "capacity", label: "Capacité actuelle", color: colors.amber },
-              { key: "potential", label: "Capacité potentielle", color: colors.sky },
+              { key: "planned", label: "Charge prévisionnelle", color: "#6366F1" },
+              { key: "actual", label: "Charge réelle", color: "#0EA5E9" },
+              { key: "capacity", label: "Capacité nette", color: "#10B981" },
+              { key: "potential", label: "Capacité potentielle", color: "#94A3B8" },
             ],
             unit: " h",
           }}
@@ -912,10 +916,10 @@ function PerformanceAnalytics({ data, showMetrics = true }: { data: ProjectAnaly
                 <YAxis />
                 <Tooltip />
                 <Legend />
-                <Bar dataKey="planned" name="Charge prévisionnelle" fill={colors.indigo} />
-                <Bar dataKey="actual" name="Charge réelle" fill={colors.emerald} />
-                <Line type="monotone" dataKey="capacity" name="Capacité actuelle" stroke={colors.amber} strokeWidth={3} />
-                <Line type="monotone" dataKey="potential" name="Capacité potentielle" stroke={colors.sky} strokeWidth={3} />
+                <Bar dataKey="planned" name="Charge prévisionnelle" fill="#6366F1" radius={[8, 8, 0, 0]} />
+                <Bar dataKey="actual" name="Charge réelle" fill="#0EA5E9" radius={[8, 8, 0, 0]} />
+                <Line type="monotone" dataKey="capacity" name="Capacité nette" stroke="#10B981" strokeWidth={3} />
+                <Line type="monotone" dataKey="potential" name="Capacité potentielle" stroke="#94A3B8" strokeWidth={2} strokeDasharray="5 4" />
               </ComposedChart>
             </ResponsiveContainer>
           ) : (
