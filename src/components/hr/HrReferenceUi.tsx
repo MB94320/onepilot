@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type ComponentType, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { Archive, ArchiveRestore, Copy, Edit3, Expand, Eye, MoreHorizontal } from "lucide-react";
 
 export type HrAccent = "indigo" | "emerald" | "amber" | "rose" | "sky" | "slate";
@@ -117,18 +117,19 @@ export function HrInfo({ label, value, accent = "slate" }: { label: string; valu
     sky: "bg-sky-50 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300",
     slate: "bg-slate-50 text-slate-700 dark:bg-slate-800/70 dark:text-slate-300",
   };
-  return <div className={`rounded-xl px-3 py-2 ${classes[accent]}`}><p className="text-[10px] font-black uppercase tracking-wide opacity-70">{label}</p><p className="mt-1 truncate text-xs font-bold" title={String(value ?? "")}>{value}</p></div>;
+  const valueTitle = typeof value === "string" || typeof value === "number" ? String(value) : undefined;
+  return <div className={`rounded-xl px-3 py-2 ${classes[accent]}`}><p className="text-[10px] font-black uppercase tracking-wide opacity-70">{label}</p><div className={`mt-1 min-w-0 truncate font-bold ${label === "Note globale" ? "flex min-h-16 items-center justify-center text-2xl font-black" : "text-xs"}`} title={valueTitle}>{value}</div></div>;
 }
 
 export function HrStatusBadge({ status, label }: { status?: string | null; label?: string }) {
   const normalized = String(status || "").toLowerCase();
-  const className = normalized === "completed" || normalized === "approved" || normalized === "validated" || normalized === "manager_approved" || normalized === "hr_approved"
+  const className = normalized === "completed" || normalized === "closed" || normalized === "done" || normalized === "approved" || normalized === "validated" || normalized === "manager_approved" || normalized === "hr_approved"
     ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
-    : normalized === "in_progress" || normalized === "submitted" || normalized === "manager_input" || normalized === "employee_input" || normalized === "calibration"
+    : normalized === "in_progress" || normalized === "active" || normalized === "pending" || normalized === "on_hold" || normalized === "submitted" || normalized === "manager_input" || normalized === "employee_input" || normalized === "calibration"
       ? "bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
-      : normalized === "prepared" || normalized === "draft" || normalized === "not_started" || normalized === "planned"
+      : normalized === "prepared" || normalized === "draft" || normalized === "not_started" || normalized === "planned" || normalized === "open"
         ? "bg-sky-50 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300"
-        : normalized === "rejected" || normalized === "blocked" || normalized === "delayed" || normalized === "cancelled"
+        : normalized === "rejected" || normalized === "blocked" || normalized === "delayed"
           ? "bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300"
           : "bg-slate-100 text-slate-700 dark:bg-slate-600/60 dark:text-slate-200";
   return <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-black ${className}`}>{label || status || "Non renseigné"}</span>;
@@ -153,6 +154,22 @@ export function HrActionMenu({
   const [isProcessing, setIsProcessing] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const closeOutside = (event: PointerEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) setIsOpen(false);
+    };
+    const closeWithEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOutside);
+    document.addEventListener("keydown", closeWithEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOutside);
+      document.removeEventListener("keydown", closeWithEscape);
+    };
+  }, [isOpen]);
+
   async function executeAction(action?: () => void | Promise<void>) {
     if (!action) return;
     setIsProcessing(true);
@@ -170,15 +187,15 @@ export function HrActionMenu({
         {isProcessing ? <Archive className="h-3.5 w-3.5 animate-pulse" /> : <MoreHorizontal className="h-3.5 w-3.5" />}
       </button>
       {isOpen && (
-        <div onClick={(event) => event.stopPropagation()} className="absolute right-0 top-10 z-30 w-56 overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl dark:border-slate-600/60 dark:bg-slate-700/70">
+        <div onClick={(event) => event.stopPropagation()} className="absolute right-0 top-10 z-30 w-60 overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl dark:border-slate-600/60 dark:bg-slate-700/70">
           {canRestore ? (
-            <button type="button" onClick={() => void executeAction(onRestore)} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-xs font-bold text-emerald-700 transition hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/30"><ArchiveRestore className="h-4 w-4" />{labels.restore}</button>
+            <button type="button" onClick={() => void executeAction(onRestore)} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-bold text-emerald-700 transition hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/30"><ArchiveRestore className="h-4 w-4" />{labels.restore}</button>
           ) : (
             <>
-              <button type="button" onClick={() => void executeAction(onView)} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-xs font-bold text-sky-700 transition hover:bg-sky-50 dark:text-sky-300 dark:hover:bg-sky-700/35"><Eye className="h-4 w-4" />{labels.view}</button>
-              <button type="button" onClick={() => void executeAction(onEdit)} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-xs font-bold text-indigo-700 transition hover:bg-indigo-50 dark:text-indigo-300 dark:hover:bg-indigo-700/35"><Edit3 className="h-4 w-4" />{labels.edit}</button>
+              <button type="button" onClick={() => void executeAction(onView)} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-bold text-sky-700 transition hover:bg-sky-50 dark:text-sky-300 dark:hover:bg-sky-700/35"><Eye className="h-4 w-4" />{labels.view}</button>
+              <button type="button" onClick={() => void executeAction(onEdit)} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-bold text-indigo-700 transition hover:bg-indigo-50 dark:text-indigo-300 dark:hover:bg-indigo-700/35"><Edit3 className="h-4 w-4" />{labels.edit}</button>
               <div className="my-1 border-t border-slate-100 dark:border-slate-600/60" />
-              <button type="button" onClick={() => void executeAction(onArchive)} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-xs font-bold text-slate-600 transition hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-600/70"><Archive className="h-4 w-4" />{labels.archive}</button>
+              <button type="button" onClick={() => void executeAction(onArchive)} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-bold text-slate-600 transition hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-600/70"><Archive className="h-4 w-4" />{labels.archive}</button>
             </>
           )}
         </div>
@@ -187,7 +204,7 @@ export function HrActionMenu({
   );
 }
 
-export type HrChartType = "bar" | "line" | "radar" | "donut";
+export type HrChartType = "bar" | "line" | "radar" | "donut" | "matrix";
 export type HrChartSeries = { key: string; label: string; color: string };
 export type HrChartExportConfig = { type: HrChartType; data: Array<Record<string, string | number>>; nameKey: string; series: HrChartSeries[]; unit?: string };
 
@@ -238,20 +255,42 @@ function createChartCanvas(title: string, description: string, config: HrChartEx
     data.forEach((item, index) => { const x = startX + (index % columns) * legendWidth; const y = startY + Math.floor(index / columns) * 30; ctx.fillStyle = config.series[index]?.color || ["#818cf8", "#6ee7b7", "#fcd34d", "#fda4af", "#7dd3fc", "#94a3b8"][index % 6]; roundedRect(ctx, x, y - 12, 18, 12, 4); ctx.fill(); ctx.fillStyle = "#475569"; ctx.font = "13px Arial"; ctx.textAlign = "left"; ctx.fillText(`${truncate(ctx, String(item[config.nameKey] || ""), 220)} : ${Number(item[valueKey] || 0)}${config.unit || ""}`, x + 26, y); });
     return canvas;
   }
+  if (config.type === "matrix") {
+    const probabilities = [1, 2, 3, 4];
+    const impacts = [4, 3, 2, 1];
+    const probabilityLabels = ["Improbable", "Possible", "Probable", "Très probable"];
+    const impactLabels: Record<number, string> = { 4: "Majeur", 3: "Sérieux", 2: "Moyen", 1: "Faible" };
+    const counts = new Map(data.map((item) => [`${Number(item.probability)}-${Number(item.impact)}`, Number(item.count || 0)]));
+    const matrixLeft = 190; const matrixTop = 190; const cellWidth = 250; const cellHeight = 92; const gap = 10;
+    probabilityLabels.forEach((label, index) => { ctx.fillStyle = "#475569"; ctx.font = "800 15px Arial"; ctx.textAlign = "center"; ctx.fillText(label, matrixLeft + index * (cellWidth + gap) + cellWidth / 2, matrixTop - 22); });
+    impacts.forEach((impact, rowIndex) => {
+      ctx.fillStyle = "#475569"; ctx.font = "800 15px Arial"; ctx.textAlign = "right"; ctx.fillText(impactLabels[impact], matrixLeft - 22, matrixTop + rowIndex * (cellHeight + gap) + cellHeight / 2 + 5);
+      probabilities.forEach((probability, columnIndex) => {
+        const score = impact * probability;
+        const count = counts.get(`${probability}-${impact}`) || 0;
+        const color = score >= 12 ? "#fb7185" : score >= 6 ? "#fdba74" : score >= 3 ? "#fcd34d" : "#6ee7b7";
+        const x = matrixLeft + columnIndex * (cellWidth + gap); const y = matrixTop + rowIndex * (cellHeight + gap);
+        roundedRect(ctx, x, y, cellWidth, cellHeight, 14); ctx.fillStyle = color; ctx.fill();
+        ctx.fillStyle = "#0f172a"; ctx.font = "900 29px Arial"; ctx.textAlign = "center"; ctx.fillText(String(count), x + cellWidth / 2, y + cellHeight / 2 + 10);
+      });
+    });
+    ctx.fillStyle = "#64748b"; ctx.font = "13px Arial"; ctx.textAlign = "left"; ctx.fillText("Volumes de risques par probabilité et impact — faible, modéré, élevé, critique", matrixLeft, 655);
+    return canvas;
+  }
   ctx.strokeStyle = "#e2e8f0"; ctx.lineWidth = 1;
   for (let index = 0; index <= 5; index += 1) { const y = top + (chartHeight / 5) * index; ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(left + chartWidth, y); ctx.stroke(); const value = Math.round(maxValue * (1 - index / 5)); ctx.fillStyle = "#64748b"; ctx.font = "12px Arial"; ctx.fillText(`${value}${config.unit || ""}`, 48, y + 4); }
   if (config.type === "bar") {
     const groupWidth = chartWidth / Math.max(1, data.length); const barWidth = Math.max(7, Math.min(26, groupWidth / Math.max(2, config.series.length + 1)));
-    data.forEach((item, itemIndex) => { config.series.forEach((series, seriesIndex) => { const value = Number(item[series.key] || 0); const h = (value / maxValue) * chartHeight; const x = left + itemIndex * groupWidth + groupWidth / 2 - (config.series.length * barWidth) / 2 + seriesIndex * barWidth; ctx.fillStyle = series.color; roundedRect(ctx, x, baseY - h, barWidth - 2, h, 5); ctx.fill(); }); ctx.save(); ctx.translate(left + itemIndex * groupWidth + groupWidth / 2, baseY + 16); ctx.rotate(-Math.PI / 5); ctx.fillStyle = "#475569"; ctx.font = "12px Arial"; ctx.textAlign = "right"; ctx.fillText(truncate(ctx, String(item[config.nameKey] || ""), 100), 0, 0); ctx.restore(); });
+    data.forEach((item, itemIndex) => { config.series.forEach((series, seriesIndex) => { const value = Number(item[series.key] || 0); const h = (value / maxValue) * chartHeight; const x = left + itemIndex * groupWidth + groupWidth / 2 - (config.series.length * barWidth) / 2 + seriesIndex * barWidth; ctx.fillStyle = series.color; roundedRect(ctx, x, baseY - h, barWidth - 2, h, 5); ctx.fill(); if (value !== 0) { ctx.fillStyle = "#334155"; ctx.font = "800 10px Arial"; ctx.textAlign = "center"; ctx.fillText(`${new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 1 }).format(value)}${config.unit || ""}`, x + (barWidth - 2) / 2, Math.max(top + 11, baseY - h - 7)); } }); ctx.save(); ctx.translate(left + itemIndex * groupWidth + groupWidth / 2, baseY + 16); ctx.rotate(-Math.PI / 5); ctx.fillStyle = "#475569"; ctx.font = "12px Arial"; ctx.textAlign = "right"; ctx.fillText(truncate(ctx, String(item[config.nameKey] || ""), 100), 0, 0); ctx.restore(); });
   } else if (config.type === "line") {
     const step = chartWidth / Math.max(1, data.length - 1);
-    config.series.forEach((series) => { ctx.beginPath(); data.forEach((item, index) => { const value = Number(item[series.key] || 0); const x = left + index * step; const y = baseY - (value / maxValue) * chartHeight; if (index === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); }); ctx.strokeStyle = series.color; ctx.lineWidth = 4; ctx.stroke(); data.forEach((item, index) => { const value = Number(item[series.key] || 0); const x = left + index * step; const y = baseY - (value / maxValue) * chartHeight; ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fillStyle = series.color; ctx.fill(); }); }); data.forEach((item, index) => { const x = left + index * step; ctx.save(); ctx.translate(x, baseY + 18); ctx.rotate(-Math.PI / 5); ctx.fillStyle = "#475569"; ctx.font = "12px Arial"; ctx.textAlign = "right"; ctx.fillText(truncate(ctx, String(item[config.nameKey] || ""), 100), 0, 0); ctx.restore(); });
+    config.series.forEach((series, seriesIndex) => { ctx.beginPath(); data.forEach((item, index) => { const value = Number(item[series.key] || 0); const x = left + index * step; const y = baseY - (value / maxValue) * chartHeight; if (index === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); }); ctx.strokeStyle = series.color; ctx.lineWidth = 4; ctx.stroke(); data.forEach((item, index) => { const value = Number(item[series.key] || 0); const x = left + index * step; const y = baseY - (value / maxValue) * chartHeight; ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fillStyle = series.color; ctx.fill(); if (value !== 0) { ctx.fillStyle = "#334155"; ctx.font = "800 10px Arial"; ctx.textAlign = "center"; ctx.fillText(`${new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 1 }).format(value)}${config.unit || ""}`, x, y - 9 - seriesIndex * 12); } }); }); data.forEach((item, index) => { const x = left + index * step; ctx.save(); ctx.translate(x, baseY + 18); ctx.rotate(-Math.PI / 5); ctx.fillStyle = "#475569"; ctx.font = "12px Arial"; ctx.textAlign = "right"; ctx.fillText(truncate(ctx, String(item[config.nameKey] || ""), 100), 0, 0); ctx.restore(); });
   } else {
     const cx = left + chartWidth / 2; const cy = top + chartHeight / 2; const radius = Math.min(chartWidth, chartHeight) / 2 - 45;
     const axes = data.map((item, index) => { const angle = -Math.PI / 2 + (index / Math.max(1, data.length)) * Math.PI * 2; const x = cx + Math.cos(angle) * radius; const y = cy + Math.sin(angle) * radius; return { item, angle, x, y }; });
     for (let level = 1; level <= 5; level += 1) { ctx.beginPath(); axes.forEach((axis, index) => { const x = cx + Math.cos(axis.angle) * radius * level / 5; const y = cy + Math.sin(axis.angle) * radius * level / 5; index === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); }); ctx.closePath(); ctx.strokeStyle = "#e2e8f0"; ctx.stroke(); }
     axes.forEach((axis) => { ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(axis.x, axis.y); ctx.strokeStyle = "#cbd5e1"; ctx.stroke(); ctx.fillStyle = "#475569"; ctx.font = "12px Arial"; ctx.textAlign = "center"; ctx.fillText(truncate(ctx, String(axis.item[config.nameKey] || ""), 120), axis.x, axis.y); });
-    config.series.forEach((series, seriesIndex) => { ctx.beginPath(); axes.forEach((axis, index) => { const value = Number(axis.item[series.key] || 0); const valueRadius = radius * (value / maxValue); const x = cx + Math.cos(axis.angle) * valueRadius; const y = cy + Math.sin(axis.angle) * valueRadius; index === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); }); ctx.closePath(); ctx.globalAlpha = 0.16; ctx.fillStyle = series.color; ctx.fill(); ctx.globalAlpha = 1; ctx.strokeStyle = series.color; ctx.lineWidth = seriesIndex === 0 ? 4 : 3; ctx.stroke(); });
+    config.series.forEach((series, seriesIndex) => { ctx.beginPath(); axes.forEach((axis, index) => { const value = Number(axis.item[series.key] || 0); const valueRadius = radius * (value / maxValue); const x = cx + Math.cos(axis.angle) * valueRadius; const y = cy + Math.sin(axis.angle) * valueRadius; index === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); }); ctx.closePath(); ctx.globalAlpha = 0.16; ctx.fillStyle = series.color; ctx.fill(); ctx.globalAlpha = 1; ctx.strokeStyle = series.color; ctx.lineWidth = seriesIndex === 0 ? 4 : 3; ctx.stroke(); axes.forEach((axis) => { const value = Number(axis.item[series.key] || 0); const valueRadius = radius * (value / maxValue); const x = cx + Math.cos(axis.angle) * valueRadius; const y = cy + Math.sin(axis.angle) * valueRadius; ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fillStyle = series.color; ctx.fill(); ctx.fillStyle = "#334155"; ctx.font = "800 11px Arial"; ctx.textAlign = "center"; ctx.fillText(`${new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 1 }).format(value)}${config.unit || ""}`, x, y - 10 - seriesIndex * 12); }); });
   }
   let legendX = 90; const legendY = height - 54; config.series.forEach((series) => { ctx.fillStyle = series.color; roundedRect(ctx, legendX, legendY - 12, 18, 12, 4); ctx.fill(); ctx.fillStyle = "#475569"; ctx.font = "13px Arial"; ctx.textAlign = "left"; ctx.fillText(series.label, legendX + 26, legendY); legendX += 34 + ctx.measureText(series.label).width; });
   return canvas;

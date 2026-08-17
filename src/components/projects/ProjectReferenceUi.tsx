@@ -1,6 +1,8 @@
 "use client";
 
-import type { ComponentType, ReactNode } from "react";
+"use client";
+
+import { useRef, type ComponentType, type ReactNode } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -15,6 +17,8 @@ import {
   HrStatusBadge,
   type HrAccent,
 } from "@/components/hr/HrReferenceUi";
+import DataExportMenu, { type ExportColumn } from "@/components/ui/DataExportMenu";
+import ProjectVisualActions from "@/components/projects/ProjectVisualActions";
 
 type AnyRow = Record<string, any>;
 
@@ -137,11 +141,11 @@ export function ProjectAlertsPanel({
           ))}
         </AlertColumn>
       </div>
-      <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {items.map((item) => {
           const accent = item.accent || (item.count ? "rose" : "emerald");
           return (
-            <article key={item.label} className="rounded-2xl border border-slate-200 bg-gradient-to-br from-sky-50/45 via-white to-indigo-50/35 p-4 shadow-sm dark:border-slate-600/60 dark:from-sky-900/15 dark:via-slate-700/75 dark:to-indigo-900/15">
+            <article key={item.label} className="rounded-2xl border border-slate-200 bg-gradient-to-br from-sky-50/45 via-white to-indigo-50/35 p-3.5 shadow-sm dark:border-slate-600/60 dark:from-sky-900/15 dark:via-slate-700/75 dark:to-indigo-900/15">
               <div className="flex items-start justify-between gap-3"><div className="flex min-w-0 items-center gap-3"><span className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${item.count ? "bg-rose-100 text-rose-700 dark:bg-rose-900/45 dark:text-rose-200" : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/45 dark:text-emerald-200"}`}><ShieldAlert className="h-4 w-4" /></span><p className="truncate text-sm font-black text-slate-950 dark:text-white">{item.label}</p></div><HrStatusBadge status={item.count ? "blocked" : "completed"} label={item.count ? "ACTION" : "OK"} /></div>
               <div className="mt-3 flex items-end justify-between gap-4"><p className="text-xs leading-5 text-slate-600 dark:text-slate-300">{item.impact} Action : {item.action}</p><span className={`text-2xl font-black ${accent === "rose" ? "text-rose-700 dark:text-rose-200" : accent === "amber" ? "text-amber-700 dark:text-amber-200" : "text-emerald-700 dark:text-emerald-200"}`}>{item.count}</span></div>
             </article>
@@ -152,7 +156,8 @@ export function ProjectAlertsPanel({
   );
 }
 
-export function ProjectHealthTable({ projects }: { projects: AnyRow[] }) {
+export function ProjectHealthTable({ projects, title = "Santé du portefeuille projets", description = "Planning, ressources, budget, risques, qualité et satisfaction consolidés sur une même échelle." }: { projects: AnyRow[]; title?: string; description?: string }) {
+  const captureRef = useRef<HTMLDivElement | null>(null);
   const rows = projects.map((project) => {
     const schedule = Number(project.spi || 0) ? Math.min(100, Number(project.spi) * 100) : Number(project.schedule_score || 60);
     const resources = Number(project.tace || 0) ? Math.max(0, 100 - Math.abs(85 - Number(project.tace)) * 2) : 60;
@@ -162,12 +167,22 @@ export function ProjectHealthTable({ projects }: { projects: AnyRow[] }) {
     const satisfaction = Math.min(100, Number(project.satisfaction_score || 0) * 20 || 60);
     return { project, schedule, resources, budget, risks, quality, satisfaction, overall: Math.round((schedule + resources + budget + risks + quality + satisfaction) / 6) };
   });
+  const exportColumns: ExportColumn<any>[] = [
+    { key: "project", label: "Projet", value: (row) => `${row.project.code} · ${row.project.name}` },
+    { key: "schedule", label: "Planning", value: (row) => Math.round(row.schedule) },
+    { key: "resources", label: "Ressources", value: (row) => Math.round(row.resources) },
+    { key: "budget", label: "Budget", value: (row) => Math.round(row.budget) },
+    { key: "risks", label: "Risques", value: (row) => Math.round(row.risks) },
+    { key: "quality", label: "Qualité", value: (row) => Math.round(row.quality) },
+    { key: "satisfaction", label: "Satisfaction", value: (row) => Math.round(row.satisfaction) },
+    { key: "overall", label: "Santé globale", value: (row) => row.overall },
+  ];
   return (
-    <div className="max-h-[334px] overflow-auto rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-600 dark:bg-slate-700/70">
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-600 dark:bg-slate-700/70"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-gradient-to-r from-sky-50/80 via-white to-indigo-50/70 px-4 py-3 dark:border-slate-600 dark:from-sky-900/20 dark:via-slate-700 dark:to-indigo-900/20"><div><h3 className="text-sm font-black text-slate-950 dark:text-white">{title}</h3><p className="mt-1 text-xs text-slate-500 dark:text-slate-300">{description}</p></div><div className="flex items-center gap-2"><DataExportMenu data={rows} columns={exportColumns} fileName="onepilot_sante_portefeuille" sheetName="Santé portefeuille" disabled={!rows.length} /><ProjectVisualActions targetRef={captureRef} fileName="onepilot-sante-portefeuille" label="le tableau de santé" /></div></div><div ref={captureRef} className="max-h-[334px] overflow-auto bg-white dark:bg-slate-700/70">
       <table className="min-w-[1500px] w-full border-separate border-spacing-0 text-sm">
         <thead className="sticky top-0 z-20 bg-sky-50 text-[10px] font-black uppercase tracking-wide text-slate-500 dark:bg-slate-600 dark:text-slate-200"><tr>{["Projet", "Planning", "Ressources", "Budget", "Risques", "Qualité", "Satisfaction", "Santé globale", "Lecture managériale"].map((label, index) => <th key={label} className={`border-b border-slate-200 px-4 py-3 text-left ${index === 0 ? "sticky left-0 z-30 bg-sky-50 dark:bg-slate-600" : ""}`}>{label}</th>)}</tr></thead>
         <tbody>{rows.map(({ project, overall, ...axes }) => <tr key={project.id || project.code} className="hover:bg-indigo-50/35 dark:hover:bg-indigo-900/20"><td className="sticky left-0 z-10 border-b border-slate-100 bg-white px-4 py-3 font-black text-indigo-700 dark:border-slate-600 dark:bg-slate-700 dark:text-indigo-200">{project.code} · {project.name}</td>{Object.values(axes).map((score, index) => <td key={index} className="border-b border-slate-100 px-4 py-3 dark:border-slate-600"><div className="flex items-center gap-2"><span className={`h-2.5 w-2.5 rounded-full ${score >= 75 ? "bg-emerald-400" : score >= 55 ? "bg-amber-400" : "bg-rose-500"}`} /><span className="font-bold text-slate-700 dark:text-slate-200">{Math.round(score)}/100</span></div></td>)}<td className="border-b border-slate-100 px-4 py-3 dark:border-slate-600"><HrStatusBadge status={overall >= 75 ? "completed" : overall >= 55 ? "in_progress" : "blocked"} label={`${overall}/100`} /></td><td className="border-b border-slate-100 px-4 py-3 text-xs font-semibold text-slate-600 dark:border-slate-600 dark:text-slate-300">{overall >= 75 ? "Projet maîtrisé : préserver la trajectoire." : overall >= 55 ? "Projet à surveiller : arbitrer les axes dégradés." : "Projet critique : plan de redressement et escalade requis."}</td></tr>)}</tbody>
       </table>
-    </div>
+    </div></section>
   );
 }

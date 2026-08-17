@@ -285,7 +285,7 @@ function RiskMatrixChart({ data }: { data: ChartRow[] }) {
   const probabilityLabels = ["Improbable", "Possible", "Probable", "Très probable"];
   const impactLabels: Record<number, string> = { 4: "Majeur", 3: "Sérieux", 2: "Moyen", 1: "Faible" };
   const tone = (score: number) => score >= 12 ? "bg-rose-500 text-white" : score >= 6 ? "bg-orange-400 text-white" : score >= 3 ? "bg-amber-300 text-slate-900" : "bg-emerald-400 text-slate-950";
-  return <div className="h-full overflow-auto p-2"><div className="grid min-w-[650px] grid-cols-[92px_repeat(4,minmax(120px,1fr))] gap-1.5"><span />{probabilityLabels.map((label) => <span key={label} className="pb-1 text-center text-xs font-bold text-slate-500 dark:text-slate-300">{label}</span>)}{impacts.flatMap((impact) => [<span key={`label-${impact}`} className="flex items-center text-xs font-bold text-slate-500 dark:text-slate-300">{impactLabels[impact]}</span>, ...probabilities.map((probability) => { const score = impact * probability; const count = counts.get(`${probability}-${impact}`) || 0; return <div key={`${probability}-${impact}`} className={`relative flex h-16 items-center justify-center rounded-xl ${tone(score)}`}><span className="text-lg font-black">{score}</span>{count > 0 && <span className="absolute right-2 top-2 rounded-full bg-white/85 px-2 py-0.5 text-[10px] font-black text-rose-700">{count} risque{count > 1 ? "s" : ""}</span>}</div>; })])}</div><div className="mt-3 flex flex-wrap gap-4 text-[10px] font-bold text-slate-500"><span>Emerald · faible</span><span>Amber · moyen</span><span>Orange · élevé</span><span>Rose · critique</span></div></div>;
+  return <div className="flex h-full flex-col justify-center p-1"><div className="grid grid-cols-[76px_repeat(4,minmax(0,1fr))] gap-1.5"><span />{probabilityLabels.map((label) => <span key={label} className="truncate pb-1 text-center text-[10px] font-bold text-slate-500 dark:text-slate-300" title={label}>{label}</span>)}{impacts.flatMap((impact) => [<span key={`label-${impact}`} className="flex items-center text-[10px] font-bold text-slate-500 dark:text-slate-300">{impactLabels[impact]}</span>, ...probabilities.map((probability) => { const score = impact * probability; const count = counts.get(`${probability}-${impact}`) || 0; return <div key={`${probability}-${impact}`} className={`flex h-11 items-center justify-center rounded-lg ${tone(score)}`} title={`${count} risque(s) · ${probabilityLabels[probability - 1]} × ${impactLabels[impact]}`}><span className="text-base font-black">{count}</span></div>; })])}</div><div className="mt-2 flex flex-wrap gap-3 text-[9px] font-bold text-slate-500"><span className="text-emerald-700">Vert · faible</span><span className="text-amber-700">Jaune · modéré</span><span className="text-orange-700">Orange · élevé</span><span className="text-rose-700">Rouge · critique</span></div></div>;
 }
 
 function ChartGrid({ children }: { children: React.ReactNode }) {
@@ -319,13 +319,14 @@ function AnalysisSection({
 
 function PortfolioAnalytics({ data }: { data: ProjectAnalyticsData }) {
   const projects = data.projects || [];
-  const health = data.health || [];
   const status = groupCount(projects, ["status"]);
   const satisfaction = satisfactionData(data.satisfaction || []);
   const load = assignmentPerformance(data.assignments || []);
   const orderedTotal = projects.reduce((total, project) => total + numberValue(project, "ordered_budget", "budget_amount"), 0);
   const consumedTotal = projects.reduce((total, project) => total + numberValue(project, "consumed_budget", "actual_cost_total"), 0);
   const criticalProjects = projects.filter((project) => numberValue(project, "critical_risks") > 0 || ["red", "blocked"].includes(textValue(project, "health_status", "status"))).length;
+  const satisfactionAverage = average(projects, "satisfaction_score") * 20;
+  const reportingAverage = average(projects, "reporting_reliability_percent", "data_reliability_score");
   const budgets = projects.slice(0, 14).map((project) => {
     const ordered = numberValue(
       project,
@@ -347,30 +348,32 @@ function PortfolioAnalytics({ data }: { data: ProjectAnalyticsData }) {
       remaining: Math.max(0, ordered - consumed),
     };
   });
-  const healthRows = health.length ? health : projects;
-  const healthData = [
-    ["Délais", ["schedule_score", "schedule_health"]],
-    ["Coûts", ["cost_score", "cost_health"]],
-    ["Périmètre", ["scope_score", "scope_health"]],
-    ["Qualité", ["quality_score", "quality_health"]],
-    ["Ressources", ["resource_score", "resource_health"]],
-    ["Risques", ["risk_score", "risk_health"]],
-  ].map(([name, keys]) => ({
-    name: String(name),
-    score: Math.round(average(healthRows, ...(keys as string[]))),
+  const healthScores = projects.map((project) => ({
+    planning: numberValue(project, "spi") ? Math.min(100, numberValue(project, "spi") * 100) : numberValue(project, "schedule_score") || 60,
+    resources: numberValue(project, "tace") ? Math.max(0, 100 - Math.abs(85 - numberValue(project, "tace")) * 2) : 60,
+    budget: numberValue(project, "cpi") ? Math.min(100, numberValue(project, "cpi") * 100) : numberValue(project, "cost_score") || 60,
+    risks: Math.max(0, 100 - numberValue(project, "critical_risks") * 25),
+    quality: Math.max(0, 100 - numberValue(project, "late_deliverables") * 10 - numberValue(project, "nonconformities") * 8),
+    satisfaction: Math.min(100, numberValue(project, "satisfaction_score") * 20 || 60),
   }));
+  const healthData = [
+    ["Planning", "planning"], ["Ressources", "resources"], ["Budget", "budget"],
+    ["Risques", "risks"], ["Qualité", "quality"], ["Satisfaction", "satisfaction"],
+  ].map(([name, key]) => ({ name, score: Math.round(healthScores.length ? healthScores.reduce((sum, row) => sum + Number(row[key as keyof typeof row]), 0) / healthScores.length : 0) }));
 
   return (
-    <AnalysisSection
-      count={projects.length}
-      description="Vue consolidée des statuts, engagements financiers et dimensions de santé du portefeuille."
-    >
-      <div className="mb-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="space-y-5">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <HrMetricCard icon={Target} label="Projets analysés" value={projects.length} description="Projets inclus dans le périmètre décisionnel courant." accent="indigo" />
         <HrMetricCard icon={CircleDollarSign} label="Budget commandé" value={`${Math.round(orderedTotal).toLocaleString("fr-FR")} €`} description={`${Math.round(consumedTotal).toLocaleString("fr-FR")} € consommés à date.`} accent="emerald" />
         <HrMetricCard icon={Activity} label="TACE moyen" value={load.length ? `${Math.round(load.reduce((total, row) => total + row.TACE, 0) / load.length)} %` : "—"} description="Occupation réelle corrélée à la capacité travaillable." accent="amber" />
         <HrMetricCard icon={ShieldAlert} label="Projets critiques" value={criticalProjects} description="Projets bloqués, rouges ou exposés à un risque critique." accent="rose" />
+        <HrMetricCard icon={CircleDollarSign} label="Budget consommé" value={`${Math.round(consumedTotal).toLocaleString("fr-FR")} €`} description="Coûts réels consolidés issus des suivis financiers projet." accent="indigo" />
+        <HrMetricCard icon={CircleDollarSign} label="Budget restant" value={`${Math.round(orderedTotal - consumedTotal).toLocaleString("fr-FR")} €`} description="Reste financier disponible sur les engagements commandés." accent="emerald" />
+        <HrMetricCard icon={Gauge} label="Satisfaction client" value={satisfactionAverage ? `${Math.round(satisfactionAverage)}/100` : "—"} description="Note moyenne des cinq critères de satisfaction mensuelle." accent="amber" />
+        <HrMetricCard icon={ListChecks} label="Fiabilité des données" value={reportingAverage ? `${Math.round(reportingAverage)} %` : "—"} description="Complétude et actualité des reportings servant aux arbitrages." accent="rose" />
       </div>
+      <div><h3 className="mb-3 text-sm font-black text-slate-950 dark:text-white">Trajectoire et santé du portefeuille</h3>
       <ChartGrid>
         <HrChartCard
           title="Répartition des projets par statut"
@@ -413,7 +416,7 @@ function PortfolioAnalytics({ data }: { data: ProjectAnalyticsData }) {
         </HrChartCard>
         <HrChartCard
           title="Radar de santé du portefeuille"
-          description="Scores moyens délais, coûts, périmètre, qualité, ressources et maîtrise des risques."
+          description="Scores moyens planning, ressources, budget, risques, qualité et satisfaction, identiques au tableau de santé."
           exportConfig={{
             type: "radar",
             data: healthData,
@@ -444,8 +447,8 @@ function PortfolioAnalytics({ data }: { data: ProjectAnalyticsData }) {
           {load.length ? <ResponsiveContainer width="100%" height="100%"><LineChart data={load}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis /><Tooltip /><Legend /><Line type="monotone" dataKey="planned" name="Charge prévisionnelle" stroke={colors.sky} strokeWidth={3} /><Line type="monotone" dataKey="TACE" name="TACE réel" stroke={colors.amber} strokeWidth={3} /></LineChart></ResponsiveContainer> : <EmptyChart label="Aucune donnée Staffing corrélée." />}
         </HrChartCard>
       </ChartGrid>
-      <div className="mt-5"><h3 className="mb-3 text-sm font-black text-slate-950 dark:text-white">Santé du portefeuille projets</h3><ProjectHealthTable projects={projects} /></div>
-    </AnalysisSection>
+      </div>
+    </div>
   );
 }
 
@@ -666,9 +669,12 @@ function assignmentPerformance(assignments: AnyRow[]) {
     };
     current.planned += numberValue(row, "planned_hours", "allocated_hours", "forecast_hours");
     current.actual += numberValue(row, "actual_hours", "worked_hours", "realized_hours");
-    current.capacity += numberValue(row, "capacity_hours", "available_hours");
-    current.potential += numberValue(row, "potential_capacity_hours", "max_capacity_hours", "capacity_hours");
-    current.productive += numberValue(row, "productive_hours", "billable_hours", "production_hours");
+    const planned = numberValue(row, "planned_hours", "allocated_hours", "forecast_hours");
+    const actual = numberValue(row, "actual_hours", "worked_hours", "realized_hours");
+    const capacity = numberValue(row, "capacity_hours", "available_hours") || planned;
+    current.capacity += capacity;
+    current.potential += numberValue(row, "potential_capacity_hours", "max_capacity_hours") || capacity * 1.12;
+    current.productive += numberValue(row, "productive_hours", "billable_hours", "production_hours") || actual;
     current.absence += numberValue(row, "absence_hours", "leave_hours");
     grouped.set(key, current);
   });
@@ -687,6 +693,18 @@ function assignmentPerformance(assignments: AnyRow[]) {
     });
 }
 
+function assignmentPerformanceByResource(assignments: AnyRow[]) {
+  const grouped = new Map<string, { planned: number; actual: number }>();
+  assignments.forEach((row) => {
+    const name = textValue(row, "resource_name", "employee_name", "assignee_name", "owner_name") || "Ressource non renseignée";
+    const current = grouped.get(name) || { planned: 0, actual: 0 };
+    current.planned += numberValue(row, "planned_hours", "allocated_hours", "forecast_hours");
+    current.actual += numberValue(row, "actual_hours", "worked_hours", "realized_hours", "productive_hours");
+    grouped.set(name, current);
+  });
+  return [...grouped.entries()].map(([name, value]) => ({ name, planned: Math.round(value.planned * 10) / 10, actual: Math.round(value.actual * 10) / 10, TACE: value.planned ? Math.round((value.actual / value.planned) * 1000) / 10 : 0 })).sort((a, b) => b.TACE - a.TACE);
+}
+
 function satisfactionData(rows: AnyRow[]) {
   const dimensions = [
     ["Écoute client", ["customer_listening_score", "listening_score"]],
@@ -701,7 +719,7 @@ function satisfactionData(rows: AnyRow[]) {
   }));
   const monthly = new Map<string, Record<string, number[]>>();
   rows.forEach((row) => {
-    const date = dateValue(row, "survey_date", "period_date", "month", "created_at");
+    const date = dateValue(row, "survey_month", "survey_date", "period_date", "month", "created_at");
     if (!date) return;
     const key = monthKey(date);
     const current = monthly.get(key) || Object.fromEntries(dimensions.map(([name]) => [name, []]));
@@ -742,10 +760,11 @@ function riskMatrix(rows: AnyRow[]) {
   return [...grouped.values()];
 }
 
-function PerformanceAnalytics({ data }: { data: ProjectAnalyticsData }) {
+function PerformanceAnalytics({ data, showMetrics = true }: { data: ProjectAnalyticsData; showMetrics?: boolean }) {
   const financial = monthlyFinancialData(data.financials || []);
   const deliveries = deliveryPerformance(data.deliverables || []);
   const load = assignmentPerformance(data.assignments || []);
+  const resourceLoad = assignmentPerformanceByResource(data.assignments || []);
   const risks = riskMatrix(data.risks || []);
   const satisfaction = satisfactionData(data.satisfaction || []);
   const latest = financial[financial.length - 1];
@@ -753,11 +772,8 @@ function PerformanceAnalytics({ data }: { data: ProjectAnalyticsData }) {
   const spi = latest && latest.VP > 0 ? latest.VA / latest.VP : 0;
 
   return (
-    <AnalysisSection
-      count={(data.projects || []).length}
-      description="Pilotage intégré valeur acquise, livrables, risques, capacité, rentabilité, satisfaction et performance ESN."
-    >
-      <div className="mb-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="space-y-5">
+      {showMetrics && <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <HrMetricCard
           icon={CircleDollarSign}
           label="Écart de coûts"
@@ -786,7 +802,8 @@ function PerformanceAnalytics({ data }: { data: ProjectAnalyticsData }) {
           description="Heures productives ÷ capacité travaillable, congés et absences exclus."
           accent="indigo"
         />
-      </div>
+      </div>}
+      <div><h3 className="mb-3 text-sm font-black text-slate-950 dark:text-white">Valeur acquise, délais, qualité, charge et finance</h3>
       <ChartGrid>
         <HrChartCard
           title="Courbe en S — VP, VA et CR"
@@ -833,7 +850,7 @@ function PerformanceAnalytics({ data }: { data: ProjectAnalyticsData }) {
           title="Profondeur de retard — DoD"
           description="Nombre cumulé de jours ouvrés de retard par rapport à la dernière date planifiée."
           exportConfig={{
-            type: "bar",
+            type: "matrix",
             data: deliveries,
             nameKey: "name",
             series: [{ key: "DoD", label: "DoD (jours)", color: colors.rose }],
@@ -859,7 +876,7 @@ function PerformanceAnalytics({ data }: { data: ProjectAnalyticsData }) {
           title="Matrice des risques 4 × 4"
           description="Positionnement selon probabilité (1 à 4) et impact chiffre d’affaires (1 à 4)."
           exportConfig={{
-            type: "bar",
+            type: "matrix",
             data: risks,
             nameKey: "name",
             series: [{ key: "count", label: "Risques", color: colors.rose }],
@@ -872,7 +889,7 @@ function PerformanceAnalytics({ data }: { data: ProjectAnalyticsData }) {
           )}
         </HrChartCard>
         <HrChartCard
-          title="Plan de charge et capacité"
+          title="Plan de charge"
           description="Charge prévisionnelle et réelle comparée aux capacités actuelle et potentielle."
           exportConfig={{
             type: "bar",
@@ -1018,8 +1035,12 @@ function PerformanceAnalytics({ data }: { data: ProjectAnalyticsData }) {
             <EmptyChart label="Aucune donnée de capacité productive disponible." />
           )}
         </HrChartCard>
+        <HrChartCard title="TACE par ressource" description="Occupation productive réelle par ressource, rapprochée des heures planifiées hors absences." exportConfig={{ type: "bar", data: resourceLoad, nameKey: "name", series: [{ key: "TACE", label: "TACE", color: colors.indigo }], unit: " %" }}>
+          {resourceLoad.length ? <ResponsiveContainer width="100%" height="100%"><BarChart data={resourceLoad}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis domain={[0, 120]} unit=" %" /><Tooltip /><Legend /><Bar dataKey="TACE" name="TACE par ressource" fill={colors.indigo} radius={[7, 7, 0, 0]} /></BarChart></ResponsiveContainer> : <EmptyChart label="Aucune affectation ressource disponible." />}
+        </HrChartCard>
       </ChartGrid>
-    </AnalysisSection>
+      </div>
+    </div>
   );
 }
 
@@ -1212,8 +1233,8 @@ export default function ProjectAnalyticsPanel({ mode, data }: ProjectAnalyticsPa
     [data],
   );
 
-  if (mode === "portfolio") return <div className="space-y-5"><PortfolioAnalytics data={normalized} /><PerformanceAnalytics data={normalized} /></div>;
+  if (mode === "portfolio") return <AnalysisSection count={(normalized.projects || []).length} description="Vue consolidée des statuts, budgets, valeur acquise, livrables, risques, capacité, satisfaction et santé du portefeuille."><PortfolioAnalytics data={normalized} /><PerformanceAnalytics data={normalized} showMetrics={false} /><div className="mt-5"><ProjectHealthTable projects={normalized.projects || []} /></div></AnalysisSection>;
   if (mode === "actions") return <ActionsAnalytics data={normalized} />;
-  if (mode === "performance") return <PerformanceAnalytics data={normalized} />;
+  if (mode === "performance") return <AnalysisSection count={(normalized.projects || []).length} description="Pilotage intégré valeur acquise, livrables, risques, capacité, rentabilité, satisfaction et performance ESN."><PerformanceAnalytics data={normalized} /></AnalysisSection>;
   return <PlanningAnalytics mode={mode} data={normalized} />;
 }

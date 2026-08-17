@@ -1,185 +1,66 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  CalendarDays,
-  ChevronLeft,
-  ChevronRight,
-  Diamond,
-  FolderKanban,
-} from "lucide-react";
+import { useMemo, useRef } from "react";
+import { AlertTriangle, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Diamond, FolderKanban, UserRound } from "lucide-react";
+
+import { HrStatusBadge } from "@/components/hr/HrReferenceUi";
+import ProjectVisualActions from "@/components/projects/ProjectVisualActions";
 
 type AnyRow = Record<string, any>;
-type Scale = "week" | "month" | "quarter";
-type Display = "projects" | "milestones";
 
-const DAY = 86_400_000;
-
-function noon(value: string | Date) {
-  const date = value instanceof Date ? new Date(value) : new Date(`${value.slice(0, 10)}T12:00:00`);
-  date.setHours(12, 0, 0, 0);
-  return date;
+function date(value?: string | null) {
+  if (!value) return "À définir";
+  return new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(`${String(value).slice(0, 10)}T12:00:00`));
 }
 
-function addDays(value: Date, days: number) {
-  const date = new Date(value);
-  date.setDate(date.getDate() + days);
-  return date;
+function status(value?: string | null) {
+  const key = String(value || "planned").toLowerCase();
+  return ({ planned: "Ouvert", open: "Ouvert", active: "En cours", in_progress: "En cours", completed: "Clos", closed: "Clos", blocked: "Bloqué", cancelled: "Annulé", on_hold: "En attente" } as Record<string, string>)[key] || "Ouvert";
 }
 
-function startOfMonth(value: Date) {
-  return new Date(value.getFullYear(), value.getMonth(), 1, 12);
+function statusTone(value?: string | null) {
+  const key = String(value || "planned").toLowerCase();
+  if (["completed", "closed"].includes(key)) return "completed";
+  if (["active", "in_progress", "on_hold"].includes(key)) return "in_progress";
+  if (key === "blocked") return "blocked";
+  if (key === "cancelled") return "archived";
+  return "planned";
 }
 
-function endOfMonth(value: Date) {
-  return new Date(value.getFullYear(), value.getMonth() + 1, 0, 12);
-}
-
-function differenceDays(start: Date, end: Date) {
-  return Math.round((noon(end).getTime() - noon(start).getTime()) / DAY);
-}
-
-function statusTone(status: string) {
-  if (["completed", "closed", "done"].includes(status)) return "from-emerald-300 to-emerald-400 text-emerald-950";
-  if (["blocked", "red"].includes(status)) return "from-rose-300 to-rose-400 text-rose-950";
-  if (["on_hold", "amber"].includes(status)) return "from-amber-200 to-amber-300 text-amber-950";
-  if (["active", "in_progress"].includes(status)) return "from-indigo-300 to-sky-300 text-indigo-950";
-  return "from-sky-200 to-sky-300 text-sky-950";
-}
-
-export default function ProjectTimelineBoard({
-  projects,
-  milestones,
-  onOpenProject,
-}: {
-  projects: AnyRow[];
-  milestones: AnyRow[];
-  onOpenProject?: (project: AnyRow) => void;
-}) {
+export default function ProjectTimelineBoard({ projects, milestones, onOpenProject }: { projects: AnyRow[]; milestones: AnyRow[]; onOpenProject?: (project: AnyRow) => void }) {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
-  const [scale, setScale] = useState<Scale>("month");
-  const [display, setDisplay] = useState<Display>("projects");
-  const today = useMemo(() => noon(new Date()), []);
-  const projectMap = useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects]);
+  const captureRef = useRef<HTMLDivElement | null>(null);
+  const rows = useMemo(() => projects.slice().sort((a, b) => String(a.end_date || "9999-12-31").localeCompare(String(b.end_date || "9999-12-31")) || String(a.code || "").localeCompare(String(b.code || ""), "fr", { numeric: true })), [projects]);
+  const milestonesByProject = useMemo(() => {
+    const map = new Map<string, AnyRow[]>();
+    milestones.filter((row) => !row.archived_at).forEach((row) => map.set(String(row.project_id), [...(map.get(String(row.project_id)) || []), row]));
+    return map;
+  }, [milestones]);
 
-  const range = useMemo(() => {
-    const dates = [
-      ...projects.flatMap((project) => [project.start_date, project.end_date]),
-      ...milestones.flatMap((milestone) => [milestone.planned_date, milestone.forecast_date, milestone.actual_date]),
-    ].filter(Boolean).map((value) => noon(String(value)));
-    const minimum = dates.length ? new Date(Math.min(...dates.map((date) => date.getTime()))) : addDays(today, -90);
-    const maximum = dates.length ? new Date(Math.max(...dates.map((date) => date.getTime()))) : addDays(today, 270);
-    return {
-      start: addDays(startOfMonth(minimum), -31),
-      end: addDays(endOfMonth(maximum), 31),
-    };
-  }, [milestones, projects, today]);
-
-  const pixelPerDay = scale === "week" ? 18 : scale === "month" ? 6 : 2.6;
-  const timelineWidth = Math.max(1100, (differenceDays(range.start, range.end) + 1) * pixelPerDay);
-  const todayLeft = differenceDays(range.start, today) * pixelPerDay;
-
-  const months = useMemo(() => {
-    const result: Array<{ key: string; label: string; left: number; width: number }> = [];
-    let cursor = startOfMonth(range.start);
-    while (cursor <= range.end) {
-      const monthEnd = endOfMonth(cursor);
-      const visibleStart = cursor < range.start ? range.start : cursor;
-      const visibleEnd = monthEnd > range.end ? range.end : monthEnd;
-      result.push({
-        key: `${cursor.getFullYear()}-${cursor.getMonth()}`,
-        label: new Intl.DateTimeFormat("fr-FR", { month: "short", year: "numeric" }).format(cursor),
-        left: differenceDays(range.start, visibleStart) * pixelPerDay,
-        width: Math.max(28, (differenceDays(visibleStart, visibleEnd) + 1) * pixelPerDay),
-      });
-      cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1, 12);
-    }
-    return result;
-  }, [pixelPerDay, range.end, range.start]);
-
-  const rows = useMemo(() => {
-    if (display === "projects") {
-      return projects.map((project) => ({ kind: "project" as const, row: project, project }));
-    }
-    return milestones
-      .filter((milestone) => !milestone.archived_at)
-      .sort((a, b) => String(a.planned_date || "").localeCompare(String(b.planned_date || "")))
-      .map((milestone) => ({ kind: "milestone" as const, row: milestone, project: projectMap.get(milestone.project_id) }));
-  }, [display, milestones, projectMap, projects]);
-
-  function focusToday() {
-    const scroller = scrollerRef.current;
-    if (!scroller) return;
-    scroller.scrollTo({ left: Math.max(0, todayLeft - scroller.clientWidth / 2), behavior: "smooth" });
-  }
-
-  useEffect(() => {
-    const frame = window.requestAnimationFrame(focusToday);
-    return () => window.cancelAnimationFrame(frame);
-  }, [scale, todayLeft]);
-
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm dark:border-slate-600 dark:bg-slate-700">
-            <button type="button" onClick={() => setDisplay("projects")} className={`inline-flex h-8 items-center gap-2 rounded-lg px-3 text-xs font-black ${display === "projects" ? "bg-indigo-600 text-white" : "text-slate-500"}`}><FolderKanban className="h-3.5 w-3.5" />Projets</button>
-            <button type="button" onClick={() => setDisplay("milestones")} className={`inline-flex h-8 items-center gap-2 rounded-lg px-3 text-xs font-black ${display === "milestones" ? "bg-emerald-600 text-white" : "text-slate-500"}`}><Diamond className="h-3.5 w-3.5" />Jalons</button>
-          </div>
-          <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm dark:border-slate-600 dark:bg-slate-700">
-            {(["week", "month", "quarter"] as Scale[]).map((item) => (
-              <button key={item} type="button" onClick={() => setScale(item)} className={`h-8 rounded-lg px-3 text-xs font-black ${scale === item ? "bg-amber-400 text-amber-950" : "text-slate-500"}`}>
-                {item === "week" ? "Semaines" : item === "month" ? "Mois" : "Trimestres"}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <button type="button" onClick={() => scrollerRef.current?.scrollBy({ left: -520, behavior: "smooth" })} className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm"><ChevronLeft className="h-4 w-4" /></button>
-          <button type="button" onClick={focusToday} className="inline-flex h-9 items-center gap-2 rounded-xl border border-sky-200 bg-white px-3 text-xs font-black text-sky-700 shadow-sm"><CalendarDays className="h-4 w-4" />Aujourd’hui</button>
-          <button type="button" onClick={() => scrollerRef.current?.scrollBy({ left: 520, behavior: "smooth" })} className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm"><ChevronRight className="h-4 w-4" /></button>
-        </div>
-      </div>
-
-      <div ref={scrollerRef} className="max-h-[430px] overflow-auto rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-600 dark:bg-slate-700">
-        <div className="relative min-w-max" style={{ width: 340 + timelineWidth }}>
-          <div className="sticky top-0 z-30 flex h-12 border-b border-slate-200 bg-slate-50 text-xs font-black uppercase tracking-wide text-slate-500 dark:border-slate-600 dark:bg-slate-600 dark:text-slate-200">
-            <div className="sticky left-0 z-40 flex w-[340px] shrink-0 items-center border-r border-slate-200 bg-inherit px-4">{display === "projects" ? "Projet / programme" : "Projet / jalon"}</div>
-            <div className="relative h-full" style={{ width: timelineWidth }}>
-              {months.map((month) => <div key={month.key} className="absolute inset-y-0 flex items-center justify-center border-r border-slate-200" style={{ left: month.left, width: month.width }}>{month.label}</div>)}
-            </div>
-          </div>
-
-          {rows.map(({ kind, row, project }) => {
-            const start = noon(String(kind === "project" ? row.start_date || range.start.toISOString() : row.forecast_date || row.planned_date));
-            const end = noon(String(kind === "project" ? row.end_date || row.start_date || range.end.toISOString() : row.forecast_date || row.planned_date));
-            const left = Math.max(0, differenceDays(range.start, start) * pixelPerDay);
-            const width = Math.max(12, (differenceDays(start, end) + 1) * pixelPerDay);
-            const late = end < today && !["completed", "closed", "done", "cancelled"].includes(String(row.status));
-            return (
-              <button key={`${kind}-${row.id}`} type="button" onClick={() => project && onOpenProject?.(project)} className="group flex h-14 w-full border-b border-slate-100 text-left transition hover:bg-indigo-50/30 dark:border-slate-600 dark:hover:bg-indigo-900/20">
-                <div className="sticky left-0 z-20 flex w-[340px] shrink-0 items-center gap-3 border-r border-slate-200 bg-white px-4 group-hover:bg-indigo-50/80 dark:border-slate-600 dark:bg-slate-700 dark:group-hover:bg-slate-600">
-                  <span className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${kind === "project" ? "bg-indigo-50 text-indigo-700" : "bg-emerald-50 text-emerald-700"}`}>{kind === "project" ? <FolderKanban className="h-4 w-4" /> : <Diamond className="h-4 w-4" />}</span>
-                  <span className="min-w-0"><span className="block truncate text-xs font-black text-slate-900 dark:text-white">{project?.code || row.code} · {kind === "project" ? row.name : row.name}</span><span className="mt-0.5 block truncate text-[11px] text-slate-500 dark:text-slate-300">{kind === "project" ? row.client_name || row.description : project?.name || "Projet non renseigné"}</span></span>
-                </div>
-                <div className="relative h-14" style={{ width: timelineWidth }}>
-                  {months.map((month) => <span key={month.key} className="absolute inset-y-0 border-r border-slate-100 dark:border-slate-600" style={{ left: month.left + month.width }} />)}
-                  {todayLeft >= 0 && todayLeft <= timelineWidth && <span className="absolute inset-y-0 z-10 w-0.5 bg-rose-400" style={{ left: todayLeft }} title="Aujourd’hui" />}
-                  {kind === "project" ? (
-                    <span className={`absolute top-3 flex h-8 items-center overflow-hidden rounded-lg bg-gradient-to-r px-2 text-[10px] font-black shadow-sm ${late ? "from-rose-300 to-rose-400 text-rose-950" : statusTone(String(row.status))}`} style={{ left, width }} title={`${row.code} · ${row.name}`}>
-                      <span className="relative z-10 truncate">{Number(row.progress_percent || 0)} %</span>
-                      <span className="absolute inset-y-0 left-0 bg-white/35" style={{ width: `${Math.max(0, Math.min(100, Number(row.progress_percent || 0)))}%` }} />
-                    </span>
-                  ) : (
-                    <span className={`absolute top-[18px] h-5 w-5 rotate-45 rounded-[3px] border-2 border-white shadow ${late ? "bg-rose-400" : row.critical ? "bg-amber-400" : "bg-emerald-300"}`} style={{ left: left - 10 }} title={`${row.code} · ${row.name}`} />
-                  )}
-                </div>
-              </button>
-            );
-          })}
-          {!rows.length && <div className="p-8 text-center text-sm font-bold text-slate-500">Aucune donnée datée sur ce périmètre.</div>}
-        </div>
+  return <div ref={captureRef} className="space-y-4 bg-white p-1 fullscreen:overflow-auto fullscreen:p-5 dark:bg-slate-800">
+    <div className="flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-2"><button type="button" onClick={() => scrollerRef.current?.scrollBy({ left: -720, behavior: "smooth" })} className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm"><ChevronLeft className="h-4 w-4" /></button><button type="button" onClick={() => scrollerRef.current?.scrollTo({ left: 0, behavior: "smooth" })} className="inline-flex h-9 items-center gap-2 rounded-xl border border-sky-200 bg-white px-3 text-xs font-black text-sky-700 shadow-sm"><CalendarDays className="h-4 w-4" />Trajectoire complète</button><button type="button" onClick={() => scrollerRef.current?.scrollBy({ left: 720, behavior: "smooth" })} className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm"><ChevronRight className="h-4 w-4" /></button></div><ProjectVisualActions targetRef={captureRef} fileName="onepilot-timeline-portefeuille" label="la timeline" /></div>
+    <div ref={scrollerRef} className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-600 dark:bg-slate-800">
+      <div className="relative min-w-max bg-gradient-to-b from-sky-50/35 via-white to-indigo-50/25 px-12 py-8 dark:from-sky-950/20 dark:via-slate-800 dark:to-indigo-950/20" style={{ width: Math.max(1180, rows.length * 300 + 120), height: 620 }}>
+        <div className="absolute left-20 right-20 top-[300px] h-2 -translate-y-1/2 rounded-full bg-gradient-to-r from-sky-300 via-indigo-300 to-emerald-300 shadow-inner" />
+        <div className="absolute right-10 top-[300px] -translate-y-1/2 border-y-[16px] border-l-[28px] border-y-transparent border-l-emerald-300" />
+        {rows.map((project, index) => {
+          const above = index % 2 === 0;
+          const projectMilestones = (milestonesByProject.get(String(project.id)) || []).slice().sort((a, b) => String(a.forecast_date || a.planned_date || "").localeCompare(String(b.forecast_date || b.planned_date || "")));
+          const nextMilestone = projectMilestones.find((row) => !row.actual_date) || projectMilestones[0];
+          const late = project.end_date && new Date(`${project.end_date}T12:00:00`) < new Date() && Number(project.progress_percent || 0) < 100;
+          const left = 80 + index * 300;
+          return <div key={project.id} className="absolute" style={{ left, top: above ? 36 : 340, width: 250 }}>
+            <button type="button" onClick={() => onOpenProject?.(project)} className={`group h-[248px] w-full overflow-hidden rounded-2xl border bg-white text-left shadow-md transition hover:-translate-y-1 hover:border-indigo-300 hover:shadow-xl dark:bg-slate-700 ${late || project.status === "blocked" ? "border-rose-200" : "border-slate-200 dark:border-slate-600"}`}>
+              <div className={`h-2 ${project.status === "completed" ? "bg-emerald-400" : project.status === "blocked" ? "bg-rose-400" : project.status === "cancelled" ? "bg-slate-400" : project.status === "active" ? "bg-amber-300" : "bg-sky-300"}`} />
+              <div className="p-4"><div className="flex items-start justify-between gap-3"><span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-700 dark:bg-indigo-900/35 dark:text-indigo-200"><FolderKanban className="h-4 w-4" /></span><HrStatusBadge status={statusTone(project.status)} label={status(project.status)} /></div><h3 className="mt-3 truncate text-sm font-black text-slate-950 dark:text-white">{project.code} · {project.name}</h3><p className="mt-1 truncate text-xs font-semibold text-slate-500 dark:text-slate-300">{project.client_name || "Projet interne"}</p><div className="mt-3 grid grid-cols-2 gap-2 text-[10px]"><span className="rounded-lg bg-sky-50 px-2 py-1.5 font-bold text-sky-700 dark:bg-sky-900/25 dark:text-sky-200">{date(project.start_date)}</span><span className="rounded-lg bg-indigo-50 px-2 py-1.5 text-right font-bold text-indigo-700 dark:bg-indigo-900/25 dark:text-indigo-200">{date(project.end_date)}</span></div><div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-600"><span className="block h-full rounded-full bg-indigo-500" style={{ width: `${Math.max(0, Math.min(100, Number(project.progress_percent || 0)))}%` }} /></div><div className="mt-1 flex justify-between text-[10px] font-black text-slate-500"><span>Avancement</span><span>{Math.round(Number(project.progress_percent || 0))} %</span></div><div className="mt-2 flex gap-1.5 text-[9px] font-black"><span className="rounded-full bg-amber-50 px-2 py-1 text-amber-700">{Number(project.risk_count || project.critical_risks || 0)} risque(s)</span><span className="rounded-full bg-rose-50 px-2 py-1 text-rose-700">{Number(project.nonconformities || 0)} NC</span><span className="rounded-full bg-sky-50 px-2 py-1 text-sky-700">{Number(project.action_count || 0)} action(s)</span></div><div className="mt-2 space-y-1 border-t border-slate-100 pt-2 dark:border-slate-600"><p className="flex items-center gap-2 truncate text-[10px] font-bold text-slate-600 dark:text-slate-200"><UserRound className="h-3.5 w-3.5 text-indigo-500" />{project.manager_name || "Responsable à affecter"}</p><p className="flex items-center gap-2 truncate text-[10px] font-bold text-slate-600 dark:text-slate-200"><Diamond className="h-3.5 w-3.5 text-emerald-500" />{nextMilestone ? `${nextMilestone.code || "Jalon"} · ${date(nextMilestone.forecast_date || nextMilestone.planned_date)}` : "Aucun jalon renseigné"}</p></div></div>
+            </button>
+            <span className={`absolute left-1/2 w-0.5 -translate-x-1/2 ${late ? "bg-rose-400" : "bg-indigo-300"}`} style={{ top: above ? 248 : -40, height: above ? 16 : 40 }} />
+            <span className={`absolute left-1/2 h-5 w-5 -translate-x-1/2 rotate-45 rounded-[4px] border-2 border-white shadow ${late ? "bg-rose-400" : project.status === "completed" ? "bg-emerald-400" : "bg-indigo-400"}`} style={{ top: above ? 256 : -50 }} />
+          </div>;
+        })}
+        {!rows.length && <div className="absolute inset-0 flex items-center justify-center"><p className="rounded-2xl border border-dashed border-slate-300 bg-white px-8 py-6 text-sm font-bold text-slate-500">Aucun projet daté à positionner sur la timeline.</p></div>}
+        <div className="absolute bottom-5 left-12 right-12 flex flex-wrap gap-4 rounded-xl border border-slate-200 bg-white/95 px-4 py-2 text-[10px] font-bold text-slate-500 shadow-sm"><span className="inline-flex items-center gap-1.5"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />Clos</span><span className="inline-flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5 text-amber-500" />En cours</span><span className="inline-flex items-center gap-1.5"><AlertTriangle className="h-3.5 w-3.5 text-rose-500" />Retard ou blocage</span><span className="inline-flex items-center gap-1.5"><Diamond className="h-3.5 w-3.5 text-indigo-500" />Position temporelle</span><span className="ml-auto">Ordre croissant des dates de fin projet</span></div>
       </div>
     </div>
-  );
+  </div>;
 }
