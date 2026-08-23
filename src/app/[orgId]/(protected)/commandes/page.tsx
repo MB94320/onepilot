@@ -5,11 +5,12 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { 
   Plus, Edit, Trash2, Building2, TrendingUp, DollarSign, 
-  Download, CalendarClock, ShoppingCart, Briefcase, BrainCircuit, Target
+  Download, CalendarClock, ShoppingCart, Briefcase, BrainCircuit, Target, X
 } from "lucide-react";
 import * as XLSX from 'xlsx';
 import CommandeForm from "./CommandeForm";
 import Link from "next/link";
+import PageTutorial from "@/components/ui/PageTutorial";
 
 const supabase = createClient();
 
@@ -191,7 +192,7 @@ export default function CommandesPage({ params }: { params: Promise<{ orgId: str
   }, [commandes, viewMode]);
 
   return (
-    <div className="space-y-3 pt-0 px-2 font-sans text-[11px] text-slate-600 dark:text-slate-400 select-none">
+    <div className="onepilot-business-page space-y-5 px-2 font-sans text-sm text-slate-600 dark:text-slate-300">
       
       {/* HEADER */}
       <div className="flex justify-between items-center h-8">
@@ -203,6 +204,8 @@ export default function CommandesPage({ params }: { params: Promise<{ orgId: str
           </button>
         </div>
       </div>
+
+      <PageTutorial title="Piloter les commandes clients et fournisseurs" description={"Suivre engagements clients, achats fournisseurs, échéances, livraison et facturation depuis les opportunités et offres validées.\nLes montants alimentent projets et finance sans ressaisie, avec contrôles de cohérence entre commandé, livré, facturé et encaissé."} objectives={["Maîtriser les engagements et les échéances contractuelles.", "Rapprocher automatiquement commerce, projet, achats et finance."]} steps={[{ title: "Créer", description: "Reprendre l’offre ou saisir une commande autonome si le module Commerce est absent." }, { title: "Suivre", description: "Contrôler validation, livraison, écarts et justificatifs." }, { title: "Rapprocher", description: "Alimenter production, facturation, encaissement et rentabilité projet." }]} recommendations={["Tracer toute modification de montant ou d’échéance.", "Alerter sur les commandes non validées et livraisons en retard."]} />
 
       {/* KPI WIDGETS RESTAURÉS AVEC COMPATIBILITÉ DARK MODE */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -233,6 +236,7 @@ export default function CommandesPage({ params }: { params: Promise<{ orgId: str
           <select value={filters.orderNumber} onChange={e => setFilters({...filters, orderNumber: e.target.value})} className="h-6 px-1.5 text-[10px] bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded text-slate-600 dark:text-slate-400 focus:outline-none"><option value="Tous">N° Commande</option>{filterOrderNumbers.map((c: any) => <option key={c} value={c}>{c}</option>)}</select>
           <select value={filters.statut} onChange={e => setFilters({...filters, statut: e.target.value})} className="h-6 px-1.5 text-[10px] bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded text-slate-600 dark:text-slate-400 focus:outline-none"><option value="Tous">Statut</option>{Object.entries(STATUT_LABELS).map(([k,v]) => <option key={k} value={k}>{v}</option>)}</select>
         </div>
+        {(searchText.trim() || Object.values(filters).some((value) => value !== "Tous")) && <div className="flex justify-end"><button type="button" onClick={() => { setSearchText(""); setFilters({ oppNumber: "Tous", entityName: "Tous", orderNumber: "Tous", statut: "Tous" }); }} className="inline-flex h-9 items-center gap-2 rounded-lg px-3 text-xs font-semibold text-slate-500 hover:bg-slate-100"><X className="h-4 w-4" />Réinitialiser les filtres</button></div>}
       </div>
 
       {/* CARDS PRÉDICTIVES RESTAURÉES COMPLÈTES AVEC DARK MODE */}

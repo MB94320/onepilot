@@ -13,24 +13,85 @@ function downloadCanvas(canvas: HTMLCanvasElement, fileName: string) {
   link.click();
 }
 
-function textFallback(target: HTMLElement, label: string) {
-  const lines = target.innerText.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+function canvasContext(width: number, height: number) {
   const canvas = document.createElement("canvas");
-  canvas.width = 1800;
-  canvas.height = Math.max(480, Math.min(12000, 120 + lines.length * 28));
+  canvas.width = Math.max(640, Math.min(12000, width));
+  canvas.height = Math.max(360, Math.min(12000, height));
   const context = canvas.getContext("2d");
   if (!context) throw new Error("Canvas indisponible");
   context.fillStyle = "#ffffff";
   context.fillRect(0, 0, canvas.width, canvas.height);
+  return { canvas, context };
+}
+
+function wrapText(context: CanvasRenderingContext2D, value: string, width: number) {
+  const words = value.trim().split(/\s+/);
+  const lines: string[] = [];
+  let line = "";
+  words.forEach((word) => {
+    const candidate = line ? `${line} ${word}` : word;
+    if (context.measureText(candidate).width > width && line) {
+      lines.push(line);
+      line = word;
+    } else line = candidate;
+  });
+  if (line) lines.push(line);
+  return lines.length ? lines : ["—"];
+}
+
+function tableFallback(target: HTMLElement, label: string) {
+  const table = target.querySelector("table");
+  if (!table) return null;
+  const rows = Array.from(table.querySelectorAll("tr")).slice(0, 250);
+  const columnCount = Math.max(1, ...rows.map((row) => row.children.length));
+  const columnWidth = 220;
+  const rowHeight = 58;
+  const titleHeight = 76;
+  const { canvas, context } = canvasContext(columnCount * columnWidth + 48, titleHeight + rows.length * rowHeight + 30);
   context.fillStyle = "#0f172a";
-  context.font = "700 26px Arial";
-  context.fillText(label, 40, 48);
-  context.font = "14px Arial";
-  lines.slice(0, 400).forEach((line, index) => {
-    context.fillStyle = index % 2 ? "#334155" : "#0f172a";
-    context.fillText(line.slice(0, 210), 40, 92 + index * 28);
+  context.font = "700 24px Arial";
+  context.fillText(label, 24, 42);
+  rows.forEach((row, rowIndex) => {
+    const cells = Array.from(row.children);
+    cells.forEach((cell, columnIndex) => {
+      const x = 24 + columnIndex * columnWidth;
+      const y = titleHeight + rowIndex * rowHeight;
+      context.fillStyle = rowIndex === 0 ? "#f0f9ff" : rowIndex % 2 ? "#ffffff" : "#f8fafc";
+      context.fillRect(x, y, columnWidth, rowHeight);
+      context.strokeStyle = "#cbd5e1";
+      context.strokeRect(x, y, columnWidth, rowHeight);
+      context.fillStyle = rowIndex === 0 ? "#475569" : "#0f172a";
+      context.font = rowIndex === 0 ? "700 12px Arial" : "13px Arial";
+      wrapText(context, (cell.textContent || "—").replace(/\s+/g, " "), columnWidth - 18).slice(0, 3).forEach((line, lineIndex) => context.fillText(line, x + 9, y + 19 + lineIndex * 16));
+    });
   });
   return canvas;
+}
+
+async function svgFallback(target: HTMLElement, label: string) {
+  const svg = [...target.querySelectorAll("svg")].sort((a, b) => b.getBoundingClientRect().width * b.getBoundingClientRect().height - a.getBoundingClientRect().width * a.getBoundingClientRect().height)[0];
+  if (!svg) return null;
+  const clone = svg.cloneNode(true) as SVGElement;
+  clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  const bounds = svg.getBoundingClientRect();
+  const width = Math.max(900, Math.ceil(bounds.width));
+  const height = Math.max(420, Math.ceil(bounds.height));
+  clone.setAttribute("width", String(width));
+  clone.setAttribute("height", String(height));
+  const blob = new Blob([new XMLSerializer().serializeToString(clone)], { type: "image/svg+xml;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  try {
+    const image = new Image();
+    await new Promise<void>((resolve, reject) => { image.onload = () => resolve(); image.onerror = () => reject(new Error("SVG illisible")); image.src = url; });
+    const result = canvasContext(width + 48, height + 92);
+    result.context.fillStyle = "#0f172a";
+    result.context.font = "700 24px Arial";
+    result.context.fillText(label, 24, 40);
+    result.context.drawImage(image, 24, 68, width, height);
+    return result.canvas;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }
 
 async function renderTarget(target: HTMLElement, label: string) {
@@ -63,7 +124,11 @@ async function renderTarget(target: HTMLElement, label: string) {
       },
     } as Parameters<typeof html2canvas>[1]);
   } catch {
-    return textFallback(target, label);
+    const table = tableFallback(target, label);
+    if (table) return table;
+    const svg = await svgFallback(target, label);
+    if (svg) return svg;
+    throw new Error("La représentation visuelle ne peut pas être générée.");
   }
 }
 
@@ -80,7 +145,13 @@ export default function ProjectVisualActions({ targetRef, fileName, label }: { t
   async function copyVisual() {
     const target = targetRef.current;
     if (!target) return;
-    const canvas = await renderTarget(target, label);
+    let canvas: HTMLCanvasElement;
+    try {
+      canvas = await renderTarget(target, label);
+    } catch {
+      setStatus("idle");
+      return;
+    }
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png", 1));
     if (!blob) return;
     if (navigator.clipboard?.write && typeof ClipboardItem !== "undefined") {

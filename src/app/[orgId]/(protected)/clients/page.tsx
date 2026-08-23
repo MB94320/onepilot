@@ -3,9 +3,10 @@
 import { use, useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
-import { Download, Edit, Trash2, Building2, Users } from "lucide-react";
+import { Download, Edit, Trash2, Building2, Users, X } from "lucide-react";
 import * as XLSX from 'xlsx';
 import ClientForm from "./ClientForm";
+import PageTutorial from "@/components/ui/PageTutorial";
 
 const supabase = createClient();
 
@@ -96,7 +97,7 @@ export default function ClientsPage({ params }: { params: Promise<{ orgId: strin
   });
 
   return (
-    <div className="space-y-3 pt-0 px-2 font-sans text-[11px] text-slate-600 dark:text-slate-400 select-none">
+    <div className="onepilot-business-page space-y-5 px-2 font-sans text-sm text-slate-600 dark:text-slate-300">
       
       {/* HEADER */}
       <div className="flex justify-between items-center h-8">
@@ -106,6 +107,8 @@ export default function ClientsPage({ params }: { params: Promise<{ orgId: strin
           <button onClick={openCreate} className="h-6 px-2.5 bg-blue-600 text-white font-medium rounded text-[10px] hover:bg-blue-700 transition-colors">+ Nouveau client</button>
         </div>
       </div>
+
+      <PageTutorial title="Administrer le référentiel clients" description={"Centraliser entreprises, contacts, rôles, secteurs et coordonnées dans un référentiel partagé par Commerce, Projets et Finance.\nUne information client modifiée ici reste unique, historisée et réutilisable dans les opportunités, offres, commandes, projets et factures."} objectives={["Éviter les doublons et fiabiliser les rattachements.", "Donner une vue client cohérente à tous les métiers autorisés."]} steps={[{ title: "Identifier", description: "Créer ou retrouver l’entreprise avant toute nouvelle saisie." }, { title: "Compléter", description: "Renseigner contacts, rôles, services et coordonnées utiles." }, { title: "Exploiter", description: "Réutiliser le client dans les flux commerciaux, projets et financiers." }]} recommendations={["Contrôler les doublons avant création.", "Limiter les modifications sensibles aux rôles autorisés."]} />
 
       {/* KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -131,6 +134,7 @@ export default function ClientsPage({ params }: { params: Promise<{ orgId: strin
           <select value={filters.role} onChange={e => setFilters({...filters, role: e.target.value})} className="h-6 px-1.5 text-[10px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded text-slate-600 dark:text-slate-400"><option value="all">Rôle</option>{roles.map(r => r !== "all" && <option key={r} value={r}>{r}</option>)}</select>
           <select value={filters.service} onChange={e => setFilters({...filters, service: e.target.value})} className="h-6 px-1.5 text-[10px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded text-slate-600 dark:text-slate-400"><option value="all">Service</option>{services.map(s => s !== "all" && <option key={s} value={s}>{s}</option>)}</select>
         </div>
+        {(searchText.trim() || Object.values(filters).some((value) => value !== "all")) && <div className="flex justify-end"><button type="button" onClick={() => { setSearchText(""); setFilters({ name: "all", sector: "all", country: "all", city: "all", contact: "all", service: "all", role: "all" }); }} className="inline-flex h-9 items-center gap-2 rounded-lg px-3 text-xs font-semibold text-slate-500 hover:bg-slate-100"><X className="h-4 w-4" />Réinitialiser les filtres</button></div>}
       </div>
 
       {/* TABLEAU COMPACT AVEC SCROLL HORIZONTAL ET COLONNE ADRESSE MAIL AJOUTÉE */}

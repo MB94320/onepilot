@@ -158,8 +158,8 @@ a {
   }
 }
 
-/* Référentiel visuel commun aux pages Projets, aligné sur les tableaux RH validés. */
-.project-module table {
+/* Référentiel visuel transversal ONEPILOT : RH, Projets, Commerce et Administration. */
+main table {
   border-collapse: separate;
   border-spacing: 0;
   color: #334155;
@@ -169,7 +169,7 @@ a {
   line-height: 1rem;
 }
 
-.project-module table thead {
+main table thead {
   background: #f0f9ff;
   color: #64748b;
   font-size: 0.625rem;
@@ -178,29 +178,58 @@ a {
   text-transform: uppercase;
 }
 
-.project-module table th,
-.project-module table td {
+main table thead {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+main table th:first-child,
+main table td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 10;
+  background-color: #ffffff;
+}
+
+main table thead th:first-child {
+  z-index: 30;
+  background-color: #f0f9ff;
+}
+
+.onepilot-business-page .overflow-x-auto {
+  max-height: 334px;
+  overflow: auto;
+}
+
+.onepilot-business-page > div,
+.onepilot-business-page > section {
+  border-radius: 1rem;
+}
+
+main table th,
+main table td {
   border-bottom: 1px solid #f1f5f9;
   padding: 0.75rem 1rem;
   vertical-align: middle;
 }
 
-.project-module table tbody tr:hover td {
+main table tbody tr:hover td {
   background-color: #eef2ff;
 }
 
-.project-module table tbody td:not(:first-child):not(:last-child) {
+main table tbody td:not(:first-child):not(:last-child) {
   font-weight: 400;
 }
 
-.project-module :fullscreen {
+:fullscreen {
   background: #ffffff !important;
   color: #0f172a !important;
   overflow: auto !important;
   padding: 1.25rem !important;
 }
 
-.project-module :fullscreen .project-visual-actions {
+:fullscreen .project-visual-actions {
   display: flex !important;
 }
 
@@ -215,4 +244,21 @@ a {
 .project-visual-clone * {
   animation: none !important;
   transition: none !important;
+}
+
+:fullscreen .dark\:bg-slate-700,
+:fullscreen .dark\:bg-slate-700\/70,
+:fullscreen .dark\:bg-slate-800\/70 {
+  background-color: #ffffff !important;
+}
+
+main table th:last-child,
+main table td:last-child {
+  white-space: nowrap;
+}
+
+main table td:last-child button,
+main table td:last-child a {
+  font-size: 0.75rem;
+  font-weight: 700;
 }

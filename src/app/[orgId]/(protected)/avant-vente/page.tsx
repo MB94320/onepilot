@@ -12,6 +12,7 @@ import { ResponsiveContainer, ScatterChart, Scatter, XAxis, YAxis, ZAxis, Cartes
 import * as XLSX from 'xlsx';
 import OffreForm from "./OffreForm";
 import Link from "next/link";
+import PageTutorial from "@/components/ui/PageTutorial";
 
 const supabase = createClient();
 
@@ -270,7 +271,7 @@ export default function OffresPage({ params }: { params: Promise<{ orgId: string
   }, [filteredOffres]);
 
   return (
-    <div className="space-y-3 pt-0 px-2 font-sans text-[11px] text-slate-600 dark:text-slate-400 select-none">
+    <div className="onepilot-business-page space-y-5 px-2 font-sans text-sm text-slate-600 dark:text-slate-300">
       
       {/* HEADER */}
       <div className="flex justify-between items-center h-8">
@@ -305,6 +306,8 @@ export default function OffresPage({ params }: { params: Promise<{ orgId: string
         </div>
       )}
 
+      <PageTutorial title="Construire et sécuriser une offre" description={"Transformer une opportunité qualifiée en offre rentable, faisable et maîtrisée, avec coûts, charge, marge, risques et décision Go/No-Go.\nUne offre gagnée transmet automatiquement client, budget, marge, charge et numéro d’opportunité au projet tout en gardant les clés de liaison."} objectives={["Décider sur la valeur, le risque et la capacité réelle à délivrer.", "Préparer une baseline projet exploitable sans double saisie."]} steps={[{ title: "Cadrer", description: "Valider besoin, périmètre, hypothèses, équipe, planning et livrables." }, { title: "Chiffrer", description: "Consolider charge, achats, coûts, prix et marge." }, { title: "Décider", description: "Tracer Go/No-Go, validation client et transformation en projet." }]} recommendations={["Conserver les hypothèses et versions de chiffrage.", "Alerter automatiquement sur marge faible, compétence rare ou capacité insuffisante."]} />
+
       {/* KPI WIDGETS IDENTIQUES PROSPECTS */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         {[ { l: "Volume Offres", v: `${stats.caTotal.toFixed(1)} k€`, ic: <DollarSign size={16} />, c: "text-blue-600 bg-blue-500/10" },
@@ -335,6 +338,7 @@ export default function OffresPage({ params }: { params: Promise<{ orgId: string
           <select value={filters.statutGng} onChange={e => setFilters({...filters, statutGng: e.target.value})} className="h-6 px-1.5 text-[10px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded text-slate-600 dark:text-slate-400"><option value="Tous">Statut Go/NoGo</option><option value="A faire">À faire</option><option value="GO">GO</option><option value="NoGo">No-Go</option></select>
           <select value={filters.statut} onChange={e => setFilters({...filters, statut: e.target.value})} className="h-6 px-1.5 text-[10px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded text-slate-600 dark:text-slate-400"><option value="Tous">Statut Offre</option>{Object.entries(STATUT_LABELS).map(([k,v]) => <option key={k} value={k}>{v}</option>)}</select>
         </div>
+        {(searchText.trim() || Object.values(filters).some((value) => value !== "Tous" && value !== "")) && <div className="flex justify-end"><button type="button" onClick={() => { setSearchText(""); setFilters({ oppNumber: "Tous", client: "Tous", commercial: "Tous", statut: "Tous", statutGng: "Tous", margeRange: "Tous", maxDatePrev: "" }); }} className="inline-flex h-9 items-center gap-2 rounded-lg px-3 text-xs font-semibold text-slate-500 hover:bg-slate-100"><X className="h-4 w-4" />Réinitialiser les filtres</button></div>}
       </div>
 
       {/* CARDS PREDICTIVES PRESERVEES */}

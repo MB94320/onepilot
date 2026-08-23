@@ -467,7 +467,7 @@ function getHref(path: string) {
               </p>
 
               <p className="mt-0.5 truncate text-[8px] font-bold uppercase tracking-[0.16em] text-slate-400">
-                Unified lifecycle engine
+                Pilotage d’entreprise unifié
               </p>
             </div>
           )}

@@ -248,7 +248,7 @@ function getConfig(moduleKey: HrTalentModuleKey) {
       exportFile: "rh_competences",
       icon: GraduationCap,
       guideTitle: "Piloter les compétences",
-      guideDescription: "Structurer la bibliothèque, suivre les niveaux par ressource et préparer formation, mobilité, staffing et entretiens. Les niveaux 0 à 4 servent l’auto-évaluation, les besoins projet et le développement des compétences.",
+      guideDescription: "Évaluer progressivement chaque ressource par chapitre et sous-chapitre, avec attendus explicites des niveaux 0 à 4 et niveau initial historisé.\nComparer ensuite ces niveaux réels aux besoins projet pour mesurer les écarts, recommander les développements et fiabiliser le staffing sans double saisie.",
     };
   }
 
@@ -861,10 +861,9 @@ function SkillResourceTable({ rows, onArchive }: { rows: AnyRow[]; onArchive: (r
             <th className="px-4 py-3 text-left">Chapitre</th>
             <th className="px-4 py-3 text-left">Sous-chapitre</th>
             <th className="px-4 py-3 text-left">Compétence</th>
+            <th className="px-4 py-3 text-left">Niveau initial</th>
             <th className="px-4 py-3 text-left">Niveau actuel</th>
-            <th className="px-4 py-3 text-left">Niveau cible</th>
-            <th className="px-4 py-3 text-left">Écart</th>
-            <th className="px-4 py-3 text-left">Projet / besoin</th>
+            <th className="px-4 py-3 text-left">Évolution</th>
             <th className="px-4 py-3 text-left">Preuve</th>
             <th className="sticky right-0 z-30 bg-slate-50 px-4 py-3 text-right dark:bg-slate-700">Actions</th>
           </tr>
@@ -876,10 +875,9 @@ function SkillResourceTable({ rows, onArchive }: { rows: AnyRow[]; onArchive: (r
               <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{row.family || "—"}</td>
               <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{row.category || "—"}</td>
               <td className="px-4 py-3 font-semibold text-slate-700 dark:text-slate-200">{row.skill_name || "—"}</td>
-              <td className="px-4 py-3">{levelLabels[clampLevel(row.current_level)]}</td>
-              <td className="px-4 py-3">{levelLabels[clampLevel(row.target_level)]}</td>
-              <td className="px-4 py-3"><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${Number(row.gap ?? 0) > 0 ? "bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300" : "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"}`}>{row.gap ?? 0}</span></td>
-              <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{row.project_context || "—"}</td>
+              <td className="px-4 py-3"><span className={`rounded-full px-2.5 py-1 text-xs font-black ${["bg-slate-100 text-slate-700", "bg-sky-100 text-sky-700", "bg-amber-100 text-amber-700", "bg-indigo-100 text-indigo-700", "bg-emerald-100 text-emerald-700"][clampLevel(row.initial_level ?? row.current_level)]}`}>{clampLevel(row.initial_level ?? row.current_level)}</span></td>
+              <td className="px-4 py-3"><span className={`rounded-full px-2.5 py-1 text-xs font-black ${["bg-slate-100 text-slate-700", "bg-sky-100 text-sky-700", "bg-amber-100 text-amber-700", "bg-indigo-100 text-indigo-700", "bg-emerald-100 text-emerald-700"][clampLevel(row.current_level)]}`}>{clampLevel(row.current_level)}</span></td>
+              <td className="px-4 py-3"><span className={`${clampLevel(row.current_level) > clampLevel(row.initial_level ?? row.current_level) ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"} rounded-full px-2.5 py-1 text-xs font-black`}>{clampLevel(row.current_level) > clampLevel(row.initial_level ?? row.current_level) ? "+" : ""}{clampLevel(row.current_level) - clampLevel(row.initial_level ?? row.current_level)}</span></td>
               <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{row.evidence || "—"}</td>
               <td className="sticky right-0 z-10 bg-white px-4 py-3 text-right dark:bg-slate-700"><ActionMenu labels={{ view: "Voir la ressource", edit: "Modifier la ressource", archive: "Archiver la ressource", restore: "Réactiver la ressource" }} onArchive={() => onArchive(row)} /></td>
             </tr>
@@ -892,8 +890,18 @@ function SkillResourceTable({ rows, onArchive }: { rows: AnyRow[]; onArchive: (r
 
 function LibraryPanel({ catalog, rows }: { catalog: SkillCatalogItem[]; rows: AnyRow[] }) {
   const employees = uniqueValues(rows, (row) => fullName(row));
+  const [search, setSearch] = useState("");
+  const [chapter, setChapter] = useState("all");
+  const [subchapter, setSubchapter] = useState("all");
+  const [selected, setSelected] = useState<SkillCatalogItem | null>(null);
+  const chapters = uniqueValues(catalog, (skill) => skill.family);
+  const subchapters = uniqueValues(catalog.filter((skill) => chapter === "all" || skill.family === chapter), (skill) => skill.category);
+  const visibleCatalog = catalog.filter((skill) => (chapter === "all" || skill.family === chapter) && (subchapter === "all" || skill.category === subchapter) && (!search.trim() || `${skill.name} ${skill.description || ""}`.toLowerCase().includes(search.trim().toLowerCase()))).sort((a, b) => String(a.family || "").localeCompare(String(b.family || ""), "fr") || String(a.category || "").localeCompare(String(b.category || ""), "fr") || a.name.localeCompare(b.name, "fr"));
+  const hasFilters = Boolean(search.trim() || chapter !== "all" || subchapter !== "all");
   return (
     <SectionCard icon={BookOpen} title="Bibliothèque de compétences" description="Référentiel complet : chapitres, sous-chapitres, compétences, attendus de niveau et auto-évaluations par ressource.">
+      <div className="mb-4 grid gap-3 md:grid-cols-3"><label className="relative"><Search className="absolute left-3 top-3 h-4 w-4 text-indigo-500" /><input value={search} onChange={(event) => setSearch(event.target.value)} className={`${selectClassName} w-full pl-9`} placeholder="Rechercher une compétence" /></label><select value={chapter} onChange={(event) => { setChapter(event.target.value); setSubchapter("all"); }} className={selectClassName}><option value="all">Tous les chapitres</option>{chapters.map((value) => <option key={value}>{value}</option>)}</select><select value={subchapter} onChange={(event) => setSubchapter(event.target.value)} className={selectClassName}><option value="all">Tous les sous-chapitres</option>{subchapters.map((value) => <option key={value}>{value}</option>)}</select></div>
+      {hasFilters && <div className="mb-3 flex justify-end"><button type="button" onClick={() => { setSearch(""); setChapter("all"); setSubchapter("all"); }} className="inline-flex h-9 items-center gap-2 rounded-lg px-3 text-xs font-semibold text-slate-500 hover:bg-slate-100"><X className="h-4 w-4" />Réinitialiser les filtres</button></div>}
       <div className="max-h-[620px] overflow-auto rounded-2xl border border-slate-200 shadow-sm dark:border-slate-600/70">
         <table className="w-full min-w-[1720px] border-separate border-spacing-0 bg-white text-sm dark:bg-slate-700/65">
           <thead className="sticky top-0 z-20 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-700 dark:text-slate-300">
@@ -912,26 +920,27 @@ function LibraryPanel({ catalog, rows }: { catalog: SkillCatalogItem[]; rows: An
             </tr>
           </thead>
           <tbody>
-            {catalog.map((skill) => {
+            {visibleCatalog.map((skill) => {
               const expectations = skill.level_expectations || {};
               return (
                 <tr key={skill.id} className="hover:bg-indigo-50/45 dark:hover:bg-indigo-900/20">
-                  <td className="sticky left-0 z-10 bg-white px-4 py-3 font-bold text-slate-950 dark:bg-slate-700 dark:text-slate-100">{skill.chapter_code ? `${skill.chapter_code} · ` : ""}{skill.family || "—"}</td>
-                  <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{skill.subchapter_code ? `${skill.subchapter_code} · ` : ""}{skill.category || "—"}</td>
-                  <td className="px-4 py-3 font-semibold text-slate-700 dark:text-slate-200">{skill.code ? `${skill.code} · ` : ""}{skill.name}</td>
+                  <td className="sticky left-0 z-10 bg-white px-4 py-3 font-bold text-slate-950 dark:bg-slate-700 dark:text-slate-100">{skill.family || "—"}</td>
+                  <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{skill.category || "—"}</td>
+                  <td className="px-4 py-3 font-semibold text-slate-700 dark:text-slate-200">{skill.name}</td>
                   <td className="px-4 py-3"><span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-700 dark:bg-indigo-900/35 dark:text-indigo-300">{skill.criticality || "standard"}</span></td>
                   {[0, 1, 2, 3, 4].map((level) => <td key={level} className="px-4 py-3 text-xs leading-5 text-slate-600 dark:text-slate-300">{expectations[String(level)] || "—"}</td>)}
                   {employees.slice(0, 12).map((employee) => {
                     const match = rows.find((row) => row.skill_id === skill.id && fullName(row) === employee);
                     return <td key={employee} className="px-4 py-3 font-bold text-slate-700 dark:text-slate-200">{match ? `N${clampLevel(match.current_level)}` : "—"}</td>;
                   })}
-                  <td className="sticky right-0 z-10 bg-white px-4 py-3 text-right dark:bg-slate-700"><ActionMenu labels={{ view: "Voir la compétence", edit: "Modifier la compétence", archive: "Archiver la compétence", restore: "Réactiver la compétence" }} /></td>
+                  <td className="sticky right-0 z-10 bg-white px-4 py-3 text-right dark:bg-slate-700"><ActionMenu labels={{ view: "Voir la compétence", edit: "Modifier la compétence", archive: "Archiver la compétence", restore: "Réactiver la compétence" }} onView={() => setSelected(skill)} onEdit={() => setSelected(skill)} /></td>
                 </tr>
               );
             })}
           </tbody>
         </table>
       </div>
+      {selected && <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/35 p-5" onMouseDown={(event) => { if (event.currentTarget === event.target) setSelected(null); }}><section className="max-h-[85vh] w-full max-w-3xl overflow-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl"><div className="flex items-start justify-between gap-4"><div><h3 className="text-lg font-black text-slate-950">{selected.name}</h3><p className="mt-1 text-sm text-slate-500">{selected.family} · {selected.category}</p></div><button type="button" onClick={() => setSelected(null)} className="rounded-xl border border-rose-200 bg-white p-2 text-rose-700"><X className="h-4 w-4" /></button></div><p className="mt-4 rounded-xl bg-slate-50 p-3 text-sm text-slate-700">{selected.description || "Description à compléter."}</p><div className="mt-4 grid gap-2">{[0, 1, 2, 3, 4].map((level) => <div key={level} className="rounded-xl border border-slate-200 p-3"><span className="font-black text-indigo-700">Niveau {level}</span><p className="mt-1 text-sm text-slate-600">{selected.level_expectations?.[String(level)] || "Attendu à compléter dans le référentiel."}</p></div>)}</div></section></div>}
     </SectionCard>
   );
 }
@@ -1548,13 +1557,13 @@ function GraphsPanel({ moduleKey, rows, catalog }: { moduleKey: HrTalentModuleKe
       <div className="grid gap-4 xl:grid-cols-2">
         {moduleKey === "skills" ? (
           <>
-            <ChartCard title="Radar par module" description="Niveau moyen réel par module de compétences, de 0 à 4.">
+            <ChartCard title="Radar par chapitre" description="Niveau moyen réel par chapitre de compétences, de 0 à 4.">
               <ResponsiveContainer width="100%" height="100%"><RadarChart data={radarModuleData}><PolarGrid /><PolarAngleAxis dataKey="module" tick={{ fontSize: 10 }} /><PolarRadiusAxis domain={[0, 4]} /><Radar name="Niveau moyen" dataKey="niveau" stroke={chartPalette[0]} fill={chartPalette[0]} fillOpacity={0.22} /><Tooltip /><Legend /></RadarChart></ResponsiveContainer>
             </ChartCard>
-            <ChartCard title="Radar par sous-module" description="Niveau moyen par sous-module pour identifier les zones fortes et faibles.">
+            <ChartCard title="Radar par sous-chapitre" description="Niveau moyen par sous-chapitre pour identifier les zones fortes et faibles.">
               <ResponsiveContainer width="100%" height="100%"><RadarChart data={radarSubmoduleData}><PolarGrid /><PolarAngleAxis dataKey="module" tick={{ fontSize: 10 }} /><PolarRadiusAxis domain={[0, 4]} /><Radar name="Niveau moyen" dataKey="niveau" stroke={chartPalette[1]} fill={chartPalette[1]} fillOpacity={0.22} /><Tooltip /><Legend /></RadarChart></ResponsiveContainer>
             </ChartCard>
-            <ChartCard title="Ressources par module" description="Nombre d’évaluations disponibles par module.">
+            <ChartCard title="Ressources par chapitre" description="Nombre d’évaluations disponibles par chapitre.">
               <ResponsiveContainer width="100%" height="100%"><BarChart data={moduleData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" tick={{ fontSize: 10 }} /><YAxis allowDecimals={false} /><Tooltip /><Legend /><Bar dataKey="value" name="Évaluations" fill={chartPalette[2]} radius={[8, 8, 0, 0]} /></BarChart></ResponsiveContainer>
             </ChartCard>
             <ChartCard title="Ressources par niveau" description="Répartition des niveaux 0 à 4 sur le périmètre filtré.">

@@ -5,11 +5,12 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { 
   Plus, Edit, Trash2, Building2, TrendingUp, Users, DollarSign, 
-  Kanban, List, Award, ShieldAlert, MessageSquare, Download, Zap, Target, BarChart3, FileText
+  Kanban, List, Award, ShieldAlert, MessageSquare, Download, Zap, Target, BarChart3, FileText, X
 } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
 import * as XLSX from 'xlsx';
 import ProspectForm from "./ProspectForm";
+import PageTutorial from "@/components/ui/PageTutorial";
 
 const supabase = createClient();
 const STAGES = ['découverte', 'contact', 'qualification', 'NoGo', 'proposition', 'négociation', 'gagné', 'perdu'] as const;
@@ -185,7 +186,7 @@ export default function ProspectsPage({ params }: { params: Promise<{ orgId: str
   }, [filteredProspects]);
 
   return (
-    <div className="space-y-3 pt-0 px-2 font-sans text-[11px] text-slate-600 dark:text-slate-400 select-none">
+    <div className="onepilot-business-page space-y-5 px-2 font-sans text-sm text-slate-600 dark:text-slate-300">
       
       {/* HEADER */}
       <div className="flex justify-between items-center h-8">
@@ -196,6 +197,8 @@ export default function ProspectsPage({ params }: { params: Promise<{ orgId: str
           <button onClick={openCreate} className="h-6 px-2.5 bg-blue-600 text-white font-medium rounded text-[10px] hover:bg-blue-700">+ Nouveau prospect</button>
         </div>
       </div>
+
+      <PageTutorial title="Piloter les prospects et opportunités" description={"Qualifier chaque opportunité, sécuriser son responsable, son calendrier, sa probabilité et son potentiel commercial.\nLes opportunités gagnées alimentent l’avant-vente puis les projets sans ressaisie, tout en conservant la traçabilité OPP-AAAA-0001."} objectives={["Prioriser le pipeline et fiabiliser la conversion.", "Partager les droits de lecture et de modification selon les responsabilités."]} steps={[{ title: "Qualifier", description: "Compléter client, besoin, montant, probabilité, échéance et responsable." }, { title: "Arbitrer", description: "Traiter les alertes et concentrer l’effort sur les opportunités pertinentes." }, { title: "Transformer", description: "Transmettre les données validées à l’avant-vente puis au projet." }]} recommendations={["Justifier les changements majeurs de probabilité et de date.", "Éviter toute double saisie client, budget ou responsable."]} />
 
       {/* KPI WIDGETS */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
@@ -234,6 +237,7 @@ export default function ProspectsPage({ params }: { params: Promise<{ orgId: str
             <input type="date" value={filters.maxClosingDate} onChange={e => setFilters({...filters, maxClosingDate: e.target.value})} className="h-6 px-1.5 text-[10px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded text-slate-600" />
           </div>
         </div>
+        {(searchText.trim() || Object.values(filters).some((value) => value !== "Tous" && value !== "")) && <div className="flex justify-end"><button type="button" onClick={() => { setSearchText(""); setFilters({ oppNumber: "Tous", client: "Tous", commercial: "Tous", stage: "Tous", source: "Tous", probability: "Tous", maxClosingDate: "", amountRange: "Tous" }); }} className="inline-flex h-9 items-center gap-2 rounded-lg px-3 text-xs font-semibold text-slate-500 hover:bg-slate-100"><X className="h-4 w-4" />Réinitialiser les filtres</button></div>}
       </div>
 
       {/* BLOCS PERFORMANCE */}

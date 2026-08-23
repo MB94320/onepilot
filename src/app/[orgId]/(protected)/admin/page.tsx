@@ -15,6 +15,7 @@ import {
   AreaChart, Area, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, 
   PieChart, Pie, Cell, Legend, LineChart, Line, ComposedChart, ReferenceLine, BarChart, Bar 
 } from "recharts";
+import PageTutorial from "@/components/ui/PageTutorial";
 
 const supabase = createClient();
 
@@ -361,7 +362,7 @@ export default function AdminPage({ params }: { params: Promise<{ orgId: string 
   };
 
   return (
-    <div className="space-y-3 pt-0 px-2 font-sans text-[11px] text-slate-600 dark:text-slate-400 select-none">
+    <div className="onepilot-business-page space-y-5 px-2 font-sans text-sm text-slate-600 dark:text-slate-300">
       
       {/* HEADER AVEC BOUTONS EXPORT (CSV Vert / PDF Rouge) */}
       <div className="flex justify-between items-center h-8">
@@ -377,6 +378,8 @@ export default function AdminPage({ params }: { params: Promise<{ orgId: string 
           </button>
         </div>
       </div>
+
+      <PageTutorial title="Administrer la plateforme et les droits" description={"Piloter organisations, utilisateurs, rôles, modules activés, abonnements, sécurité et audit depuis un centre de contrôle multi-tenant.\nChaque droit doit rester limité à l’organisation, au module, au projet et au niveau d’action autorisé, avec traçabilité des changements sensibles."} objectives={["Garantir l’isolation des entreprises et le principe du moindre privilège.", "Permettre un abonnement modulaire sans bloquer les processus autonomes."]} steps={[{ title: "Configurer", description: "Définir organisation, modules, rôles, périmètres et responsables." }, { title: "Contrôler", description: "Vérifier accès, abonnements, journaux et incohérences de configuration." }, { title: "Auditer", description: "Tracer exports sensibles, changements de droits, archivages et décisions." }]} recommendations={["Revoir périodiquement les comptes inactifs et les droits élevés.", "Ne jamais partager des données entre organisations sans autorisation explicite."]} />
 
       {/* TABS DE NAVIGATION ADMINISTRATEUR */}
       <div className="flex gap-1 py-1 w-full border-b border-slate-200 dark:border-slate-800 mb-2">
