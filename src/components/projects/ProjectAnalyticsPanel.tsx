@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, type ComponentProps } from "react";
+import { useEffect, useMemo, useState, type ComponentProps } from "react";
 import {
   Activity,
   BarChart3,
@@ -41,7 +41,9 @@ function ResponsiveContainer(props: ComponentProps<typeof RechartsResponsiveCont
 }
 
 function XAxis(props: ComponentProps<typeof RechartsXAxis>) {
-  return <RechartsXAxis interval={0} minTickGap={0} {...props} />;
+  const [fullscreen, setFullscreen] = useState(false);
+  useEffect(() => { const update = () => setFullscreen(Boolean(document.fullscreenElement)); document.addEventListener("fullscreenchange", update); return () => document.removeEventListener("fullscreenchange", update); }, []);
+  return <RechartsXAxis interval={fullscreen ? 0 : 1} minTickGap={fullscreen ? 0 : 18} {...props} />;
 }
 
 import {

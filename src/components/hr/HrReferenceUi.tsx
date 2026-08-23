@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
-import { Archive, ArchiveRestore, Copy, Edit3, Expand, Eye, MoreHorizontal } from "lucide-react";
+import { Archive, ArchiveRestore, BarChart3, Copy, Edit3, Expand, Eye, Minimize2, MoreHorizontal } from "lucide-react";
 
 export type HrAccent = "indigo" | "emerald" | "amber" | "rose" | "sky" | "slate";
 
@@ -192,10 +192,9 @@ export function HrActionMenu({
             <button type="button" onClick={() => void executeAction(onRestore)} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-bold text-emerald-700 transition hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/30"><ArchiveRestore className="h-4 w-4" />{labels.restore}</button>
           ) : (
             <>
-              <button type="button" onClick={() => void executeAction(onView)} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-bold text-sky-700 transition hover:bg-sky-50 dark:text-sky-300 dark:hover:bg-sky-700/35"><Eye className="h-4 w-4" />{labels.view}</button>
-              <button type="button" onClick={() => void executeAction(onEdit)} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-bold text-indigo-700 transition hover:bg-indigo-50 dark:text-indigo-300 dark:hover:bg-indigo-700/35"><Edit3 className="h-4 w-4" />{labels.edit}</button>
-              <div className="my-1 border-t border-slate-100 dark:border-slate-600/60" />
-              <button type="button" onClick={() => void executeAction(onArchive)} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-bold text-slate-600 transition hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-600/70"><Archive className="h-4 w-4" />{labels.archive}</button>
+              {onView && <button type="button" onClick={() => void executeAction(onView)} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-bold text-sky-700 transition hover:bg-sky-50 dark:text-sky-300 dark:hover:bg-sky-700/35"><Eye className="h-4 w-4" />{labels.view}</button>}
+              {onEdit && <button type="button" onClick={() => void executeAction(onEdit)} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-bold text-indigo-700 transition hover:bg-indigo-50 dark:text-indigo-300 dark:hover:bg-indigo-700/35"><Edit3 className="h-4 w-4" />{labels.edit}</button>}
+              {onArchive && <><div className="my-1 border-t border-slate-100 dark:border-slate-600/60" /><button type="button" onClick={() => void executeAction(onArchive)} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-bold text-slate-600 transition hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-600/70"><Archive className="h-4 w-4" />{labels.archive}</button></>}
             </>
           )}
         </div>
@@ -311,15 +310,18 @@ async function copyChart(title: string, description: string, config: HrChartExpo
 export function HrChartCard({ title, description, exportConfig, children }: { title: string; description: string; exportConfig: HrChartExportConfig; children: ReactNode }) {
   const containerRef = useRef<HTMLElement | null>(null);
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "downloaded" | "failed">("idle");
+  const [expanded, setExpanded] = useState(false);
+  useEffect(() => { const update = () => setExpanded(document.fullscreenElement === containerRef.current); document.addEventListener("fullscreenchange", update); return () => document.removeEventListener("fullscreenchange", update); }, []);
   async function handleCopy() { setCopyStatus("idle"); setCopyStatus(await copyChart(title, description, exportConfig)); window.setTimeout(() => setCopyStatus("idle"), 2600); }
+  async function toggleFullscreen() { if (document.fullscreenElement === containerRef.current) await document.exitFullscreen(); else await containerRef.current?.requestFullscreen?.(); }
   return (
-    <article ref={containerRef} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-600/60 dark:bg-slate-600/65">
+    <article ref={containerRef} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm fullscreen:overflow-auto dark:border-slate-600/60 dark:bg-slate-600/65">
       <div className="flex items-center justify-between gap-4 border-b border-slate-100 bg-gradient-to-r from-sky-50/70 via-white to-indigo-50/60 px-5 py-4 dark:border-slate-600/55 dark:from-sky-900/25 dark:via-slate-700/85 dark:to-indigo-900/25">
-        <div className="min-w-0 flex-1"><h3 className="truncate text-sm font-bold text-slate-950 dark:text-slate-100" title={title}>{title}</h3><p className="mt-1 truncate whitespace-nowrap text-xs text-slate-500 dark:text-slate-300" title={description}>{description}</p></div>
+        <div className="flex min-w-0 flex-1 items-start gap-3"><span className="rounded-xl bg-indigo-100 p-2.5 text-indigo-700"><BarChart3 className="h-4 w-4" /></span><div className="min-w-0"><h3 className="truncate text-sm font-bold text-slate-950 dark:text-slate-100" title={title}>{title}</h3><p className="mt-1 truncate whitespace-nowrap text-xs text-slate-500 dark:text-slate-300" title={description}>{description}</p></div></div>
         <div className="flex shrink-0 items-center gap-2">
           {copyStatus !== "idle" && <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-black text-slate-600 shadow-sm dark:border-slate-500/70 dark:bg-slate-600/80 dark:text-slate-100">{copyStatus === "copied" ? "Copié" : copyStatus === "downloaded" ? "PNG téléchargé" : "Copie impossible"}</span>}
           <button type="button" onClick={() => void handleCopy()} title="Copier" aria-label={`Copier ${title}`} className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-indigo-100 bg-white text-indigo-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-indigo-50 dark:border-indigo-800/70 dark:bg-slate-600/65 dark:text-indigo-200 dark:hover:bg-indigo-900/35"><Copy className="h-4 w-4" /></button>
-          <button type="button" onClick={() => containerRef.current?.requestFullscreen?.()} title="Agrandir" aria-label={`Agrandir ${title}`} className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-indigo-100 bg-white text-indigo-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-indigo-50 dark:border-indigo-800/70 dark:bg-slate-600/65 dark:text-indigo-200 dark:hover:bg-indigo-900/35"><Expand className="h-4 w-4" /></button>
+          <button type="button" onClick={() => void toggleFullscreen()} title={expanded ? "Réduire" : "Agrandir"} aria-label={`${expanded ? "Réduire" : "Agrandir"} ${title}`} className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-indigo-100 bg-white text-indigo-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-indigo-50 dark:border-indigo-800/70 dark:bg-slate-600/65 dark:text-indigo-200 dark:hover:bg-indigo-900/35">{expanded ? <Minimize2 className="h-4 w-4" /> : <Expand className="h-4 w-4" />}</button>
         </div>
       </div>
       <div className="h-[330px] min-h-[330px] min-w-0 w-full p-4">{children}</div>

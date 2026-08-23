@@ -157,3 +157,62 @@ a {
     display: block !important;
   }
 }
+
+/* Référentiel visuel commun aux pages Projets, aligné sur les tableaux RH validés. */
+.project-module table {
+  border-collapse: separate;
+  border-spacing: 0;
+  color: #334155;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 400;
+  line-height: 1rem;
+}
+
+.project-module table thead {
+  background: #f0f9ff;
+  color: #64748b;
+  font-size: 0.625rem;
+  font-weight: 800;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
+.project-module table th,
+.project-module table td {
+  border-bottom: 1px solid #f1f5f9;
+  padding: 0.75rem 1rem;
+  vertical-align: middle;
+}
+
+.project-module table tbody tr:hover td {
+  background-color: #eef2ff;
+}
+
+.project-module table tbody td:not(:first-child):not(:last-child) {
+  font-weight: 400;
+}
+
+.project-module :fullscreen {
+  background: #ffffff !important;
+  color: #0f172a !important;
+  overflow: auto !important;
+  padding: 1.25rem !important;
+}
+
+.project-module :fullscreen .project-visual-actions {
+  display: flex !important;
+}
+
+/* Le séparateur du Gantt force les granularités temporelles sur une seconde ligne. */
+.project-module span.h-5.w-px.bg-slate-200 {
+  flex-basis: 100%;
+  height: 0;
+  width: 100%;
+}
+
+.project-visual-clone,
+.project-visual-clone * {
+  animation: none !important;
+  transition: none !important;
+}

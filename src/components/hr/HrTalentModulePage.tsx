@@ -53,6 +53,7 @@ import DataExportMenu, { type ExportColumn } from "@/components/ui/DataExportMen
 import PageHeader from "@/components/ui/PageHeader";
 import PageTutorial from "@/components/ui/PageTutorial";
 import { createClient } from "@/lib/supabase/client";
+import HrEmployeeSkillsForm from "@/components/hr/HrEmployeeSkillsForm";
 
 const supabase = createClient();
 
@@ -242,7 +243,7 @@ function getConfig(moduleKey: HrTalentModuleKey) {
     return {
       title: "Compétences",
       subtitle: "Bibliothèque, auto-évaluations, écarts, experts internes et préparation staffing/projets.",
-      newLabel: "Nouvelle évaluation",
+      newLabel: "Formulaire compétences",
       primaryTab: "Ressources",
       exportFile: "rh_competences",
       icon: GraduationCap,
@@ -1984,7 +1985,8 @@ export default function HrTalentModulePage({ params, moduleKey }: { params: Prom
       {activeTab === "library" && <LibraryPanel catalog={data.catalog} rows={filteredRows} />}
       {activeTab === "alerts" && <AlertsPanel moduleKey={moduleKey} rows={filteredRows} />}
 
-      {showCreateModal && <CreateModal moduleKey={moduleKey} organizationId={data.organization.id} employees={data.employees} catalog={data.catalog} onClose={() => setShowCreateModal(false)} />}
+      {showCreateModal && moduleKey === "skills" && <HrEmployeeSkillsForm organizationId={data.organization.id} employees={data.employees} catalog={data.catalog} assessments={data.rows} onClose={() => setShowCreateModal(false)} onSaved={() => void query.refetch()} />}
+      {showCreateModal && moduleKey !== "skills" && <CreateModal moduleKey={moduleKey} organizationId={data.organization.id} employees={data.employees} catalog={data.catalog} onClose={() => setShowCreateModal(false)} />}
     </div>
   );
 }
