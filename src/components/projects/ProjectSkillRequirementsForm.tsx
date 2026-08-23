@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { Plus, Save, Trash2, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { hrInputClassName, hrSelectClassName } from "@/components/hr/HrReferenceUi";
+import { hrCancelButtonClassName, hrInputClassName, hrSaveButtonClassName, hrSelectClassName } from "@/components/hr/HrReferenceUi";
 
 type AnyRow = Record<string, any>;
 const supabase = createClient();
@@ -70,7 +70,7 @@ export default function ProjectSkillRequirementsForm({ organizationId, projectId
       </div>
       <button type="button" onClick={() => setRows((current) => [...current, initial()])} className="mt-4 inline-flex h-10 items-center gap-2 rounded-xl border border-indigo-200 bg-white px-4 text-sm font-bold text-indigo-700 hover:bg-indigo-50"><Plus className="h-4 w-4" />Ajouter une compétence</button>
       {error && <p className="mt-4 rounded-xl bg-rose-50 p-3 text-sm font-bold text-rose-700">{error}</p>}
-      <div className="mt-6 flex justify-end gap-3"><button type="button" onClick={onClose} className="inline-flex h-10 items-center rounded-xl border border-rose-200 bg-white px-4 text-sm font-bold text-rose-700 shadow-sm hover:bg-rose-50">Annuler</button><button type="button" disabled={saving} onClick={() => void save()} className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-4 text-sm font-bold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50"><Save className="h-4 w-4" />{saving ? "Enregistrement…" : "Enregistrer"}</button></div>
+      <div className="mt-6 flex justify-end gap-3"><button type="button" onClick={onClose} className={hrCancelButtonClassName}>Annuler</button><button type="button" disabled={saving} onClick={() => void save()} className={hrSaveButtonClassName}><Save className="h-4 w-4" />{saving ? "Enregistrement…" : "Enregistrer"}</button></div>
     </aside>
   </div>;
 }

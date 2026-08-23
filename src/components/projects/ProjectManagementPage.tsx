@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  isValidElement,
   use,
   useMemo,
   useState,
@@ -38,8 +39,10 @@ import {
 
 import {
   HrActionMenu,
+  HrColumnFilterMenu,
   HrInfo,
   HrMetricCard,
+  HrResetFilters,
   HrSectionCard,
   HrStatusBadge,
   hrInputClassName,
@@ -451,8 +454,30 @@ function columnsFor(mode: ProjectPageMode, onCommerce: (row: AnyRow) => void): C
   ];
 }
 
-function DataTable({ mode, rows, columns, onView, onEdit, onArchive, onRestore }: { mode: ProjectPageMode; rows: AnyRow[]; columns: Column[]; onView: (row: AnyRow) => void; onEdit: (row: AnyRow) => void; onArchive: (row: AnyRow) => void; onRestore: (row: AnyRow) => void }) {
+function LegacyDataTable({ mode, rows, columns, onView, onEdit, onArchive, onRestore }: { mode: ProjectPageMode; rows: AnyRow[]; columns: Column[]; onView: (row: AnyRow) => void; onEdit: (row: AnyRow) => void; onArchive: (row: AnyRow) => void; onRestore: (row: AnyRow) => void }) {
   return <div className="max-h-[334px] overflow-auto rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-600 dark:bg-slate-700/70"><table className="min-w-max w-full border-separate border-spacing-0 text-left text-xs"><thead className="sticky top-0 z-30 bg-slate-50 text-[10px] font-black uppercase tracking-wide text-slate-500 dark:bg-slate-600 dark:text-slate-200"><tr>{columns.map((column, index) => <th key={`${column.label}-${index}`} className={`border-b border-slate-200 px-3 py-3 ${index === 0 ? "sticky left-0 z-40 bg-slate-50 dark:bg-slate-600" : ""}`}>{column.label}</th>)}<th className="sticky right-0 z-40 border-b border-slate-200 bg-slate-50 px-3 py-3 text-right dark:bg-slate-600">Actions</th></tr></thead><tbody>{rows.map((row) => <tr key={row.id} onClick={() => onView(row)} className="cursor-pointer hover:bg-indigo-50/35 dark:hover:bg-indigo-900/20">{columns.map((column, index) => <td key={`${row.id}-${index}`} className={`max-w-[240px] truncate border-b border-slate-100 px-3 py-3 text-slate-700 dark:border-slate-600 dark:text-slate-200 ${index === 0 ? "sticky left-0 z-20 bg-white font-black text-indigo-700 dark:bg-slate-700 dark:text-indigo-200" : ""}`} title={typeof column.value(row) === "string" ? String(column.value(row)) : undefined}>{column.value(row)}</td>)}<td onClick={(event) => event.stopPropagation()} className="sticky right-0 z-20 border-b border-slate-100 bg-white px-3 py-2 text-right dark:border-slate-600 dark:bg-slate-700"><HrActionMenu labels={{ view: `Voir ${config[mode].entity}`, edit: `Modifier ${config[mode].entity}`, archive: `Archiver ${config[mode].entity}`, restore: `Réactiver ${config[mode].entity}` }} onView={() => onView(row)} onEdit={() => onEdit(row)} onArchive={() => onArchive(row)} onRestore={() => onRestore(row)} canRestore={Boolean(row.archived_at) || row.status === "archived"} /></td></tr>)}</tbody></table></div>;
+}
+
+function columnText(value: ReactNode): string {
+  if (value == null || typeof value === "boolean") return value == null ? "—" : value ? "Oui" : "Non";
+  if (typeof value === "string" || typeof value === "number") return String(value);
+  if (Array.isArray(value)) return value.map(columnText).join(" ");
+  if (isValidElement(value)) {
+    const props = value.props as { label?: unknown; status?: unknown; children?: ReactNode };
+    return columnText((props.label ?? props.status ?? props.children ?? "—") as ReactNode);
+  }
+  return "—";
+}
+
+function DataTable({ mode, rows, columns, onView, onEdit, onArchive, onRestore }: { mode: ProjectPageMode; rows: AnyRow[]; columns: Column[]; onView: (row: AnyRow) => void; onEdit: (row: AnyRow) => void; onArchive: (row: AnyRow) => void; onRestore: (row: AnyRow) => void }) {
+  const [filters, setFilters] = useState<Record<number, string[]>>({});
+  const resolved = useMemo(() => rows.map((row) => ({ row, values: columns.map((column) => columnText(column.value(row))) })), [columns, rows]);
+  const visible = resolved.filter(({ values }) => values.every((value, index) => !filters[index]?.length || filters[index].includes(value)));
+  const active = Object.values(filters).some((values) => values.length);
+  return <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-600 dark:bg-slate-700/70">
+    <div className="max-h-[334px] overflow-auto"><table className="min-w-max w-full border-separate border-spacing-0 text-left text-xs"><thead className="sticky top-0 z-30 bg-sky-50 text-[10px] font-black uppercase tracking-wide text-slate-500 dark:bg-slate-600 dark:text-slate-200"><tr>{columns.map((column, index) => <th key={`${column.label}-${index}`} className={`border-b border-slate-200 px-3 py-3 ${index === 0 ? "sticky left-0 z-40 bg-sky-50 dark:bg-slate-600" : ""}`}><HrColumnFilterMenu label={column.label} values={resolved.map((item) => item.values[index])} selected={filters[index] || []} onChange={(values) => setFilters((current) => ({ ...current, [index]: values }))} /></th>)}<th className="sticky right-0 z-40 border-b border-slate-200 bg-sky-50 px-3 py-3 text-right dark:bg-slate-600">Actions</th></tr></thead><tbody>{visible.map(({ row }) => <tr key={row.id} onClick={() => onView(row)} className="cursor-pointer hover:bg-indigo-50/35 dark:hover:bg-indigo-900/20">{columns.map((column, index) => <td key={`${row.id}-${index}`} className={`max-w-[240px] truncate border-b border-slate-100 px-3 py-3 font-normal text-slate-700 dark:border-slate-600 dark:text-slate-200 ${index === 0 ? "sticky left-0 z-20 bg-white font-bold text-indigo-700 dark:bg-slate-700 dark:text-indigo-200" : ""}`} title={columnText(column.value(row))}>{column.value(row)}</td>)}<td onClick={(event) => event.stopPropagation()} className="sticky right-0 z-20 border-b border-slate-100 bg-white px-3 py-2 text-right dark:border-slate-600 dark:bg-slate-700"><HrActionMenu labels={{ view: `Voir ${config[mode].entity}`, edit: `Modifier ${config[mode].entity}`, archive: `Archiver ${config[mode].entity}`, restore: `Réactiver ${config[mode].entity}` }} onView={() => onView(row)} onEdit={() => onEdit(row)} onArchive={() => onArchive(row)} onRestore={() => onRestore(row)} canRestore={Boolean(row.archived_at) || row.status === "archived"} /></td></tr>)}</tbody></table></div>
+    {active && <div className="border-t border-slate-100 px-4 py-2"><HrResetFilters onReset={() => setFilters({})} /></div>}
+  </div>;
 }
 
 function Drawer({ mode, row, onClose, onEdit }: { mode: ProjectPageMode; row: AnyRow; onClose: () => void; onEdit: () => void }) {

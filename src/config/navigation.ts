@@ -106,6 +106,19 @@ export const navigationSections: NavigationSection[] = [
           "cibles",
         ],
       },
+      {
+        id: "access-sharing",
+        label: "Accès & partage",
+        href: "/pilotage/acces-partage",
+        icon: ShieldCheck,
+        exact: true,
+        keywords: [
+          "droits",
+          "habilitations",
+          "partage",
+          "permissions",
+        ],
+      },
     ],
   },
   {

@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useRef, useState, type ComponentType, type ReactNode } from "react";
+import { Fragment, use, useRef, useState, type ComponentType, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
@@ -12,6 +12,7 @@ import {
   BriefcaseBusiness,
   CalendarClock,
   CheckCircle2,
+  ChevronDown,
   Clock3,
   Copy,
   Edit3,
@@ -54,6 +55,7 @@ import PageHeader from "@/components/ui/PageHeader";
 import PageTutorial from "@/components/ui/PageTutorial";
 import { createClient } from "@/lib/supabase/client";
 import HrEmployeeSkillsForm from "@/components/hr/HrEmployeeSkillsForm";
+import { HrActionMenu, HrColumnFilterMenu, HrResetFilters } from "@/components/hr/HrReferenceUi";
 
 const supabase = createClient();
 
@@ -605,68 +607,7 @@ function ActionMenu({
   onRestore?: () => void;
   canRestore?: boolean;
 }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  async function executeAction(action?: () => void) {
-    if (!action) return;
-    setIsProcessing(true);
-    try {
-      action();
-      setIsOpen(false);
-    } finally {
-      setIsProcessing(false);
-    }
-  }
-
-  return (
-    <div ref={menuRef} className="relative inline-flex">
-      <button
-        type="button"
-        aria-label="Voir, modifier, archiver ou réactiver la fiche"
-        title="Voir, modifier, archiver ou réactiver"
-        disabled={isProcessing}
-        onClick={(event) => {
-          event.stopPropagation();
-          setIsOpen((current) => !current);
-        }}
-        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600/60 dark:bg-slate-700/70 dark:text-slate-300 dark:hover:border-indigo-900 dark:hover:bg-indigo-700/35 dark:hover:text-indigo-300"
-      >
-        {isProcessing ? <Archive className="h-3.5 w-3.5 animate-pulse" /> : <MoreHorizontal className="h-3.5 w-3.5" />}
-      </button>
-
-      {isOpen && (
-        <div
-          onClick={(event) => event.stopPropagation()}
-          className="absolute right-0 top-10 z-30 w-56 overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl dark:border-slate-600/60 dark:bg-slate-700/70"
-        >
-          {canRestore ? (
-            <button type="button" onClick={() => void executeAction(onRestore)} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-bold text-emerald-700 transition hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/30">
-              <ArchiveRestore className="h-4 w-4" />
-              {labels.restore}
-            </button>
-          ) : (
-            <>
-              <button type="button" onClick={() => void executeAction(onView)} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-bold text-sky-700 transition hover:bg-sky-50 dark:text-sky-300 dark:hover:bg-sky-700/35">
-                <Eye className="h-4 w-4" />
-                {labels.view}
-              </button>
-              <button type="button" onClick={() => void executeAction(onEdit)} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-bold text-indigo-700 transition hover:bg-indigo-50 dark:text-indigo-300 dark:hover:bg-indigo-700/35">
-                <Edit3 className="h-4 w-4" />
-                {labels.edit}
-              </button>
-              <div className="my-1 border-t border-slate-100 dark:border-slate-600/60" />
-              <button type="button" onClick={() => void executeAction(onArchive)} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-bold text-slate-600 transition hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-600/70">
-                <Archive className="h-4 w-4" />
-                {labels.archive}
-              </button>
-            </>
-          )}
-        </div>
-      )}
-    </div>
-  );
+  return <HrActionMenu labels={labels} onView={onView} onEdit={onEdit} onArchive={onArchive} onRestore={onRestore} canRestore={canRestore} />;
 }
 
 function FiltersPanel({ moduleKey, rows, catalog, employees, value, onChange, resultCount }: { moduleKey: HrTalentModuleKey; rows: AnyRow[]; catalog: SkillCatalogItem[]; employees: Employee[]; value: FilterValue; onChange: (value: FilterValue) => void; resultCount: number }) {
@@ -810,7 +751,7 @@ function buildSkillResourceSummaries(rows: AnyRow[], employees: Employee[]) {
   }).sort((a, b) => fullName(a.employee).localeCompare(fullName(b.employee), "fr", { sensitivity: "base" }));
 }
 
-function SkillResourceCard({ summary, onArchive }: { summary: ReturnType<typeof buildSkillResourceSummaries>[number]; onArchive: () => void }) {
+function SkillResourceCard({ summary, onOpen, onArchive }: { summary: ReturnType<typeof buildSkillResourceSummaries>[number]; onOpen: () => void; onArchive: () => void }) {
   const employee = summary.employee as any;
   return (
     <article className="group rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-indigo-200 hover:bg-indigo-50/25 hover:shadow-md dark:border-slate-600/60 dark:bg-slate-700/70 dark:hover:bg-indigo-900/20">
@@ -819,7 +760,7 @@ function SkillResourceCard({ summary, onArchive }: { summary: ReturnType<typeof 
           <h3 className="truncate text-sm font-black text-slate-950 dark:text-slate-100">{fullName(employee)}</h3>
           <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500 dark:text-slate-300">{employee.employee_number || "Matricule non renseigné"} · {getEmployeeDepartment(employee)} · {getEmployeeJob(employee)}</p>
         </div>
-        <ActionMenu labels={{ view: "Voir la ressource", edit: "Modifier la ressource", archive: "Archiver la ressource", restore: "Réactiver la ressource" }} onArchive={onArchive} />
+        <ActionMenu labels={{ view: "Voir les compétences", edit: "Modifier les compétences", archive: "Archiver les compétences", restore: "Réactiver les compétences" }} onView={onOpen} onEdit={onOpen} onArchive={onArchive} />
       </div>
       <div className="mt-4 grid gap-2 sm:grid-cols-2">
         <Info label="Dernière évaluation" value={formatDate(summary.lastEvaluation)} accent="sky" />
@@ -851,25 +792,32 @@ function SkillResourceCard({ summary, onArchive }: { summary: ReturnType<typeof 
   );
 }
 
-function SkillResourceTable({ rows, onArchive }: { rows: AnyRow[]; onArchive: (row: AnyRow) => void }) {
+function SkillResourceTable({ rows, onOpen, onArchive }: { rows: AnyRow[]; onOpen: (row: AnyRow) => void; onArchive: (row: AnyRow) => void }) {
+  const columns = [
+    { key: "resource", label: "Ressource", value: (row: AnyRow) => fullName(row) },
+    { key: "chapter", label: "Chapitre", value: (row: AnyRow) => String(row.family || "—") },
+    { key: "subchapter", label: "Sous-chapitre", value: (row: AnyRow) => String(row.category || "—") },
+    { key: "skill", label: "Compétence", value: (row: AnyRow) => String(row.skill_name || "—") },
+    { key: "initial", label: "Niveau initial", value: (row: AnyRow) => String(clampLevel(row.initial_level ?? row.current_level)) },
+    { key: "current", label: "Niveau actuel", value: (row: AnyRow) => String(clampLevel(row.current_level)) },
+    { key: "evolution", label: "Évolution", value: (row: AnyRow) => String(clampLevel(row.current_level) - clampLevel(row.initial_level ?? row.current_level)) },
+    { key: "evidence", label: "Preuve", value: (row: AnyRow) => String(row.evidence || "—") },
+  ];
+  const [columnFilters, setColumnFilters] = useState<Record<string, string[]>>({});
+  const visibleRows = rows.filter((row) => columns.every((column) => !columnFilters[column.key]?.length || columnFilters[column.key].includes(column.value(row))));
+  const hasFilters = Object.values(columnFilters).some((values) => values.length > 0);
   return (
-    <div className="max-h-[520px] overflow-auto rounded-2xl border border-slate-200 shadow-sm dark:border-slate-600/70">
+    <div className="overflow-hidden rounded-2xl border border-slate-200 shadow-sm dark:border-slate-600/70">
+      <div className="max-h-[520px] overflow-auto">
       <table className="w-full min-w-[1380px] border-separate border-spacing-0 bg-white text-sm dark:bg-slate-700/65">
         <thead className="sticky top-0 z-20 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-700 dark:text-slate-300">
           <tr>
-            <th className="sticky left-0 z-30 bg-slate-50 px-4 py-3 text-left dark:bg-slate-700">Ressource</th>
-            <th className="px-4 py-3 text-left">Chapitre</th>
-            <th className="px-4 py-3 text-left">Sous-chapitre</th>
-            <th className="px-4 py-3 text-left">Compétence</th>
-            <th className="px-4 py-3 text-left">Niveau initial</th>
-            <th className="px-4 py-3 text-left">Niveau actuel</th>
-            <th className="px-4 py-3 text-left">Évolution</th>
-            <th className="px-4 py-3 text-left">Preuve</th>
+            {columns.map((column, index) => <th key={column.key} className={`${index === 0 ? "sticky left-0 z-30 bg-slate-50 dark:bg-slate-700" : ""} px-4 py-3 text-left`}><HrColumnFilterMenu label={column.label} values={rows.map(column.value)} selected={columnFilters[column.key] || []} onChange={(values) => setColumnFilters((current) => ({ ...current, [column.key]: values }))} /></th>)}
             <th className="sticky right-0 z-30 bg-slate-50 px-4 py-3 text-right dark:bg-slate-700">Actions</th>
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
+          {visibleRows.map((row) => (
             <tr key={row.id} className="hover:bg-indigo-50/45 dark:hover:bg-indigo-900/20">
               <td className="sticky left-0 z-10 bg-white px-4 py-3 font-bold text-slate-950 dark:bg-slate-700 dark:text-slate-100">{fullName(row)}</td>
               <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{row.family || "—"}</td>
@@ -879,37 +827,42 @@ function SkillResourceTable({ rows, onArchive }: { rows: AnyRow[]; onArchive: (r
               <td className="px-4 py-3"><span className={`rounded-full px-2.5 py-1 text-xs font-black ${["bg-slate-100 text-slate-700", "bg-sky-100 text-sky-700", "bg-amber-100 text-amber-700", "bg-indigo-100 text-indigo-700", "bg-emerald-100 text-emerald-700"][clampLevel(row.current_level)]}`}>{clampLevel(row.current_level)}</span></td>
               <td className="px-4 py-3"><span className={`${clampLevel(row.current_level) > clampLevel(row.initial_level ?? row.current_level) ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"} rounded-full px-2.5 py-1 text-xs font-black`}>{clampLevel(row.current_level) > clampLevel(row.initial_level ?? row.current_level) ? "+" : ""}{clampLevel(row.current_level) - clampLevel(row.initial_level ?? row.current_level)}</span></td>
               <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{row.evidence || "—"}</td>
-              <td className="sticky right-0 z-10 bg-white px-4 py-3 text-right dark:bg-slate-700"><ActionMenu labels={{ view: "Voir la ressource", edit: "Modifier la ressource", archive: "Archiver la ressource", restore: "Réactiver la ressource" }} onArchive={() => onArchive(row)} /></td>
+              <td className="sticky right-0 z-10 bg-white px-4 py-3 text-right dark:bg-slate-700"><ActionMenu labels={{ view: "Voir les compétences", edit: "Modifier les compétences", archive: "Archiver les compétences", restore: "Réactiver les compétences" }} onView={() => onOpen(row)} onEdit={() => onOpen(row)} onArchive={() => onArchive(row)} /></td>
             </tr>
           ))}
         </tbody>
       </table>
+      </div>
+      {hasFilters && <div className="border-t border-slate-100 px-4 py-2"><HrResetFilters onReset={() => setColumnFilters({})} /></div>}
     </div>
   );
 }
 
 function LibraryPanel({ catalog, rows }: { catalog: SkillCatalogItem[]; rows: AnyRow[] }) {
   const employees = uniqueValues(rows, (row) => fullName(row));
-  const [search, setSearch] = useState("");
-  const [chapter, setChapter] = useState("all");
-  const [subchapter, setSubchapter] = useState("all");
+  const [filters, setFilters] = useState<Record<string, string[]>>({});
+  const [collapsedChapters, setCollapsedChapters] = useState<Set<string>>(new Set());
+  const [collapsedSubchapters, setCollapsedSubchapters] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<SkillCatalogItem | null>(null);
   const chapters = uniqueValues(catalog, (skill) => skill.family);
-  const subchapters = uniqueValues(catalog.filter((skill) => chapter === "all" || skill.family === chapter), (skill) => skill.category);
-  const visibleCatalog = catalog.filter((skill) => (chapter === "all" || skill.family === chapter) && (subchapter === "all" || skill.category === subchapter) && (!search.trim() || `${skill.name} ${skill.description || ""}`.toLowerCase().includes(search.trim().toLowerCase()))).sort((a, b) => String(a.family || "").localeCompare(String(b.family || ""), "fr") || String(a.category || "").localeCompare(String(b.category || ""), "fr") || a.name.localeCompare(b.name, "fr"));
-  const hasFilters = Boolean(search.trim() || chapter !== "all" || subchapter !== "all");
+  const subchapters = uniqueValues(catalog, (skill) => skill.category);
+  const skills = uniqueValues(catalog, (skill) => skill.name);
+  const criticalities = uniqueValues(catalog, (skill) => skill.criticality || "Standard");
+  const visibleCatalog = catalog.filter((skill) => (!filters.chapter?.length || filters.chapter.includes(String(skill.family || "Non classé"))) && (!filters.subchapter?.length || filters.subchapter.includes(String(skill.category || "Non classé"))) && (!filters.skill?.length || filters.skill.includes(skill.name)) && (!filters.criticality?.length || filters.criticality.includes(String(skill.criticality || "Standard")))).sort((a, b) => String(a.family || "").localeCompare(String(b.family || ""), "fr") || String(a.category || "").localeCompare(String(b.category || ""), "fr") || a.name.localeCompare(b.name, "fr"));
+  const hasFilters = Object.values(filters).some((values) => values.length > 0);
+  const totalColumns = 10 + employees.slice(0, 12).length;
+  function toggle(setter: Dispatch<SetStateAction<Set<string>>>, key: string) { setter((current) => { const next = new Set(current); if (next.has(key)) next.delete(key); else next.add(key); return next; }); }
   return (
     <SectionCard icon={BookOpen} title="Bibliothèque de compétences" description="Référentiel complet : chapitres, sous-chapitres, compétences, attendus de niveau et auto-évaluations par ressource.">
-      <div className="mb-4 grid gap-3 md:grid-cols-3"><label className="relative"><Search className="absolute left-3 top-3 h-4 w-4 text-indigo-500" /><input value={search} onChange={(event) => setSearch(event.target.value)} className={`${selectClassName} w-full pl-9`} placeholder="Rechercher une compétence" /></label><select value={chapter} onChange={(event) => { setChapter(event.target.value); setSubchapter("all"); }} className={selectClassName}><option value="all">Tous les chapitres</option>{chapters.map((value) => <option key={value}>{value}</option>)}</select><select value={subchapter} onChange={(event) => setSubchapter(event.target.value)} className={selectClassName}><option value="all">Tous les sous-chapitres</option>{subchapters.map((value) => <option key={value}>{value}</option>)}</select></div>
-      {hasFilters && <div className="mb-3 flex justify-end"><button type="button" onClick={() => { setSearch(""); setChapter("all"); setSubchapter("all"); }} className="inline-flex h-9 items-center gap-2 rounded-lg px-3 text-xs font-semibold text-slate-500 hover:bg-slate-100"><X className="h-4 w-4" />Réinitialiser les filtres</button></div>}
-      <div className="max-h-[620px] overflow-auto rounded-2xl border border-slate-200 shadow-sm dark:border-slate-600/70">
+      <div className="overflow-hidden rounded-2xl border border-slate-200 shadow-sm dark:border-slate-600/70">
+      <div className="max-h-[620px] overflow-auto">
         <table className="w-full min-w-[1720px] border-separate border-spacing-0 bg-white text-sm dark:bg-slate-700/65">
           <thead className="sticky top-0 z-20 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-700 dark:text-slate-300">
             <tr>
-              <th className="sticky left-0 z-30 bg-slate-50 px-4 py-3 text-left dark:bg-slate-700">Chapitre</th>
-              <th className="px-4 py-3 text-left">Sous-chapitre</th>
-              <th className="px-4 py-3 text-left">Compétence</th>
-              <th className="px-4 py-3 text-left">Criticité</th>
+              <th className="sticky left-0 z-30 bg-slate-50 px-4 py-3 text-left dark:bg-slate-700"><HrColumnFilterMenu label="Chapitre" values={chapters} selected={filters.chapter || []} onChange={(values) => setFilters((current) => ({ ...current, chapter: values }))} /></th>
+              <th className="px-4 py-3 text-left"><HrColumnFilterMenu label="Sous-chapitre" values={subchapters} selected={filters.subchapter || []} onChange={(values) => setFilters((current) => ({ ...current, subchapter: values }))} /></th>
+              <th className="px-4 py-3 text-left"><HrColumnFilterMenu label="Compétence" values={skills} selected={filters.skill || []} onChange={(values) => setFilters((current) => ({ ...current, skill: values }))} /></th>
+              <th className="px-4 py-3 text-left"><HrColumnFilterMenu label="Criticité" values={criticalities} selected={filters.criticality || []} onChange={(values) => setFilters((current) => ({ ...current, criticality: values }))} /></th>
               <th className="px-4 py-3 text-left">Description Niveau 0</th>
               <th className="px-4 py-3 text-left">Description Niveau 1</th>
               <th className="px-4 py-3 text-left">Description Niveau 2</th>
@@ -920,10 +873,20 @@ function LibraryPanel({ catalog, rows }: { catalog: SkillCatalogItem[]; rows: An
             </tr>
           </thead>
           <tbody>
-            {visibleCatalog.map((skill) => {
+            {visibleCatalog.map((skill, index) => {
               const expectations = skill.level_expectations || {};
-              return (
-                <tr key={skill.id} className="hover:bg-indigo-50/45 dark:hover:bg-indigo-900/20">
+              const chapterName = String(skill.family || "Non classé");
+              const subchapterName = String(skill.category || "Non classé");
+              const previous = visibleCatalog[index - 1];
+              const newChapter = !previous || String(previous.family || "Non classé") !== chapterName;
+              const newSubchapter = newChapter || String(previous.category || "Non classé") !== subchapterName;
+              const subchapterKey = `${chapterName}|||${subchapterName}`;
+              const chapterClosed = collapsedChapters.has(chapterName);
+              const subchapterClosed = collapsedSubchapters.has(subchapterKey);
+              return <Fragment key={skill.id}>
+                {newChapter && <tr><td colSpan={totalColumns} className="sticky left-0 z-10 bg-indigo-50 px-3 py-2 dark:bg-indigo-900/25"><button type="button" onClick={() => toggle(setCollapsedChapters, chapterName)} className="flex w-full items-center gap-2 text-left text-xs font-black text-indigo-800 dark:text-indigo-200"><ChevronDown className={`h-4 w-4 transition ${chapterClosed ? "-rotate-90" : ""}`} />Chapitre · {chapterName}</button></td></tr>}
+                {newSubchapter && !chapterClosed && <tr><td colSpan={totalColumns} className="sticky left-0 z-10 bg-sky-50/90 py-2 pl-8 pr-3 dark:bg-sky-900/20"><button type="button" onClick={() => toggle(setCollapsedSubchapters, subchapterKey)} className="flex w-full items-center gap-2 text-left text-xs font-bold text-sky-800 dark:text-sky-200"><ChevronDown className={`h-3.5 w-3.5 transition ${subchapterClosed ? "-rotate-90" : ""}`} />Sous-chapitre · {subchapterName}</button></td></tr>}
+                {!chapterClosed && !subchapterClosed && <tr className="hover:bg-indigo-50/45 dark:hover:bg-indigo-900/20">
                   <td className="sticky left-0 z-10 bg-white px-4 py-3 font-bold text-slate-950 dark:bg-slate-700 dark:text-slate-100">{skill.family || "—"}</td>
                   <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{skill.category || "—"}</td>
                   <td className="px-4 py-3 font-semibold text-slate-700 dark:text-slate-200">{skill.name}</td>
@@ -934,11 +897,12 @@ function LibraryPanel({ catalog, rows }: { catalog: SkillCatalogItem[]; rows: An
                     return <td key={employee} className="px-4 py-3 font-bold text-slate-700 dark:text-slate-200">{match ? `N${clampLevel(match.current_level)}` : "—"}</td>;
                   })}
                   <td className="sticky right-0 z-10 bg-white px-4 py-3 text-right dark:bg-slate-700"><ActionMenu labels={{ view: "Voir la compétence", edit: "Modifier la compétence", archive: "Archiver la compétence", restore: "Réactiver la compétence" }} onView={() => setSelected(skill)} onEdit={() => setSelected(skill)} /></td>
-                </tr>
-              );
+                </tr>}
+              </Fragment>;
             })}
           </tbody>
         </table>
+      </div>{hasFilters && <div className="border-t border-slate-100 px-4 py-2"><HrResetFilters onReset={() => setFilters({})} /></div>}
       </div>
       {selected && <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/35 p-5" onMouseDown={(event) => { if (event.currentTarget === event.target) setSelected(null); }}><section className="max-h-[85vh] w-full max-w-3xl overflow-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl"><div className="flex items-start justify-between gap-4"><div><h3 className="text-lg font-black text-slate-950">{selected.name}</h3><p className="mt-1 text-sm text-slate-500">{selected.family} · {selected.category}</p></div><button type="button" onClick={() => setSelected(null)} className="rounded-xl border border-rose-200 bg-white p-2 text-rose-700"><X className="h-4 w-4" /></button></div><p className="mt-4 rounded-xl bg-slate-50 p-3 text-sm text-slate-700">{selected.description || "Description à compléter."}</p><div className="mt-4 grid gap-2">{[0, 1, 2, 3, 4].map((level) => <div key={level} className="rounded-xl border border-slate-200 p-3"><span className="font-black text-indigo-700">Niveau {level}</span><p className="mt-1 text-sm text-slate-600">{selected.level_expectations?.[String(level)] || "Attendu à compléter dans le référentiel."}</p></div>)}</div></section></div>}
     </SectionCard>
@@ -1397,7 +1361,7 @@ function GenericTable({ moduleKey, rows, onArchive, onRestore }: { moduleKey: Hr
   );
 }
 
-function WorkCardsAndTable({ moduleKey, rows, employees, onArchive, onRestore }: { moduleKey: HrTalentModuleKey; rows: AnyRow[]; employees: Employee[]; onArchive: (row: AnyRow) => void; onRestore: (row: AnyRow) => void }) {
+function WorkCardsAndTable({ moduleKey, rows, employees, onOpenSkills, onArchive, onRestore }: { moduleKey: HrTalentModuleKey; rows: AnyRow[]; employees: Employee[]; onOpenSkills?: (employeeId: string) => void; onArchive: (row: AnyRow) => void; onRestore: (row: AnyRow) => void }) {
   const [view, setView] = useState<DisplayMode>("cards");
   const summaries = moduleKey === "skills" ? buildSkillResourceSummaries(rows, employees) : [];
   const timeSummaries = moduleKey === "time" ? buildTimeProjectSummaries(rows) : [];
@@ -1414,8 +1378,8 @@ function WorkCardsAndTable({ moduleKey, rows, employees, onArchive, onRestore }:
         </div>
       }
     >
-      {moduleKey === "skills" && view === "cards" && <div className="grid gap-4 xl:grid-cols-2">{summaries.map((summary) => <SkillResourceCard key={summary.employee.id} summary={summary} onArchive={() => summary.rows[0] && onArchive(summary.rows[0])} />)}</div>}
-      {moduleKey === "skills" && view === "table" && <SkillResourceTable rows={rows} onArchive={onArchive} />}
+      {moduleKey === "skills" && view === "cards" && <div className="grid gap-4 xl:grid-cols-2">{summaries.map((summary) => <SkillResourceCard key={summary.employee.id} summary={summary} onOpen={() => onOpenSkills?.(String(summary.employee.id))} onArchive={() => summary.rows[0] && onArchive(summary.rows[0])} />)}</div>}
+      {moduleKey === "skills" && view === "table" && <SkillResourceTable rows={rows} onOpen={(row) => onOpenSkills?.(String(row.employee_id))} onArchive={onArchive} />}
       {moduleKey === "time" && view === "cards" && <div className="grid gap-4 xl:grid-cols-2">{timeSummaries.map((summary) => <TimeProjectCard key={summary.id} summary={summary} onArchive={() => summary.detailRows.forEach((row) => onArchive(row))} onRestore={() => summary.detailRows.forEach((row) => onRestore(row))} />)}</div>}
       {moduleKey === "time" && view === "table" && <TimeProjectTable rows={timeSummaries} onArchive={(summary) => summary.detailRows.forEach((row) => onArchive(row))} onRestore={(summary) => summary.detailRows.forEach((row) => onRestore(row))} />}
       {moduleKey !== "skills" && moduleKey !== "time" && view === "cards" && <div className="grid gap-4 xl:grid-cols-2">{rows.map((row) => <GenericCard key={row.id} moduleKey={moduleKey} row={row} onArchive={() => onArchive(row)} onRestore={() => onRestore(row)} />)}</div>}
@@ -1718,7 +1682,7 @@ function buildExportColumns(moduleKey: HrTalentModuleKey): ExportColumn<AnyRow>[
     { key: "status", label: "Statut", value: (row) => labelStatus(moduleKey, row.status) },
   ];
 
-  if (moduleKey === "skills") return [...base, { key: "family", label: "Chapitre", value: (row) => row.family }, { key: "category", label: "Sous-chapitre", value: (row) => row.category }, { key: "skill", label: "Compétence", value: (row) => row.skill_name }, { key: "current_level", label: "Niveau actuel", value: (row) => clampLevel(row.current_level) }, { key: "target_level", label: "Niveau cible", value: (row) => clampLevel(row.target_level) }, { key: "gap", label: "Écart", value: (row) => row.gap }, { key: "criticality", label: "Criticité", value: (row) => row.criticality }, { key: "project_context", label: "Projet / besoin", value: (row) => row.project_context }, { key: "evidence", label: "Preuve", value: (row) => row.evidence }];
+  if (moduleKey === "skills") return [...base, { key: "family", label: "Chapitre", value: (row) => row.family }, { key: "category", label: "Sous-chapitre", value: (row) => row.category }, { key: "skill", label: "Compétence", value: (row) => row.skill_name }, { key: "initial_level", label: "Niveau initial", value: (row) => clampLevel(row.initial_level ?? row.current_level) }, { key: "current_level", label: "Niveau actuel", value: (row) => clampLevel(row.current_level) }, { key: "evolution", label: "Évolution", value: (row) => clampLevel(row.current_level) - clampLevel(row.initial_level ?? row.current_level) }, { key: "criticality", label: "Criticité", value: (row) => row.criticality }, { key: "evidence", label: "Preuve", value: (row) => row.evidence }];
   if (moduleKey === "onboarding") return [...base, { key: "start_date", label: "Début", value: (row) => row.start_date }, { key: "target_end_date", label: "Fin cible", value: (row) => row.target_end_date }, { key: "progress", label: "Progression", value: (row) => row.progress_percent }, { key: "risk", label: "Risque", value: (row) => row.risk_level }, { key: "checklist", label: "Checklist", value: (row) => JSON.stringify(row.checklist_items ?? []) }, { key: "notes", label: "Notes", value: (row) => row.notes }];
   if (moduleKey === "reviews") return [...base, { key: "cycle", label: "Campagne", value: (row) => row.cycle_name }, { key: "objectives", label: "Objectifs", value: (row) => row.objective_count }, { key: "completed", label: "Objectifs complétés", value: (row) => row.completed_objective_count }, { key: "rating", label: "Note globale", value: (row) => row.global_rating }, { key: "employee_comment", label: "Commentaire collaborateur", value: (row) => row.employee_comment }, { key: "manager_comment", label: "Commentaire manager", value: (row) => row.manager_comment }, { key: "details", label: "Détail entretien", value: (row) => JSON.stringify(row.review_details ?? {}) }];
   return [
@@ -1912,6 +1876,7 @@ export default function HrTalentModulePage({ params, moduleKey }: { params: Prom
   const [filters, setFilters] = useState<FilterValue>(emptyFilters);
   const [activeTab, setActiveTab] = useState<TabKey>("main");
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [selectedSkillEmployeeId, setSelectedSkillEmployeeId] = useState<string | undefined>(undefined);
   const [historyOpen, setHistoryOpen] = useState(false);
   const config = getConfig(moduleKey);
   const query = useQuery({ queryKey: ["hr-talent-module", moduleKey, orgId], queryFn: () => loadData(orgId, moduleKey) });
@@ -1989,12 +1954,12 @@ export default function HrTalentModulePage({ params, moduleKey }: { params: Prom
         </div>
       </div>
 
-      {activeTab === "main" && <WorkCardsAndTable moduleKey={moduleKey} rows={filteredRows} employees={data.employees} onArchive={(row) => archiveMutation.mutate(row)} onRestore={(row) => restoreMutation.mutate(row)} />}
+      {activeTab === "main" && <WorkCardsAndTable moduleKey={moduleKey} rows={filteredRows} employees={data.employees} onOpenSkills={(employeeId) => { setSelectedSkillEmployeeId(employeeId); setShowCreateModal(true); }} onArchive={(row) => archiveMutation.mutate(row)} onRestore={(row) => restoreMutation.mutate(row)} />}
       {activeTab === "graphs" && <GraphsPanel moduleKey={moduleKey} rows={filteredRows} catalog={data.catalog} />}
       {activeTab === "library" && <LibraryPanel catalog={data.catalog} rows={filteredRows} />}
       {activeTab === "alerts" && <AlertsPanel moduleKey={moduleKey} rows={filteredRows} />}
 
-      {showCreateModal && moduleKey === "skills" && <HrEmployeeSkillsForm organizationId={data.organization.id} employees={data.employees} catalog={data.catalog} assessments={data.rows} onClose={() => setShowCreateModal(false)} onSaved={() => void query.refetch()} />}
+      {showCreateModal && moduleKey === "skills" && <HrEmployeeSkillsForm organizationId={data.organization.id} employees={data.employees} catalog={data.catalog} assessments={data.rows} initialEmployeeId={selectedSkillEmployeeId} onClose={() => { setShowCreateModal(false); setSelectedSkillEmployeeId(undefined); }} onSaved={() => void query.refetch()} />}
       {showCreateModal && moduleKey !== "skills" && <CreateModal moduleKey={moduleKey} organizationId={data.organization.id} employees={data.employees} catalog={data.catalog} onClose={() => setShowCreateModal(false)} />}
     </div>
   );

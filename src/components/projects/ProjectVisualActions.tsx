@@ -69,7 +69,9 @@ function tableFallback(target: HTMLElement, label: string) {
 }
 
 async function svgFallback(target: HTMLElement, label: string) {
-  const svg = [...target.querySelectorAll("svg")].sort((a, b) => b.getBoundingClientRect().width * b.getBoundingClientRect().height - a.getBoundingClientRect().width * a.getBoundingClientRect().height)[0];
+  const svg = [...target.querySelectorAll("svg")]
+    .filter((item) => item.getBoundingClientRect().width >= 220 && item.getBoundingClientRect().height >= 120)
+    .sort((a, b) => b.getBoundingClientRect().width * b.getBoundingClientRect().height - a.getBoundingClientRect().width * a.getBoundingClientRect().height)[0];
   if (!svg) return null;
   const clone = svg.cloneNode(true) as SVGElement;
   clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
@@ -97,6 +99,15 @@ async function svgFallback(target: HTMLElement, label: string) {
 async function renderTarget(target: HTMLElement, label: string) {
   const width = Math.max(target.scrollWidth, target.clientWidth, 1);
   const height = Math.max(target.scrollHeight, target.clientHeight, 1);
+  // Les tableaux et les grands diagrammes SVG sont reconstruits en image dédiée.
+  // Cela évite les captures vides produites par certains navigateurs sur les zones
+  // scrollables, Recharts, PERT, WBS, timelines et chaînes d'audit.
+  if (target.querySelector("table")) {
+    const table = tableFallback(target, label);
+    if (table) return table;
+  }
+  const diagram = await svgFallback(target, label);
+  if (diagram) return diagram;
   try {
     return await html2canvas(target, {
       backgroundColor: "#ffffff",
@@ -124,10 +135,6 @@ async function renderTarget(target: HTMLElement, label: string) {
       },
     } as Parameters<typeof html2canvas>[1]);
   } catch {
-    const table = tableFallback(target, label);
-    if (table) return table;
-    const svg = await svgFallback(target, label);
-    if (svg) return svg;
     throw new Error("La représentation visuelle ne peut pas être générée.");
   }
 }

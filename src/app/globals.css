@@ -254,11 +254,38 @@ main table tbody td:not(:first-child):not(:last-child) {
 
 main table th:last-child,
 main table td:last-child {
+  position: sticky;
+  right: 0;
+  z-index: 10;
+  background-color: #ffffff;
   white-space: nowrap;
+}
+
+main table thead th:last-child {
+  z-index: 30;
+  background-color: #f0f9ff;
+}
+
+main table tbody tr:hover td:last-child {
+  background-color: #eef2ff;
 }
 
 main table td:last-child button,
 main table td:last-child a {
   font-size: 0.75rem;
   font-weight: 700;
+}
+
+:fullscreen table,
+:fullscreen section,
+:fullscreen article,
+:fullscreen [data-visual-scroll] {
+  color-scheme: light;
+}
+
+:fullscreen .bg-slate-50,
+:fullscreen .bg-slate-800,
+:fullscreen .dark\:bg-slate-800,
+:fullscreen .dark\:bg-slate-800\/30 {
+  background-color: #f8fafc !important;
 }

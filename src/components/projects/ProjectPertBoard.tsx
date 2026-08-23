@@ -1,10 +1,9 @@
 "use client";
 
-import { useId, useMemo, useRef } from "react";
+import { useId, useMemo } from "react";
 import { GitBranch, Route } from "lucide-react";
 
 import { HrInfo, HrStatusBadge } from "@/components/hr/HrReferenceUi";
-import ProjectVisualActions from "@/components/projects/ProjectVisualActions";
 
 type AnyRow = Record<string, any>;
 
@@ -76,7 +75,6 @@ function calculateNetwork(tasks: AnyRow[], dependencies: AnyRow[]) {
 
 export default function ProjectPertBoard({ tasks, dependencies, onEditTask }: { tasks: AnyRow[]; dependencies: AnyRow[]; onEditTask?: (row: AnyRow) => void }) {
   const markerId = `pert-arrow-${useId().replace(/:/g, "")}`;
-  const captureRef = useRef<HTMLElement | null>(null);
   const taskMap = useMemo(() => new Map(tasks.map((task) => [String(task.id), task])), [tasks]);
   const network = useMemo(() => calculateNetwork(tasks, dependencies), [dependencies, tasks]);
   const layout = useMemo(() => {
@@ -93,7 +91,7 @@ export default function ProjectPertBoard({ tasks, dependencies, onEditTask }: { 
   const critical = network.nodes.filter((node) => node.critical);
   const projectNumber = String(tasks[0]?.project_code || "Projet non renseigné");
   return (
-    <section ref={captureRef} className="flex flex-col gap-4 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 p-4 shadow-sm fullscreen:overflow-auto dark:border-slate-600 dark:bg-slate-800">
+    <section className="flex flex-col gap-4 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 p-4 shadow-sm fullscreen:overflow-auto fullscreen:bg-white dark:border-slate-600 dark:bg-slate-800">
       <div className="order-1 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <HrInfo label="N° projet" value={projectNumber} accent="sky" />
         <HrInfo label="Durée calculée du projet" value={`${network.projectDuration} j ouvrés`} accent="indigo" />
@@ -103,7 +101,6 @@ export default function ProjectPertBoard({ tasks, dependencies, onEditTask }: { 
       </div>
       <section className="order-4 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-600 dark:bg-slate-700/70">
         <div className="flex items-center gap-3 border-b border-slate-100 bg-gradient-to-r from-sky-50/70 via-white to-indigo-50/60 px-5 py-4 dark:border-slate-600 dark:from-sky-900/25 dark:via-slate-700 dark:to-indigo-900/25"><span className="rounded-xl bg-rose-100 p-2.5 text-rose-700 dark:bg-rose-900/45 dark:text-rose-200"><Route className="h-4 w-4" /></span><div><h3 className="text-sm font-bold text-slate-950 dark:text-white">Réseau PERT et chemin critique calculé</h3><p className="mt-1 text-xs text-slate-500 dark:text-slate-300">Les liaisons roses composent la plus longue séquence sans marge qui pilote la date de fin.</p></div></div>
-        <div className="flex justify-end border-b border-slate-100 bg-white px-4 py-2 dark:border-slate-600 dark:bg-slate-700"><ProjectVisualActions targetRef={captureRef} fileName={`onepilot-pert-${projectNumber}`} label="le réseau PERT" /></div>
         <div className="max-h-[560px] overflow-auto bg-slate-50/45 p-4 dark:bg-slate-800/30">
           <svg width={layout.width} height={layout.height} role="img" aria-label="Diagramme PERT du projet">
             <defs><marker id={markerId} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor" /></marker></defs>

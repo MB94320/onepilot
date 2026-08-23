@@ -38,9 +38,9 @@ export default function ProjectAuditArrow({ themes, questions, audits, responses
       <svg viewBox="0 0 1600 500" className="block h-auto w-full" role="img" aria-label="Flèche des thèmes de conformité depuis l’AVV vers le Delivery">
         <defs><filter id="audit-shadow" x="-10%" y="-20%" width="120%" height="150%"><feDropShadow dx="0" dy="4" stdDeviation="4" floodColor="#334155" floodOpacity=".14" /></filter></defs>
         <rect x="8" y="38" width="350" height="420" rx="18" fill="none" stroke="#0ea5e9" strokeWidth="2" strokeDasharray="9 8" />
-        <rect x="1190" y="38" width="400" height="420" rx="18" fill="none" stroke="#6366f1" strokeWidth="2" strokeDasharray="9 8" />
+        <rect x="350" y="38" width="1240" height="420" rx="18" fill="none" stroke="#6366f1" strokeWidth="2" strokeDasharray="9 8" />
         <rect x="96" y="48" width="174" height="34" rx="17" fill="#e0f2fe" /><text x="183" y="70" textAnchor="middle" fontSize="15" fontWeight="900" fill="#0369a1">AVV</text>
-        <rect x="1303" y="48" width="174" height="34" rx="17" fill="#e0e7ff" /><text x="1390" y="70" textAnchor="middle" fontSize="15" fontWeight="900" fill="#4338ca">DELIVERY</text>
+        <rect x="884" y="48" width="174" height="34" rx="17" fill="#e0e7ff" /><text x="971" y="70" textAnchor="middle" fontSize="15" fontWeight="900" fill="#4338ca">DELIVERY</text>
         <g filter="url(#audit-shadow)">
           {base.map((row, index) => { const upper = index < 2; const column = index % 2; const x = 20 + column * 170; const y1 = upper ? 80 : 255; const y2 = upper ? 255 : 430; return <g key={row.id}><polygon points={`${x},${y1} ${x + 142},${y1} ${x + 170},255 ${x + 28},${y2}`} fill={fill(row.score)} stroke="#0284c7" strokeWidth="1.5" /><ThemeText row={row} x={x + 86} y={(y1 + y2) / 2} /></g>; })}
           {shaft.map((row, index) => { const upper = index < 5; const column = index % 5; const x = 360 + column * 170; const y1 = upper ? 135 : 255; const y2 = upper ? 255 : 375; return <g key={row.id}><polygon points={`${x},${y1} ${x + 145},${y1} ${x + 170},255 ${x + 145},${y2} ${x},${y2} ${x + 25},255`} fill={fill(row.score)} stroke="#0284c7" strokeWidth="1.5" /><ThemeText row={row} x={x + 85} y={(y1 + y2) / 2} compact /></g>; })}
