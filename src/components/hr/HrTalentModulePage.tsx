@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, use, useRef, useState, type ComponentType, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import { Fragment, use, useMemo, useRef, useState, type ComponentType, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
@@ -841,11 +841,12 @@ function SkillResourceTable({ rows, onOpen, onArchive }: { rows: AnyRow[]; onOpe
 function LibraryPanel({ catalog, rows }: { catalog: SkillCatalogItem[]; rows: AnyRow[] }) {
   const employees = uniqueValues(rows, (row) => fullName(row));
   const [filters, setFilters] = useState<Record<string, string[]>>({});
-  const [collapsedChapters, setCollapsedChapters] = useState<Set<string>>(new Set());
-  const [collapsedSubchapters, setCollapsedSubchapters] = useState<Set<string>>(new Set());
-  const [selected, setSelected] = useState<SkillCatalogItem | null>(null);
   const chapters = uniqueValues(catalog, (skill) => skill.family);
   const subchapters = uniqueValues(catalog, (skill) => skill.category);
+  const subchapterKeys = useMemo(() => catalog.map((skill) => `${String(skill.family || "Non classé")}|||${String(skill.category || "Non classé")}`), [catalog]);
+  const [collapsedChapters, setCollapsedChapters] = useState<Set<string>>(() => new Set(chapters));
+  const [collapsedSubchapters, setCollapsedSubchapters] = useState<Set<string>>(() => new Set(subchapterKeys));
+  const [selected, setSelected] = useState<SkillCatalogItem | null>(null);
   const skills = uniqueValues(catalog, (skill) => skill.name);
   const criticalities = uniqueValues(catalog, (skill) => skill.criticality || "Standard");
   const visibleCatalog = catalog.filter((skill) => (!filters.chapter?.length || filters.chapter.includes(String(skill.family || "Non classé"))) && (!filters.subchapter?.length || filters.subchapter.includes(String(skill.category || "Non classé"))) && (!filters.skill?.length || filters.skill.includes(skill.name)) && (!filters.criticality?.length || filters.criticality.includes(String(skill.criticality || "Standard")))).sort((a, b) => String(a.family || "").localeCompare(String(b.family || ""), "fr") || String(a.category || "").localeCompare(String(b.category || ""), "fr") || a.name.localeCompare(b.name, "fr"));

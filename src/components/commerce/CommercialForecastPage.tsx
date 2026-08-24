@@ -44,8 +44,13 @@ function probability(row: AnyRow) {
 async function loadForecast(orgId: string) {
   const organization = await resolveOrganization(orgId);
   const table = (name: string) => (supabase.from(name as never) as any).select("*").eq("organization_id", organization.id);
-  const [offers, prospects, clients, technical] = await Promise.all([table("offres"), table("prospects"), table("clients"), table("offres_fiche_technique")]);
-  for (const result of [offers, prospects, clients, technical]) if (result.error) throw new Error(result.error.message);
+  const [offers, prospects, clients] = await Promise.all([table("offres"), table("prospects"), table("clients")]);
+  for (const result of [offers, prospects, clients]) if (result.error) throw new Error(result.error.message);
+  const offerIds = (offers.data || []).map((row: AnyRow) => row.id).filter(Boolean);
+  const technical = offerIds.length
+    ? await (supabase.from("offres_fiche_technique" as never) as any).select("*").in("offre_id", offerIds)
+    : { data: [], error: null };
+  if (technical.error) throw new Error(technical.error.message);
   const prospectMap = new Map((prospects.data || []).map((row: AnyRow) => [String(row.id), row]));
   const clientMap = new Map((clients.data || []).map((row: AnyRow) => [String(row.id), row]));
   const technicalMap = new Map((technical.data || []).map((row: AnyRow) => [String(row.offre_id), row]));

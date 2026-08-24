@@ -6,8 +6,6 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Search,
-  Shield,
-  SlidersHorizontal,
 } from "lucide-react";
 import Link from "next/link";
 import {
@@ -21,8 +19,8 @@ import {
 } from "react";
 
 import {
+  administrationNavigationSection,
   navigationSections,
-  superAdminNavigation,
   type NavigationChapter,
 } from "@/config/navigation";
 import {
@@ -197,6 +195,7 @@ export default function Sidebar({
     quality: false,
     finance: false,
     workspace: false,
+    administration: false,
   });
 
   useEffect(() => {
@@ -231,6 +230,15 @@ export default function Sidebar({
 
   const t =
     getTranslations(language);
+
+  const canSeeAdministration =
+    canAccessPlatformAdministration(user);
+  const AdministrationIcon = administrationNavigationSection.icon;
+
+  const availableSections = useMemo(
+    () => navigationSections,
+    [],
+  );
 
   
 function normalizeNavigationPath(path: string) {
@@ -298,10 +306,10 @@ function getHref(path: string) {
           .toLowerCase();
 
       if (!normalizedSearch) {
-        return navigationSections;
+        return availableSections;
       }
 
-      return navigationSections
+      return availableSections
         .map((section) => {
           const translatedSection =
             getSectionLabel(
@@ -356,40 +364,8 @@ function getHref(path: string) {
     }, [
       search,
       language,
+      availableSections,
     ]);
-
-  useEffect(() => {
-    if (!orgId) {
-      return;
-    }
-
-    const activeSection =
-      navigationSections.find(
-        (section) =>
-          section.chapters.some(
-            (chapter) => {
-              const href = `/${encodeURIComponent(
-                orgId,
-              )}${chapter.href}`;
-
-              return isChapterActive(
-                pathname,
-                href,
-                chapter,
-              );
-            },
-          ),
-      );
-
-    if (activeSection) {
-      setOpenSections(
-        (currentSections) => ({
-          ...currentSections,
-          [activeSection.id]: true,
-        }),
-      );
-    }
-  }, [pathname, orgId]);
 
   function toggleSection(
     sectionId: string,
@@ -409,22 +385,6 @@ function getHref(path: string) {
       }),
     );
   }
-
-  const canSeeAdministration =
-    canAccessPlatformAdministration(
-      user,
-    );
-
-  const adminHref = getHref(
-    superAdminNavigation.href,
-  );
-
-  const adminActive =
-    orgId.length > 0 &&
-    (pathname === adminHref ||
-      pathname.startsWith(
-        `${adminHref}/`,
-      ));
 
   return (
     <aside
@@ -725,47 +685,30 @@ function getHref(path: string) {
       </nav>
 
       {canSeeAdministration && (
-        <div className="shrink-0 border-t border-slate-200 bg-gradient-to-br from-amber-50/80 via-white to-orange-50/60 p-3 dark:border-slate-800 dark:from-amber-950/20 dark:via-slate-950 dark:to-orange-950/20">
+        <div className="shrink-0 border-t border-slate-200 px-3 py-3 dark:border-slate-800">
           <Link
-            href={adminHref}
-            className={`flex min-h-12 items-center rounded-xl border ${
-              isOpen
-                ? "justify-between px-3 py-2"
-                : "justify-center"
+            href={getHref("/admin")}
+            title={!isOpen ? administrationNavigationSection.label : undefined}
+            className={`flex h-11 items-center rounded-xl transition ${
+              isOpen ? "gap-3 px-2.5" : "justify-center"
             } ${
-              adminActive
-                ? "border-amber-300 bg-amber-100 text-amber-900"
-                : "border-amber-200 bg-white/80 text-amber-800"
+              pathname.includes("/admin")
+                ? "bg-gradient-to-r from-slate-100 to-indigo-50 text-indigo-700 dark:from-slate-900 dark:to-indigo-950/30 dark:text-indigo-300"
+                : "text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-900/60"
             }`}
           >
-            <div className="flex min-w-0 items-center gap-3">
-              <Shield className="h-4 w-4 shrink-0" />
-
-              {isOpen && (
-                <div className="min-w-0">
-                  <p className="truncate text-[11px] font-black uppercase tracking-wide">
-                    {
-                      t.sidebar
-                        .administration
-                    }
-                  </p>
-
-                  <p className="truncate text-[9px] font-semibold opacity-70">
-                    {
-                      t.sidebar
-                        .superAdminAccess
-                    }
-                  </p>
-                </div>
-              )}
-            </div>
-
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+              <AdministrationIcon className="h-4 w-4" />
+            </span>
             {isOpen && (
-              <SlidersHorizontal className="h-4 w-4 opacity-60" />
+              <span className="truncate text-xs font-black">
+                {administrationNavigationSection.label}
+              </span>
             )}
           </Link>
         </div>
       )}
+
     </aside>
   );
 }

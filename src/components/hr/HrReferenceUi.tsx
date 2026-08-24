@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Archive, ArchiveRestore, BarChart3, Check, ChevronDown, Copy, Edit3, Expand, Eye, Filter, Minimize2, MoreHorizontal, Search, X } from "lucide-react";
 
 export type HrAccent = "indigo" | "emerald" | "amber" | "rose" | "sky" | "slate";
@@ -43,34 +44,58 @@ export function HrColumnFilterMenu({
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const ref = useRef<HTMLDivElement | null>(null);
+  const anchorRef = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const [position, setPosition] = useState({ left: 16, top: 16 });
   const options = useMemo(() => [...new Set(values.map((value) => value.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, "fr", { numeric: true, sensitivity: "base" })), [values]);
   const visible = options.filter((value) => value.toLocaleLowerCase("fr").includes(search.trim().toLocaleLowerCase("fr")));
   const active = selected.length > 0;
 
   useEffect(() => {
     if (!open) return;
-    const close = (event: PointerEvent) => { if (ref.current && !ref.current.contains(event.target as Node)) setOpen(false); };
+    const updatePosition = () => {
+      const bounds = anchorRef.current?.getBoundingClientRect();
+      if (!bounds) return;
+      const menuWidth = 288;
+      const left = Math.max(12, Math.min(window.innerWidth - menuWidth - 12, bounds.right - menuWidth));
+      const estimatedHeight = Math.min(430, 182 + Math.min(options.length, 8) * 38);
+      const openAbove = bounds.bottom + estimatedHeight > window.innerHeight && bounds.top > estimatedHeight;
+      setPosition({ left, top: openAbove ? Math.max(12, bounds.top - estimatedHeight - 8) : Math.min(window.innerHeight - 80, bounds.bottom + 8) });
+    };
+    updatePosition();
+    const close = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (!anchorRef.current?.contains(target) && !menuRef.current?.contains(target)) setOpen(false);
+    };
     const escape = (event: KeyboardEvent) => { if (event.key === "Escape") setOpen(false); };
     document.addEventListener("pointerdown", close);
     document.addEventListener("keydown", escape);
-    return () => { document.removeEventListener("pointerdown", close); document.removeEventListener("keydown", escape); };
-  }, [open]);
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      document.removeEventListener("pointerdown", close);
+      document.removeEventListener("keydown", escape);
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [open, options.length]);
 
   function toggle(value: string) {
     onChange(selected.includes(value) ? selected.filter((item) => item !== value) : [...selected, value]);
   }
 
-  return <div ref={ref} className="relative min-w-max">
-    <button type="button" onClick={(event) => { event.stopPropagation(); setOpen((current) => !current); }} className={`group flex w-full min-w-28 items-center justify-between gap-2 text-left ${active ? "text-indigo-700 dark:text-indigo-200" : "text-inherit"}`} aria-label={`Filtrer la colonne ${label}`} aria-expanded={open}>
-      <span>{label}</span><span className={`relative inline-flex h-5 w-5 items-center justify-center rounded-md transition ${active ? "bg-indigo-600 text-white" : "text-slate-400 group-hover:bg-indigo-100 group-hover:text-indigo-700"}`}>{active ? <Filter className="h-3 w-3" /> : <ChevronDown className="h-3.5 w-3.5" />}</span>
-    </button>
-    {open && <div onClick={(event) => event.stopPropagation()} className="absolute right-0 top-7 z-[80] w-72 overflow-hidden rounded-xl border border-slate-200 bg-white text-left normal-case tracking-normal shadow-2xl dark:border-slate-600 dark:bg-slate-700">
+  const menu = open && typeof document !== "undefined" ? createPortal(<div ref={menuRef} onClick={(event) => event.stopPropagation()} style={{ left: position.left, top: position.top }} className="fixed z-[300] w-72 overflow-hidden rounded-xl border border-slate-200 bg-white text-left normal-case tracking-normal shadow-2xl dark:border-slate-600 dark:bg-slate-700">
       <div className="border-b border-slate-100 p-3 dark:border-slate-600"><label className="relative block"><Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-indigo-500" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Rechercher dans la colonne" className={`${hrInputClassName} h-9 w-full pl-9 text-xs font-medium`} /></label></div>
       <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2 dark:border-slate-600"><button type="button" onClick={() => onChange(options)} className="text-xs font-bold text-indigo-700 hover:underline dark:text-indigo-200">Tout sélectionner</button><button type="button" onClick={() => onChange([])} className="text-xs font-bold text-slate-500 hover:underline dark:text-slate-300">Effacer</button></div>
       <div className="max-h-64 overflow-auto p-2">{visible.map((value) => <label key={value} className="flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-semibold text-slate-700 hover:bg-indigo-50 dark:text-slate-100 dark:hover:bg-indigo-900/30"><input type="checkbox" checked={selected.includes(value)} onChange={() => toggle(value)} className="sr-only" /><span className={`inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border ${selected.includes(value) ? "border-indigo-600 bg-indigo-600 text-white" : "border-slate-300 bg-white"}`}>{selected.includes(value) && <Check className="h-3 w-3" />}</span><span className="truncate" title={value}>{value}</span></label>)}{!visible.length && <p className="px-3 py-6 text-center text-xs font-semibold text-slate-400">Aucune valeur</p>}</div>
       <div className="flex justify-end border-t border-slate-100 p-2 dark:border-slate-600"><button type="button" onClick={() => setOpen(false)} className="inline-flex h-8 items-center rounded-lg bg-indigo-600 px-3 text-xs font-bold text-white hover:bg-indigo-700">Appliquer</button></div>
-    </div>}
+    </div>, document.body) : null;
+
+  return <div className="relative min-w-max">
+    <button ref={anchorRef} type="button" onClick={(event) => { event.stopPropagation(); setOpen((current) => !current); }} className={`group flex w-full min-w-28 items-center justify-between gap-2 text-left ${active ? "text-indigo-700 dark:text-indigo-200" : "text-inherit"}`} aria-label={`Filtrer la colonne ${label}`} aria-expanded={open}>
+      <span>{label}</span><span className={`relative inline-flex h-5 w-5 items-center justify-center rounded-md transition ${active ? "bg-indigo-600 text-white" : "text-slate-400 group-hover:bg-indigo-100 group-hover:text-indigo-700"}`}>{active ? <Filter className="h-3 w-3" /> : <ChevronDown className="h-3.5 w-3.5" />}</span>
+    </button>
+    {menu}
   </div>;
 }
 
@@ -224,11 +249,13 @@ export function HrActionMenu({
   const [isOpen, setIsOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
     const closeOutside = (event: PointerEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) setIsOpen(false);
+      if (!menuRef.current?.contains(event.target as Node) && !buttonRef.current?.contains(event.target as Node)) setIsOpen(false);
     };
     const closeWithEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") setIsOpen(false);
@@ -240,6 +267,26 @@ export function HrActionMenu({
       document.removeEventListener("keydown", closeWithEscape);
     };
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const updatePosition = () => {
+      const rect = buttonRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const width = 240;
+      const estimatedHeight = canRestore ? 58 : 160;
+      const left = Math.max(12, Math.min(window.innerWidth - width - 12, rect.right - width));
+      const top = rect.bottom + estimatedHeight + 12 <= window.innerHeight ? rect.bottom + 8 : Math.max(12, rect.top - estimatedHeight - 8);
+      setMenuPosition({ top, left });
+    };
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [canRestore, isOpen]);
 
   async function executeAction(action?: () => void | Promise<void>) {
     if (!action) return;
@@ -253,12 +300,12 @@ export function HrActionMenu({
   }
 
   return (
-    <div ref={menuRef} className="relative inline-flex">
-      <button type="button" aria-label="Voir, modifier, archiver ou réactiver la fiche" title="Voir, modifier, archiver ou réactiver" disabled={isProcessing} onClick={(event) => { event.stopPropagation(); setIsOpen((current) => !current); }} className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600/60 dark:bg-slate-700/70 dark:text-slate-300 dark:hover:border-indigo-900 dark:hover:bg-indigo-700/35 dark:hover:text-indigo-300">
+    <div className="inline-flex">
+      <button ref={buttonRef} type="button" aria-label="Voir, modifier, archiver ou réactiver la fiche" title="Voir, modifier, archiver ou réactiver" disabled={isProcessing} onClick={(event) => { event.stopPropagation(); setIsOpen((current) => !current); }} className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600/60 dark:bg-slate-700/70 dark:text-slate-300 dark:hover:border-indigo-900 dark:hover:bg-indigo-700/35 dark:hover:text-indigo-300">
         {isProcessing ? <Archive className="h-3.5 w-3.5 animate-pulse" /> : <MoreHorizontal className="h-3.5 w-3.5" />}
       </button>
-      {isOpen && (
-        <div onClick={(event) => event.stopPropagation()} className="absolute right-0 top-10 z-30 w-60 overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl dark:border-slate-600/60 dark:bg-slate-700/70">
+      {isOpen && menuPosition && createPortal(
+        <div ref={menuRef} onClick={(event) => event.stopPropagation()} style={{ top: menuPosition.top, left: menuPosition.left }} className="fixed z-[320] w-60 overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 shadow-2xl dark:border-slate-600/60 dark:bg-slate-700/95">
           {canRestore ? (
             <button type="button" onClick={() => void executeAction(onRestore)} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-bold text-emerald-700 transition hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/30"><ArchiveRestore className="h-4 w-4" />{labels.restore}</button>
           ) : (
@@ -268,7 +315,8 @@ export function HrActionMenu({
               {onArchive && <><div className="my-1 border-t border-slate-100 dark:border-slate-600/60" /><button type="button" onClick={() => void executeAction(onArchive)} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-bold text-slate-600 transition hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-600/70"><Archive className="h-4 w-4" />{labels.archive}</button></>}
             </>
           )}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

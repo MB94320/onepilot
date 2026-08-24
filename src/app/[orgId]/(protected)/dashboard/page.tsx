@@ -524,7 +524,7 @@ export default function DashboardPage({ params }: { params: Promise<{ orgId: str
   };
 
   return (
-    <div className="space-y-3 pt-0 px-2 font-sans text-[11px] text-slate-600 dark:text-slate-400 select-none">
+    <div className="onepilot-business-page space-y-5 px-2 font-sans text-sm text-slate-600 dark:text-slate-300">
       
       {/* HEADER & BOUTON EXPORT PDF ROUGE */}
       <div className="flex justify-between items-center h-8">

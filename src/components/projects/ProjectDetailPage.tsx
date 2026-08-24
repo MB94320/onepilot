@@ -21,7 +21,6 @@ import {
   Save,
   Search,
   ShieldAlert,
-  ShieldCheck,
   SlidersHorizontal,
   Target,
   Users,
@@ -75,11 +74,10 @@ import { ProjectHealthTable } from "@/components/projects/ProjectReferenceUi";
 import ProjectVisualActions from "@/components/projects/ProjectVisualActions";
 import ProjectAuditArrow from "@/components/projects/ProjectAuditArrow";
 import ProjectSkillRequirementsForm from "@/components/projects/ProjectSkillRequirementsForm";
-import ProjectAccessPanel from "@/components/projects/ProjectAccessPanel";
 
 type AnyRow = Record<string, any>;
 type Params = { orgId: string; id: string };
-type TabKey = "cockpit" | "planning" | "team" | "quality" | "finance" | "access";
+type TabKey = "cockpit" | "planning" | "team" | "quality" | "finance";
 
 const supabase = createClient();
 const colors = {
@@ -154,7 +152,6 @@ async function loadProject(orgId: string, projectId: string) {
     auditQuestions,
     projectAudits,
     auditResponses,
-    accessGrants,
   ] = await Promise.all([
     table("project_clients"),
     table("hr_employee_overview"),
@@ -175,9 +172,8 @@ async function loadProject(orgId: string, projectId: string) {
     table("project_audit_questions").order("question_order"),
     table("project_audits").eq("project_id", projectId).order("audit_date", { ascending: false }),
     table("project_audit_responses").eq("project_id", projectId),
-    table("project_access_grants").eq("project_id", projectId).order("created_at"),
   ]);
-  const results = [clients, employees, tasks, dependencies, milestones, actions, deliverables, risks, nonconformities, assignments, skills, financials, satisfaction, health, audit, auditThemes, auditQuestions, projectAudits, auditResponses, accessGrants];
+  const results = [clients, employees, tasks, dependencies, milestones, actions, deliverables, risks, nonconformities, assignments, skills, financials, satisfaction, health, audit, auditThemes, auditQuestions, projectAudits, auditResponses];
   const failure = results.find((result) => result.error)?.error;
   if (failure) throw new Error(failure.message);
   const [skillLibraryResult, employeeSkillsResult] = await Promise.all([
@@ -221,7 +217,6 @@ async function loadProject(orgId: string, projectId: string) {
     auditQuestions: auditQuestions.data || [],
     projectAudits: projectAudits.data || [],
     auditResponses: auditResponses.data || [],
-    accessGrants: accessGrants.data || [],
   };
 }
 
@@ -469,7 +464,6 @@ export default function ProjectDetailPage({ params }: { params: Promise<Params> 
     { key: "team", label: "Équipe & compétences", icon: Users, active: "bg-emerald-600 text-white" },
     { key: "quality", label: "Qualité", icon: ShieldAlert, active: "bg-amber-500 text-white" },
     { key: "finance", label: "Finance & performance", icon: CircleDollarSign, active: "bg-rose-600 text-white" },
-    { key: "access", label: "Accès & partage", icon: ShieldCheck, active: "bg-sky-600 text-white" },
   ];
   return <div className="project-module space-y-6">
     <PageHeader title={`${project.code} · ${project.name}`} subtitle="Cockpit projet complet : exécution, charge, compétences, qualité, risques, finance, performance et décisions." actions={<><DataExportMenu data={data.audit} columns={auditExport} fileName={`onepilot_${project.code}_audit`} sheetName="Audit projet" disabled={!data.audit.length} /><button type="button" onClick={() => router.push(`/${encodeURIComponent(orgId)}/projects`)} className="inline-flex h-10 items-center gap-2 rounded-xl border border-sky-200 bg-white px-4 text-sm font-bold text-sky-700 shadow-sm hover:bg-sky-50"><ArrowLeft className="h-4 w-4" />Portefeuille</button></>} />
@@ -509,7 +503,6 @@ export default function ProjectDetailPage({ params }: { params: Promise<Params> 
     {tab === "finance" && <div className="grid gap-5 xl:grid-cols-2"><HrChartCard title="Valeur acquise et coûts cumulés" description="VP, VA et CR avec lecture CPI/SPI et prévision à terminaison." exportConfig={{ type: "line", data: financialSeries, nameKey: "month", series: [{ key: "pv", label: "VP", color: colors.indigo }, { key: "ev", label: "VA", color: colors.emerald }, { key: "ac", label: "CR", color: colors.rose }], unit: " €" }}><ResponsiveContainer width="100%" height={300}><LineChart data={financialSeries}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="month" /><YAxis /><Tooltip /><Legend /><Line dataKey="pv" name="VP" stroke={colors.indigo} strokeWidth={3} /><Line dataKey="ev" name="VA" stroke={colors.emerald} strokeWidth={3} /><Line dataKey="ac" name="CR" stroke={colors.rose} strokeWidth={3} /></LineChart></ResponsiveContainer></HrChartCard><HrChartCard title="Production et facturation" description="Production, facturé et encaissement mensuels pour piloter FAE, PCA et trésorerie." exportConfig={{ type: "bar", data: financialSeries, nameKey: "month", series: [{ key: "production", label: "Production", color: colors.emerald }, { key: "billed", label: "Facturé", color: colors.indigo }] }}><ResponsiveContainer width="100%" height={300}><BarChart data={financialSeries}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="month" /><YAxis /><Tooltip /><Legend /><Bar dataKey="production" name="Production" fill={colors.emerald} radius={[7, 7, 0, 0]} /><Bar dataKey="billed" name="Facturé" fill={colors.indigo} radius={[7, 7, 0, 0]} /></BarChart></ResponsiveContainer></HrChartCard><HrSectionCard icon={CircleDollarSign} title="Synthèse financière et EVM" description="Indicateurs calculés depuis le journal mensuel, avec formules traçables et dénominateurs sécurisés."><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><HrInfo label="BAC" value={money(latestFinance.bac || project.ordered_budget || project.budget_amount)} accent="indigo" /><HrInfo label="CPI = VA / CR" value={Number(latestFinance.cpi || 0).toFixed(3)} accent={Number(latestFinance.cpi || 0) >= 1 ? "emerald" : "rose"} /><HrInfo label="SPI = VA / VP" value={Number(latestFinance.spi || 0).toFixed(3)} accent={Number(latestFinance.spi || 0) >= 1 ? "emerald" : "rose"} /><HrInfo label="EAC" value={money(latestFinance.estimate_at_completion)} accent="amber" /><HrInfo label="Écart coût = VA − CR" value={money(latestFinance.cost_variance)} /><HrInfo label="Écart délai = VA − VP" value={money(latestFinance.schedule_variance)} /><HrInfo label="FAE" value={money(latestFinance.fae)} accent="sky" /><HrInfo label="PCA" value={money(latestFinance.pca)} accent="amber" /></div></HrSectionCard><ProjectTable title="Historique satisfaction" description="Notes mensuelles par critère et actions d’amélioration client." icon={Activity} rows={scopedSatisfaction} columns={[{ label: "Mois", value: (row) => formatMonth(row.survey_month) }, { label: "Écoute", value: (row) => `${row.customer_listening_score}/5` }, { label: "Planification", value: (row) => `${row.planning_score}/5` }, { label: "Compétences", value: (row) => `${row.technical_skills_score}/5` }, { label: "Indicateurs", value: (row) => `${row.monitoring_score}/5` }, { label: "Risques", value: (row) => `${row.risk_management_score}/5` }, { label: "Global", value: (row) => `${Number(row.overall_score || 0).toFixed(1)}/5` }, { label: "Action", value: (row) => row.improvement_actions || "—" }]} /></div>}
     {tab === "finance" && <div className="grid gap-5 xl:grid-cols-2"><HrChartCard title="Coûts, production et marge" description="Lecture mensuelle des coûts et de la production, complétée par la marge réelle en pourcentage." exportConfig={{ type: "bar", data: financialSeries, nameKey: "month", series: [{ key: "costs", label: "Coûts", color: colors.rose }, { key: "production", label: "Production", color: colors.emerald }, { key: "margin", label: "Marge", color: colors.indigo }] }}><ResponsiveContainer width="100%" height={300}><ComposedChart data={financialSeries}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="month" /><YAxis yAxisId="amount" /><YAxis yAxisId="margin" orientation="right" unit=" %" /><Tooltip /><Legend /><Bar yAxisId="amount" dataKey="costs" name="Coûts" fill={colors.rose} /><Bar yAxisId="amount" dataKey="production" name="Production" fill={colors.emerald} /><Line yAxisId="margin" dataKey="margin" name="Marge (%)" stroke={colors.indigo} strokeWidth={3} /></ComposedChart></ResponsiveContainer></HrChartCard><HrChartCard title="Prévisionnel et réel — coûts et production" description="Comparaison des références prévues avec les montants réellement constatés pour anticiper les dérives." exportConfig={{ type: "bar", data: financialSeries, nameKey: "month", series: [{ key: "plannedCosts", label: "Coûts prévus", color: colors.sky }, { key: "costs", label: "Coûts réels", color: colors.rose }, { key: "plannedProduction", label: "Production prévue", color: colors.indigo }, { key: "production", label: "Production réelle", color: colors.emerald }] }}><ResponsiveContainer width="100%" height={300}><BarChart data={financialSeries}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="month" /><YAxis /><Tooltip /><Legend /><Bar dataKey="plannedCosts" name="Coûts prévus" fill={colors.sky} /><Bar dataKey="costs" name="Coûts réels" fill={colors.rose} /><Bar dataKey="plannedProduction" name="Production prévue" fill={colors.indigo} /><Bar dataKey="production" name="Production réelle" fill={colors.emerald} /></BarChart></ResponsiveContainer></HrChartCard></div>}
     {tab === "finance" && <HrSectionCard icon={BarChart3} title="Définitions des indicateurs" description="Vocabulaire commun pour une lecture fiable des performances du projet."><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><HrInfo label="VP / PV" value="Valeur planifiée du travail prévu" accent="indigo" /><HrInfo label="VA / EV" value="Valeur acquise du travail réellement achevé" accent="emerald" /><HrInfo label="CR / AC" value="Coûts réels engagés" accent="rose" /><HrInfo label="SPI" value="VA ÷ VP · inférieur à 1 = retard" accent="amber" /><HrInfo label="CPI" value="VA ÷ CR · inférieur à 1 = dérive coût" accent="amber" /><HrInfo label="EAC" value="Prévision du coût total à terminaison" accent="sky" /><HrInfo label="OTD / OQD / DoD" value="Ponctualité, qualité au premier passage, profondeur de retard" accent="emerald" /><HrInfo label="TACE" value="Taux d’activité congés exclus" accent="indigo" /></div></HrSectionCard>}
-    {tab === "access" && <ProjectAccessPanel organizationId={data.organization.id} projectId={project.id} employees={data.employees} grants={data.accessGrants} onSaved={() => void query.refetch()} />}
     {taskEditing && <ProjectTaskEditDrawer task={taskEditing} organizationId={data.organization.id} employees={data.employees} tasks={data.tasks} dependencies={data.dependencies} onClose={() => setTaskEditing(null)} onSaved={() => void query.refetch()} />}
     {skillsEditing && <ProjectSkillRequirementsForm organizationId={data.organization.id} projectId={project.id} library={data.skillLibrary} initialRows={data.skills} onClose={() => setSkillsEditing(false)} onSaved={() => void query.refetch()} />}
   </div>;

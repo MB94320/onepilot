@@ -227,6 +227,13 @@ main table tbody td:not(:first-child):not(:last-child) {
   color: #0f172a !important;
   overflow: auto !important;
   padding: 1.25rem !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  min-width: 100vw !important;
+  min-height: 100vh !important;
+  max-width: none !important;
+  max-height: none !important;
+  border-radius: 0 !important;
 }
 
 :fullscreen .project-visual-actions {
@@ -283,9 +290,53 @@ main table td:last-child a {
   color-scheme: light;
 }
 
+:fullscreen [data-visual-scroll] {
+  max-height: calc(100vh - 7rem) !important;
+  overflow: auto !important;
+}
+
+:fullscreen .h-\[330px\],
+:fullscreen .min-h-\[330px\] {
+  height: calc(100vh - 7.5rem) !important;
+  min-height: 520px !important;
+}
+
 :fullscreen .bg-slate-50,
 :fullscreen .bg-slate-800,
 :fullscreen .dark\:bg-slate-800,
 :fullscreen .dark\:bg-slate-800\/30 {
   background-color: #f8fafc !important;
+}
+
+/* Les formulaires métier restent centrés et lisibles sur les écrans larges. */
+.fixed.inset-0 > section.max-w-\[1440px\] {
+  max-width: 72rem !important;
+  max-height: 92vh !important;
+}
+
+/* Pieds de formulaires communs à RH, Projets, Commerce et Administration. */
+.fixed.inset-0 div[class*="border-t"] > button:first-child[class*="px-4"] {
+  min-height: 2.5rem;
+  border: 1px solid #fecdd3 !important;
+  border-radius: 0.75rem !important;
+  background: #ffffff !important;
+  color: #be123c !important;
+  font-size: 0.875rem !important;
+  font-weight: 700 !important;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.05);
+}
+
+.fixed.inset-0 div[class*="border-t"] > button:last-child[class*="px-4"] {
+  min-height: 2.5rem;
+  border: 1px solid #4f46e5 !important;
+  border-radius: 0.75rem !important;
+  background: #4f46e5 !important;
+  color: #ffffff !important;
+  font-size: 0.875rem !important;
+  font-weight: 700 !important;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.08);
+}
+
+.fixed.inset-0 div[class*="border-t"] > button:last-child[class*="px-4"]:hover {
+  background: #4338ca !important;
 }

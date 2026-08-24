@@ -56,7 +56,7 @@ async function resolveOrganization(orgId: string) {
 async function loadAccess(orgId: string) {
   const organization = await resolveOrganization(orgId);
   const [employees, grants] = await Promise.all([
-    (supabase.from("hr_employee_overview" as never) as any).select("*").eq("organization_id", organization.id).is("archived_at", null).order("full_name"),
+    (supabase.from("hr_employee_overview" as never) as any).select("*").eq("organization_id", organization.id).order("full_name"),
     (supabase.from("platform_access_grants" as never) as any).select("*").eq("organization_id", organization.id).order("created_at", { ascending: false }),
   ]);
   if (employees.error) throw new Error(employees.error.message);

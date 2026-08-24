@@ -69,7 +69,7 @@ function tableFallback(target: HTMLElement, label: string) {
 }
 
 async function svgFallback(target: HTMLElement, label: string) {
-  const svg = [...target.querySelectorAll("svg")]
+  const svg = [...target.querySelectorAll("svg[data-visual-svg]")]
     .filter((item) => item.getBoundingClientRect().width >= 220 && item.getBoundingClientRect().height >= 120)
     .sort((a, b) => b.getBoundingClientRect().width * b.getBoundingClientRect().height - a.getBoundingClientRect().width * a.getBoundingClientRect().height)[0];
   if (!svg) return null;
@@ -97,19 +97,22 @@ async function svgFallback(target: HTMLElement, label: string) {
 }
 
 async function renderTarget(target: HTMLElement, label: string) {
-  const width = Math.max(target.scrollWidth, target.clientWidth, 1);
-  const height = Math.max(target.scrollHeight, target.clientHeight, 1);
+  const captureTarget = target.querySelector<HTMLElement>(
+    "[data-visual-diagram], .overscroll-contain, .overflow-x-auto.rounded-2xl",
+  ) || target;
+  const width = Math.max(captureTarget.scrollWidth, captureTarget.clientWidth, 1);
+  const height = Math.max(captureTarget.scrollHeight, captureTarget.clientHeight, 1);
   // Les tableaux et les grands diagrammes SVG sont reconstruits en image dédiée.
   // Cela évite les captures vides produites par certains navigateurs sur les zones
   // scrollables, Recharts, PERT, WBS, timelines et chaînes d'audit.
-  if (target.querySelector("table")) {
-    const table = tableFallback(target, label);
+  if (captureTarget.querySelector("table")) {
+    const table = tableFallback(captureTarget, label);
     if (table) return table;
   }
-  const diagram = await svgFallback(target, label);
+  const diagram = await svgFallback(captureTarget, label);
   if (diagram) return diagram;
   try {
-    return await html2canvas(target, {
+    return await html2canvas(captureTarget, {
       backgroundColor: "#ffffff",
       scale: Math.min(2, 12000 / Math.max(width, height)),
       useCORS: true,
