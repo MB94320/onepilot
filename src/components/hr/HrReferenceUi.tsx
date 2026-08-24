@@ -209,16 +209,23 @@ export function HrInfo({ label, value, accent = "slate" }: { label: string; valu
   return <div className={`rounded-xl px-3 py-2 ${classes[accent]}`}><p className="text-[10px] font-black uppercase tracking-wide opacity-70">{label}</p><div className={`mt-1 min-w-0 truncate font-bold ${label === "Note globale" ? "flex min-h-16 items-center justify-center text-2xl font-black" : "text-xs"}`} title={valueTitle}>{value}</div></div>;
 }
 
+const hrStatusTranslations: Record<string, string> = {
+  completed: "Clôturé", closed: "Clôturé", done: "Terminé", delivered: "Livré", accepted: "Accepté",
+  approved: "Validé", validated: "Validé", manager_approved: "Validé manager", hr_approved: "Validé RH",
+  in_progress: "En cours", active: "En cours", pending: "En attente", on_hold: "En attente", submitted: "Soumis",
+  prepared: "Préparé", draft: "Brouillon", not_started: "Non démarré", planned: "Planifié", open: "Ouvert",
+  rejected: "Refusé", blocked: "Bloqué", delayed: "En retard", late: "En retard", overdue: "En retard", cancelled: "Annulé", archived: "Archivé",
+  review: "En revue", compliant: "Conforme", partially_compliant: "Partiellement conforme", non_compliant: "Non conforme",
+  not_applicable: "Non applicable", invoiced: "Facturé", collected: "Encaissé", unpaid: "Non réglé", partially_paid: "Partiellement réglé",
+};
+
+export function hrStatusLabel(status?: string | null) {
+  const normalized = String(status || "").trim().toLowerCase();
+  return hrStatusTranslations[normalized] || status || "Non renseigné";
+}
+
 export function HrStatusBadge({ status, label }: { status?: string | null; label?: string }) {
   const normalized = String(status || "").toLowerCase();
-  const translations: Record<string, string> = {
-    completed: "Clôturé", closed: "Clôturé", done: "Terminé", delivered: "Livré", accepted: "Accepté",
-    approved: "Validé", validated: "Validé", manager_approved: "Validé manager", hr_approved: "Validé RH",
-    in_progress: "En cours", active: "En cours", pending: "En attente", on_hold: "En attente", submitted: "Soumis",
-    prepared: "Préparé", draft: "Brouillon", not_started: "Non démarré", planned: "Planifié", open: "Ouvert",
-    rejected: "Refusé", blocked: "Bloqué", delayed: "En retard", late: "En retard", cancelled: "Annulé", archived: "Archivé",
-    review: "En revue", compliant: "Conforme", partially_compliant: "Partiellement conforme", non_compliant: "Non conforme",
-  };
   const className = normalized === "completed" || normalized === "closed" || normalized === "done" || normalized === "delivered" || normalized === "accepted" || normalized === "approved" || normalized === "validated" || normalized === "manager_approved" || normalized === "hr_approved" || normalized === "compliant"
     ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
     : normalized === "in_progress" || normalized === "active" || normalized === "pending" || normalized === "on_hold" || normalized === "submitted" || normalized === "manager_input" || normalized === "employee_input" || normalized === "calibration"
@@ -228,7 +235,7 @@ export function HrStatusBadge({ status, label }: { status?: string | null; label
         : normalized === "rejected" || normalized === "blocked" || normalized === "delayed" || normalized === "late" || normalized === "non_compliant"
           ? "bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300"
           : "bg-slate-100 text-slate-700 dark:bg-slate-600/60 dark:text-slate-200";
-  return <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-black ${className}`}>{label || translations[normalized] || status || "Non renseigné"}</span>;
+  return <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-black ${className}`}>{label || hrStatusLabel(status)}</span>;
 }
 
 export function HrActionMenu({

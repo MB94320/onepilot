@@ -301,6 +301,18 @@ main table td:last-child a {
   min-height: 520px !important;
 }
 
+:fullscreen .recharts-responsive-container,
+:fullscreen .recharts-wrapper {
+  width: 100% !important;
+  height: calc(100vh - 9rem) !important;
+  min-height: 560px !important;
+}
+
+:fullscreen svg.recharts-surface {
+  width: 100% !important;
+  min-height: 560px !important;
+}
+
 :fullscreen .bg-slate-50,
 :fullscreen .bg-slate-800,
 :fullscreen .dark\:bg-slate-800,

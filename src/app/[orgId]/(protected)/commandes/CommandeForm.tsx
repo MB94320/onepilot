@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { X, Briefcase, ShoppingCart } from "lucide-react";
+import { hrCancelButtonClassName, hrSaveButtonClassName } from "@/components/hr/HrReferenceUi";
 
 const supabase = createClient();
 
@@ -148,8 +149,8 @@ export default function CommandeForm({ currentOrgId, onClose, onRefresh }: Comma
             <input value={titreCommande} onChange={e => setTitreCommande(e.target.value)} placeholder="Ex: Prestation Audit, Achat Matériel..." className="w-full h-8 px-2 bg-white border border-slate-200 rounded focus:outline-none" required />
           </div>
           <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
-            <button type="button" onClick={onClose} className="h-7 px-3 text-slate-500 hover:text-slate-700 font-medium" disabled={isSubmitting}>Annuler</button>
-            <button type="submit" className="h-7 px-4 bg-blue-600 text-white rounded font-medium hover:bg-blue-700 disabled:opacity-40" disabled={isSubmitting}>{isSubmitting ? "Création..." : "Valider la commande"}</button>
+            <button type="button" onClick={onClose} className={hrCancelButtonClassName} disabled={isSubmitting}>Annuler</button>
+            <button type="submit" className={hrSaveButtonClassName} disabled={isSubmitting}>{isSubmitting ? "Création..." : "Enregistrer"}</button>
           </div>
         </form>
       </div>

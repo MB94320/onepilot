@@ -59,7 +59,7 @@ async function loadAdministration(orgId: string, mode: Mode) {
   const table = (name: string) => (supabase.from(name as never) as any).select("*").eq("organization_id", organization.id);
   const [membersResult, auditResult, accessResult] = await Promise.all([
     table("organization_members").order("created_at", { ascending: false }),
-    table("hr_audit_logs").order("created_at", { ascending: false }).limit(1000),
+    table("hr_audit_logs").order("performed_at", { ascending: false }).limit(1000),
     table("platform_access_grants").is("archived_at", null).order("created_at", { ascending: false }),
   ]);
   if (membersResult.error) throw new Error(membersResult.error.message);
@@ -127,7 +127,12 @@ export default function AdministrationModulePage({ params, mode }: { params: Pro
   const columns: Column[] = useMemo(() => mode === "organizations" ? [
     { key: "name", label: "Organisation", value: (row) => row.name || "—" }, { key: "slug", label: "Identifiant", value: (row) => row.slug || "—" }, { key: "plan", label: "Offre", value: (row) => row.plan || row.subscription_plan || "Non renseignée" }, { key: "status", label: "Statut", value: (row) => <HrStatusBadge status={tone(row.status || "active")} label={row.status || "Actif"} />, raw: (row) => row.status || "Actif" }, { key: "date", label: "Création", value: (row) => date(row.created_at) },
   ] : mode === "security" ? [
-    { key: "date", label: "Date", value: (row) => date(row.created_at) }, { key: "user", label: "Utilisateur", value: (row) => row.user_email || row.actor_email || row.actor_user_id || "Système" }, { key: "action", label: "Action", value: (row) => row.action || "Événement" }, { key: "details", label: "Détail", value: (row) => row.details || row.reason || "—" }, { key: "status", label: "Niveau", value: (row) => <HrStatusBadge status={String(row.action || "").includes("ERROR") ? "blocked" : "planned"} label={String(row.action || "").includes("ERROR") ? "Alerte" : "Information"} />, raw: (row) => String(row.action || "").includes("ERROR") ? "Alerte" : "Information" },
+    { key: "date", label: "Date", value: (row) => date(row.performed_at) },
+    { key: "user", label: "Utilisateur", value: (row) => row.performed_by || "Système" },
+    { key: "entity", label: "Objet", value: (row) => [row.entity_type, row.entity_id].filter(Boolean).join(" · ") || "Objet non renseigné" },
+    { key: "action", label: "Action", value: (row) => row.action || "Événement" },
+    { key: "details", label: "Détail", value: (row) => Array.isArray(row.changed_fields) && row.changed_fields.length ? `Champs modifiés : ${row.changed_fields.join(", ")}` : row.metadata?.reason || row.metadata?.details || "Opération tracée" },
+    { key: "status", label: "Niveau", value: (row) => <HrStatusBadge status={String(row.action || "").toLowerCase().includes("error") ? "blocked" : "planned"} label={String(row.action || "").toLowerCase().includes("error") ? "Alerte" : "Information"} />, raw: (row) => String(row.action || "").toLowerCase().includes("error") ? "Alerte" : "Information" },
   ] : mode === "settings" ? [
     { key: "category", label: "Catégorie", value: (row) => row.category }, { key: "name", label: "Paramètre", value: (row) => row.name }, { key: "value", label: "Valeur", value: (row) => String(row.value ?? "—") }, { key: "status", label: "Statut", value: (row) => <HrStatusBadge status="completed" label={row.status} />, raw: (row) => row.status }, { key: "date", label: "Mise à jour", value: (row) => date(row.updated_at) },
   ] : [

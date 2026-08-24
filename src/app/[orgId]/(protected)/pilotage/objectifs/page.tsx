@@ -1,2 +1,2 @@
-import { UnifiedModulePage } from "@/components/platform/UnifiedModulePage";
-export default function ObjectivesPage({ params }: { params: Promise<{ orgId: string }> }) { return <UnifiedModulePage params={params} mode="objectives" />; }
+import PilotageModulePage from "@/components/pilotage/PilotageModulePage";
+export default function ObjectivesPage({ params }: { params: Promise<{ orgId: string }> }) { return <PilotageModulePage params={params} mode="objectives" />; }

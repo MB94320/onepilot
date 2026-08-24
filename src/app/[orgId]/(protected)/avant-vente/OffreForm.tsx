@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { X } from "lucide-react";
+import { hrCancelButtonClassName, hrSaveButtonClassName } from "@/components/hr/HrReferenceUi";
 
 const supabase = createClient();
 
@@ -148,8 +149,8 @@ export default function OffreForm({ currentOrgId, onClose, onRefresh }: OffreFor
           </div>
 
           <div className="flex justify-end gap-2 pt-2 border-t dark:border-slate-800">
-            <button type="button" onClick={onClose} className="h-7 px-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded font-medium hover:bg-slate-200" disabled={isSubmitting}>Annuler</button>
-            <button type="submit" className="h-7 px-4 bg-blue-600 text-white rounded font-medium hover:bg-blue-700 disabled:opacity-40" disabled={isSubmitting}>
+            <button type="button" onClick={onClose} className={hrCancelButtonClassName} disabled={isSubmitting}>Annuler</button>
+            <button type="submit" className={hrSaveButtonClassName} disabled={isSubmitting}>
               {isSubmitting ? "Initialisation..." : "Valider & Ouvrir"}
             </button>
           </div>

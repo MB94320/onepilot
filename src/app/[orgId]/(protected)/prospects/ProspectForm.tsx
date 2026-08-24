@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { FileText } from "lucide-react";
+import { hrCancelButtonClassName, hrSaveButtonClassName } from "@/components/hr/HrReferenceUi";
 
 const supabase = createClient();
 const STAGES = ['découverte', 'contact', 'qualification', 'NoGo', 'proposition', 'négociation', 'gagné', 'perdu'] as const;
@@ -206,8 +207,8 @@ export default function ProspectForm({ selectedProspect, clientsList, currentOrg
         </div>
 
         <div className="flex justify-end gap-2 border-t border-slate-100 dark:border-slate-800 pt-3">
-          <button onClick={onClose} className="px-3 h-7 border border-slate-200 dark:border-slate-800 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-slate-500">Annuler</button>
-          <button onClick={() => saveMutation.mutate(f)} disabled={!f.title || !f.client_id} className="px-4 h-7 bg-blue-600 text-white font-medium rounded hover:bg-blue-700 transition-colors disabled:opacity-40">
+          <button onClick={onClose} className={hrCancelButtonClassName}>Annuler</button>
+          <button onClick={() => saveMutation.mutate(f)} disabled={!f.title || !f.client_id} className={hrSaveButtonClassName}>
             Enregistrer
           </button>
         </div>

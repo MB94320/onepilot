@@ -8,7 +8,7 @@ import PageHeader from "@/components/ui/PageHeader";
 import PageTutorial from "@/components/ui/PageTutorial";
 import DataExportMenu, { type ExportColumn } from "@/components/ui/DataExportMenu";
 import { createClient } from "@/lib/supabase/client";
-import { HrActionMenu, HrChartCard, HrColumnFilterMenu, HrMetricCard, HrResetFilters, HrSectionCard, HrStatusBadge, hrInputClassName, hrSelectClassName, hrTableClassName, hrTableHeaderClassName } from "@/components/hr/HrReferenceUi";
+import { HrActionMenu, HrChartCard, HrColumnFilterMenu, HrMetricCard, HrResetFilters, HrSectionCard, HrStatusBadge, hrInputClassName, hrSelectClassName, hrStatusLabel, hrTableClassName, hrTableHeaderClassName } from "@/components/hr/HrReferenceUi";
 import ProjectVisualActions from "@/components/projects/ProjectVisualActions";
 
 type AnyRow = Record<string, any>;
@@ -23,26 +23,26 @@ const configs: Record<Mode, { title: string; singular: string; subtitle: string;
   deliverables: { title: "Livrables", singular: "livrable", subtitle: "Suivez les engagements, l’acceptation client, les retards et la conformité du premier coup.", table: "project_deliverables", domain: "Qualité & risques" },
   nonconformities: { title: "Non-conformités", singular: "non-conformité", subtitle: "Centralisez les écarts, causes, corrections et preuves d’efficacité des plans d’action.", table: "project_nonconformities", domain: "Qualité & risques" },
   audits: { title: "Audits", singular: "audit", subtitle: "Planifiez les audits et exploitez les résultats, écarts et actions de mise en conformité.", table: "project_audits", domain: "Qualité & risques" },
-  qualityDocuments: { title: "Documents qualité", singular: "document", subtitle: "Retrouvez les documents qualité depuis la bibliothèque documentaire transverse.", domain: "Qualité & risques" },
+  qualityDocuments: { title: "Documents qualité", singular: "document", subtitle: "Retrouvez les modèles, procédures et références qualité selon la phase AVV, Delivery ou transverse.", table: "platform_document_catalog", domain: "Qualité & risques" },
   finance: { title: "Finance", singular: "période financière", subtitle: "Consolidez coûts, production, facturation, encaissement, marge, PCA et FAE.", table: "project_financial_periods", domain: "Finance" },
   margins: { title: "Marges", singular: "marge", subtitle: "Analysez les marges prévisionnelles et réelles, leurs écarts et leurs causes.", table: "project_financial_periods", domain: "Finance" },
   billing: { title: "Facturation", singular: "facturation", subtitle: "Réconciliez production, bons de livraison, facturation et reste à facturer.", table: "project_financial_periods", domain: "Finance" },
   cash: { title: "Trésorerie", singular: "flux", subtitle: "Suivez les encaissements, décaissements, encours et besoins de trésorerie.", table: "project_financial_periods", domain: "Finance" },
   collections: { title: "Recouvrement", singular: "encours", subtitle: "Priorisez les créances, retards de paiement et actions de recouvrement.", table: "project_financial_periods", domain: "Finance" },
   expenses: { title: "Notes de frais", singular: "note de frais", subtitle: "Contrôlez les dépenses, justificatifs, validations et rattachements analytiques.", table: "project_financial_periods", domain: "Finance" },
-  documents: { title: "Documents & outils", singular: "document", subtitle: "Centralisez les PDF, modèles, processus, partages et automatisations de la plateforme.", domain: "Documents & outils" },
-  library: { title: "Bibliothèque documentaire", singular: "document", subtitle: "Classez et retrouvez les PDF et documents de référence par module et par activité.", domain: "Documents & outils" },
-  templates: { title: "Modèles", singular: "modèle", subtitle: "Gérez les modèles de documents réutilisables et leurs versions validées.", domain: "Documents & outils" },
-  processes: { title: "Processus", singular: "processus", subtitle: "Documentez les processus, responsables, contrôles et preuves applicables.", domain: "Documents & outils" },
+  documents: { title: "Documents & outils", singular: "document", subtitle: "Centralisez modèles, procédures, processus, références et outils générables par l’IA.", table: "platform_document_catalog", domain: "Documents & outils" },
+  library: { title: "Bibliothèque documentaire", singular: "document", subtitle: "Classez et retrouvez les documents de référence par module, phase, catégorie et version.", table: "platform_document_catalog", domain: "Documents & outils" },
+  templates: { title: "Modèles", singular: "modèle", subtitle: "Gérez les modèles réutilisables, leurs versions validées et leur génération assistée.", table: "platform_document_catalog", domain: "Documents & outils" },
+  processes: { title: "Processus & procédures", singular: "processus", subtitle: "Documentez les processus, procédures, responsables, contrôles et preuves applicables.", table: "platform_document_catalog", domain: "Documents & outils" },
   sharing: { title: "Partages documentaires", singular: "partage", subtitle: "Maîtrisez les destinataires, droits, échéances et traces de consultation.", domain: "Documents & outils" },
-  automations: { title: "Automatisations", singular: "automatisation", subtitle: "Pilotez les automatisations, déclencheurs, résultats et anomalies de traitement.", domain: "Documents & outils" },
+  automations: { title: "Assistants & agents IA", singular: "agent IA", subtitle: "Pilotez les assistants, déclencheurs, autonomie, résultats, garde-fous et anomalies.", table: "platform_ai_agents", domain: "Documents & outils" },
 };
 
 function text(value: unknown) { return String(value ?? "").trim(); }
 function amount(value: unknown) { return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(Number(value || 0)); }
 function date(value: unknown) { if (!value) return "—"; const parsed = new Date(String(value)); return Number.isNaN(parsed.getTime()) ? "—" : new Intl.DateTimeFormat("fr-FR").format(parsed); }
 function normalized(row: AnyRow) {
-  const status = text(row.status || row.quality_status || row.health_status || "Ouvert");
+  const status = hrStatusLabel(text(row.status || row.quality_status || row.health_status || "Ouvert"));
   return {
     ...row,
     displayCode: text(row.code || row.project_code || row.reference || row.id?.slice?.(0, 8) || "—"),
@@ -93,7 +93,11 @@ async function loadRows(orgId: string, mode: Mode) {
   }
   const result = await (supabase.from(config.table as any) as any).select("*").eq("organization_id", organization.id).order("created_at", { ascending: false }).limit(500);
   if (result.error) throw new Error(result.error.message);
-  return { organization, rows: (result.data || []).map(normalized) };
+  let scopedRows: AnyRow[] = result.data || [];
+  if (mode === "templates") scopedRows = scopedRows.filter((row) => row.category === "template");
+  if (mode === "processes") scopedRows = scopedRows.filter((row) => ["process", "procedure"].includes(row.category));
+  if (mode === "qualityDocuments") scopedRows = scopedRows.filter((row) => row.module_key === "quality");
+  return { organization, rows: scopedRows.map(normalized) };
 }
 
 export function UnifiedModulePage({ params, mode }: { params: Promise<{ orgId: string }>; mode: Mode }) {
