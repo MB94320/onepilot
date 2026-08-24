@@ -5,7 +5,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   Archive,
-  ArchiveRestore,
   BarChart3,
   Bell,
   BookOpen,
@@ -15,14 +14,12 @@ import {
   ChevronDown,
   Clock3,
   Copy,
-  Edit3,
   Expand,
-  Eye,
   Gauge,
   GraduationCap,
   Lightbulb,
   ListChecks,
-  MoreHorizontal,
+  Minimize2,
   Plus,
   Search,
   ShieldAlert,
@@ -55,7 +52,15 @@ import PageHeader from "@/components/ui/PageHeader";
 import PageTutorial from "@/components/ui/PageTutorial";
 import { createClient } from "@/lib/supabase/client";
 import HrEmployeeSkillsForm from "@/components/hr/HrEmployeeSkillsForm";
-import { HrActionMenu, HrColumnFilterMenu, HrResetFilters } from "@/components/hr/HrReferenceUi";
+import HrReviewForm from "@/components/hr/HrReviewForm";
+import { HrReviewCard, HrReviewTable } from "@/components/hr/HrReviewUi";
+import {
+  HrActionMenu,
+  HrColumnFilterMenu,
+  HrResetFilters,
+  hrCancelButtonClassName,
+  hrSaveButtonClassName,
+} from "@/components/hr/HrReferenceUi";
 
 const supabase = createClient();
 
@@ -139,14 +144,6 @@ const emptyFilters: FilterValue = {
 
 const selectClassName =
   "h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300 dark:focus:border-indigo-600 dark:focus:ring-indigo-950";
-
-const levelLabels = [
-  "Niveau 0 · Profane",
-  "Niveau 1 · Sensibilisé",
-  "Niveau 2 · Autonome encadré",
-  "Niveau 3 · Confirmé",
-  "Niveau 4 · Expert",
-];
 
 const levelShortLabels = ["N0", "N1", "N2", "N3", "N4"];
 const chartPalette = ["#6366f1", "#10b981", "#f59e0b", "#f43f5e", "#0ea5e9"];
@@ -275,7 +272,7 @@ function getConfig(moduleKey: HrTalentModuleKey) {
     exportFile: "rh_entretiens_objectifs",
     icon: Target,
     guideTitle: "Piloter les entretiens et objectifs",
-    guideDescription: "Consolider performance, objectifs, compétences, formation, feedbacks et validations collaborateur/manager. Les entretiens capitalisent l’année écoulée, les objectifs en cours et le plan de développement.",
+    guideDescription: "Consolider performance, objectifs, compétences, formation et feedbacks dans une fiche annuelle unique par collaborateur. L’entretien peut être enregistré puis repris à tout moment ; le workflow trace l’envoi au manager, la validation manager, la validation RH provisoire et la clôture.",
   };
 }
 
@@ -299,6 +296,8 @@ function labelStatus(moduleKey: HrTalentModuleKey, status?: string | null) {
     employee_input: "Saisie collaborateur",
     manager_input: "Saisie manager",
     calibration: "Calibration",
+    sent_to_manager: "Envoyé au manager",
+    hr_provisional: "Validé RH (provisoire)",
     open: "Ouvert",
     archived: "Archivé",
   };
@@ -383,7 +382,8 @@ async function loadData(slugOrId: string, moduleKey: HrTalentModuleKey): Promise
     rowResult = await (supabase.from("hr_review_items" as never) as any)
       .select("*")
       .eq("organization_id", organization.id)
-      .order("created_at", { ascending: false })
+      .is("archived_at", null)
+      .order("updated_at", { ascending: false })
       .limit(500);
   }
 
@@ -478,7 +478,7 @@ function filterRows(moduleKey: HrTalentModuleKey, rows: AnyRow[], filters: Filte
       if (filters.need === "expert" && clampLevel(row.current_level) < 3) return false;
       if (filters.need === "project_gap" && !(String(row.project_context ?? "").length > 0 && Number(row.gap ?? 0) > 0)) return false;
     } else if (filters.need === "gap") {
-      if (!["submitted", "manager_approved", "to_develop", "delayed", "employee_input", "manager_input", "calibration"].includes(String(row.status))) return false;
+      if (!["submitted", "manager_approved", "to_develop", "delayed", "in_progress", "sent_to_manager", "hr_provisional", "employee_input", "manager_input", "calibration"].includes(String(row.status))) return false;
     } else if (filters.need === "critical") {
       if (!(row.risk_level === "high" || row.status === "rejected")) return false;
     }
@@ -754,7 +754,7 @@ function buildSkillResourceSummaries(rows: AnyRow[], employees: Employee[]) {
 function SkillResourceCard({ summary, onOpen, onArchive }: { summary: ReturnType<typeof buildSkillResourceSummaries>[number]; onOpen: () => void; onArchive: () => void }) {
   const employee = summary.employee as any;
   return (
-    <article className="group rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-indigo-200 hover:bg-indigo-50/25 hover:shadow-md dark:border-slate-600/60 dark:bg-slate-700/70 dark:hover:bg-indigo-900/20">
+    <article role="button" tabIndex={0} onClick={onOpen} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") onOpen(); }} className="group cursor-pointer rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-indigo-200 hover:bg-indigo-50/25 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-indigo-300 dark:border-slate-600/60 dark:bg-slate-700/70 dark:hover:bg-indigo-900/20">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="truncate text-sm font-black text-slate-950 dark:text-slate-100">{fullName(employee)}</h3>
@@ -768,9 +768,9 @@ function SkillResourceCard({ summary, onOpen, onArchive }: { summary: ReturnType
       </div>
       <div className="mt-4 grid grid-cols-5 gap-2">
         {summary.counts.map((count, index) => (
-          <div key={index} className="rounded-xl border border-slate-200 bg-slate-50 px-2 py-2 text-center dark:border-slate-600/60 dark:bg-slate-800/70">
-            <p className="text-[10px] font-black text-slate-400">{levelShortLabels[index]}</p>
-            <p className="mt-1 text-lg font-black text-slate-950 dark:text-white">{count}</p>
+          <div key={index} className={`rounded-xl border px-2 py-2 text-center ${["border-slate-200 bg-slate-50 text-slate-700", "border-sky-200 bg-sky-50 text-sky-700", "border-amber-200 bg-amber-50 text-amber-700", "border-indigo-200 bg-indigo-50 text-indigo-700", "border-emerald-200 bg-emerald-50 text-emerald-700"][index]}`}>
+            <p className="text-[10px] font-black opacity-70">{levelShortLabels[index]}</p>
+            <p className="mt-1 text-lg font-black">{count}</p>
           </div>
         ))}
       </div>
@@ -818,7 +818,7 @@ function SkillResourceTable({ rows, onOpen, onArchive }: { rows: AnyRow[]; onOpe
         </thead>
         <tbody>
           {visibleRows.map((row) => (
-            <tr key={row.id} className="hover:bg-indigo-50/45 dark:hover:bg-indigo-900/20">
+            <tr key={row.id} onClick={() => onOpen(row)} className="cursor-pointer hover:bg-indigo-50/45 dark:hover:bg-indigo-900/20">
               <td className="sticky left-0 z-10 bg-white px-4 py-3 font-bold text-slate-950 dark:bg-slate-700 dark:text-slate-100">{fullName(row)}</td>
               <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{row.family || "—"}</td>
               <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{row.category || "—"}</td>
@@ -1362,7 +1362,7 @@ function GenericTable({ moduleKey, rows, onArchive, onRestore }: { moduleKey: Hr
   );
 }
 
-function WorkCardsAndTable({ moduleKey, rows, employees, onOpenSkills, onArchive, onRestore }: { moduleKey: HrTalentModuleKey; rows: AnyRow[]; employees: Employee[]; onOpenSkills?: (employeeId: string) => void; onArchive: (row: AnyRow) => void; onRestore: (row: AnyRow) => void }) {
+function WorkCardsAndTable({ moduleKey, rows, employees, onOpenSkills, onOpenReview, onArchive, onRestore }: { moduleKey: HrTalentModuleKey; rows: AnyRow[]; employees: Employee[]; onOpenSkills?: (employeeId: string) => void; onOpenReview?: (row: AnyRow) => void; onArchive: (row: AnyRow) => void; onRestore: (row: AnyRow) => void }) {
   const [view, setView] = useState<DisplayMode>("cards");
   const summaries = moduleKey === "skills" ? buildSkillResourceSummaries(rows, employees) : [];
   const timeSummaries = moduleKey === "time" ? buildTimeProjectSummaries(rows) : [];
@@ -1383,8 +1383,10 @@ function WorkCardsAndTable({ moduleKey, rows, employees, onOpenSkills, onArchive
       {moduleKey === "skills" && view === "table" && <SkillResourceTable rows={rows} onOpen={(row) => onOpenSkills?.(String(row.employee_id))} onArchive={onArchive} />}
       {moduleKey === "time" && view === "cards" && <div className="grid gap-4 xl:grid-cols-2">{timeSummaries.map((summary) => <TimeProjectCard key={summary.id} summary={summary} onArchive={() => summary.detailRows.forEach((row) => onArchive(row))} onRestore={() => summary.detailRows.forEach((row) => onRestore(row))} />)}</div>}
       {moduleKey === "time" && view === "table" && <TimeProjectTable rows={timeSummaries} onArchive={(summary) => summary.detailRows.forEach((row) => onArchive(row))} onRestore={(summary) => summary.detailRows.forEach((row) => onRestore(row))} />}
-      {moduleKey !== "skills" && moduleKey !== "time" && view === "cards" && <div className="grid gap-4 xl:grid-cols-2">{rows.map((row) => <GenericCard key={row.id} moduleKey={moduleKey} row={row} onArchive={() => onArchive(row)} onRestore={() => onRestore(row)} />)}</div>}
-      {moduleKey !== "skills" && moduleKey !== "time" && view === "table" && <GenericTable moduleKey={moduleKey} rows={rows} onArchive={onArchive} onRestore={onRestore} />}
+      {moduleKey === "reviews" && view === "cards" && <div className="grid gap-4 xl:grid-cols-2">{rows.map((row) => <HrReviewCard key={row.id} row={row} onOpen={(item) => onOpenReview?.(item)} onArchive={onArchive} />)}</div>}
+      {moduleKey === "reviews" && view === "table" && <HrReviewTable rows={rows} onOpen={(item) => onOpenReview?.(item)} onArchive={onArchive} />}
+      {moduleKey === "onboarding" && view === "cards" && <div className="grid gap-4 xl:grid-cols-2">{rows.map((row) => <GenericCard key={row.id} moduleKey={moduleKey} row={row} onArchive={() => onArchive(row)} onRestore={() => onRestore(row)} />)}</div>}
+      {moduleKey === "onboarding" && view === "table" && <GenericTable moduleKey={moduleKey} rows={rows} onArchive={onArchive} onRestore={onRestore} />}
     </SectionCard>
   );
 }
@@ -1448,16 +1450,16 @@ function ChartCard({ title, description, children }: { title: string; descriptio
     }, "image/png");
   }
 
-  const card = (height: string) => (
+  const card = (height: string, expanded = false) => (
     <>
       <div className="mb-4 flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h3 className="truncate text-sm font-black text-slate-950 dark:text-white" title={title}>{title}</h3>
-          <p className="mt-1 truncate text-xs text-slate-500 dark:text-slate-300" title={description}>{description}</p>
+          <h3 className={`truncate text-sm font-black ${expanded ? "text-slate-950" : "text-slate-950 dark:text-white"}`} title={title}>{title}</h3>
+          <p className={`mt-1 truncate text-xs ${expanded ? "text-slate-500" : "text-slate-500 dark:text-slate-300"}`} title={description}>{description}</p>
         </div>
         <div className="flex shrink-0 gap-1.5">
           <button type="button" onClick={copy} title="Copier le graphique" className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700 dark:border-slate-600 dark:hover:bg-indigo-900/30"><Copy className="h-3.5 w-3.5" /></button>
-          <button type="button" onClick={() => setIsExpanded(true)} title="Agrandir le graphique" className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700 dark:border-slate-600 dark:hover:bg-indigo-900/30"><Expand className="h-3.5 w-3.5" /></button>
+          <button type="button" onClick={() => setIsExpanded(!expanded)} title={expanded ? "Réduire le graphique" : "Agrandir le graphique"} className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700">{expanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Expand className="h-3.5 w-3.5" />}</button>
         </div>
       </div>
       <div ref={chartRef} className={height}>{children}</div>
@@ -1470,10 +1472,9 @@ function ChartCard({ title, description, children }: { title: string; descriptio
         {card("h-[280px]")}
       </article>
       {isExpanded && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4" onClick={() => setIsExpanded(false)}>
-          <article className="h-[86vh] w-full max-w-6xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-600 dark:bg-slate-800" onClick={(event) => event.stopPropagation()}>
-            {card("h-[70vh]")}
-            <div className="mt-4 flex justify-end"><button type="button" onClick={() => setIsExpanded(false)} className="inline-flex h-10 items-center rounded-xl border border-slate-200 px-4 text-sm font-bold text-slate-600 transition hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700">Fermer</button></div>
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-100/95 p-3" onClick={() => setIsExpanded(false)}>
+          <article className="h-full w-full overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            {card("h-[calc(100vh-9rem)]", true)}
           </article>
         </div>
       )}
@@ -1498,6 +1499,14 @@ function GraphsPanel({ moduleKey, rows, catalog }: { moduleKey: HrTalentModuleKe
   ];
   const timeProjectData = Object.entries(rows.reduce((acc: Record<string, number>, row) => { const key = row.project_number || "Projet non renseigné"; acc[key] = (acc[key] || 0) + getTimeTotalHours(row); return acc; }, {})).map(([name, heures]) => ({ name, heures }));
   const timeCostProjectData = Object.entries(rows.reduce((acc: Record<string, number>, row) => { const key = row.project_number || "Projet non renseigné"; acc[key] = (acc[key] || 0) + getTimeTotalCost(row); return acc; }, {})).map(([name, cout]) => ({ name, cout }));
+  const reviewObjectiveData = rows.map((row) => ({ name: fullName(row), atteinte: percentage(Number(row.completed_objective_count || 0), Number(row.objective_count || 0)), note: Number(row.global_rating || 0) }));
+  const reviewWorkflowData = [
+    { name: "En cours", value: rows.filter((row) => ["in_progress", "employee_input"].includes(String(row.status))).length },
+    { name: "Envoyé au manager", value: rows.filter((row) => ["sent_to_manager", "manager_input"].includes(String(row.status))).length },
+    { name: "Validé manager", value: rows.filter((row) => ["manager_approved", "calibration"].includes(String(row.status))).length },
+    { name: "Validé RH provisoire", value: rows.filter((row) => row.status === "hr_provisional").length },
+    { name: "Terminé", value: rows.filter((row) => row.status === "completed").length },
+  ];
   const monthlyTimeData = Object.entries(rows.reduce((acc: Record<string, { heures: number; avv: number; management: number; production: number; formation: number; intercontrat: number; reprise: number; achat: number; frais: number }>, row) => {
     const date = row.activity_date ? new Date(row.activity_date) : null;
     const key = date && !Number.isNaN(date.getTime()) ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}` : "Non daté";
@@ -1523,10 +1532,10 @@ function GraphsPanel({ moduleKey, rows, catalog }: { moduleKey: HrTalentModuleKe
         {moduleKey === "skills" ? (
           <>
             <ChartCard title="Radar par chapitre" description="Niveau moyen réel par chapitre de compétences, de 0 à 4.">
-              <ResponsiveContainer width="100%" height="100%"><RadarChart data={radarModuleData}><PolarGrid /><PolarAngleAxis dataKey="module" tick={{ fontSize: 10 }} /><PolarRadiusAxis domain={[0, 4]} /><Radar name="Niveau moyen" dataKey="niveau" stroke={chartPalette[0]} fill={chartPalette[0]} fillOpacity={0.22} /><Tooltip /><Legend /></RadarChart></ResponsiveContainer>
+              <ResponsiveContainer width="100%" height="100%"><RadarChart data={radarModuleData}><PolarGrid /><PolarAngleAxis dataKey="module" tick={{ fontSize: 10 }} /><PolarRadiusAxis domain={[0, 4]} tick={false} axisLine={false} /><Radar name="Niveau moyen" dataKey="niveau" stroke={chartPalette[0]} fill={chartPalette[0]} fillOpacity={0.22} /><Tooltip /><Legend /></RadarChart></ResponsiveContainer>
             </ChartCard>
             <ChartCard title="Radar par sous-chapitre" description="Niveau moyen par sous-chapitre pour identifier les zones fortes et faibles.">
-              <ResponsiveContainer width="100%" height="100%"><RadarChart data={radarSubmoduleData}><PolarGrid /><PolarAngleAxis dataKey="module" tick={{ fontSize: 10 }} /><PolarRadiusAxis domain={[0, 4]} /><Radar name="Niveau moyen" dataKey="niveau" stroke={chartPalette[1]} fill={chartPalette[1]} fillOpacity={0.22} /><Tooltip /><Legend /></RadarChart></ResponsiveContainer>
+              <ResponsiveContainer width="100%" height="100%"><RadarChart data={radarSubmoduleData}><PolarGrid /><PolarAngleAxis dataKey="module" tick={{ fontSize: 10 }} /><PolarRadiusAxis domain={[0, 4]} tick={false} axisLine={false} /><Radar name="Niveau moyen" dataKey="niveau" stroke={chartPalette[1]} fill={chartPalette[1]} fillOpacity={0.22} /><Tooltip /><Legend /></RadarChart></ResponsiveContainer>
             </ChartCard>
             <ChartCard title="Ressources par chapitre" description="Nombre d’évaluations disponibles par chapitre.">
               <ResponsiveContainer width="100%" height="100%"><BarChart data={moduleData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" tick={{ fontSize: 10 }} /><YAxis allowDecimals={false} /><Tooltip /><Legend /><Bar dataKey="value" name="Évaluations" fill={chartPalette[2]} radius={[8, 8, 0, 0]} /></BarChart></ResponsiveContainer>
@@ -1563,6 +1572,18 @@ function GraphsPanel({ moduleKey, rows, catalog }: { moduleKey: HrTalentModuleKe
             </ChartCard>
             <ChartCard title="Coûts par projet" description="Coûts chargés estimés par projet à partir des heures et taux RH.">
               <ResponsiveContainer width="100%" height="100%"><BarChart data={timeCostProjectData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" tick={{ fontSize: 10 }} /><YAxis allowDecimals={false} /><Tooltip /><Legend /><Bar dataKey="cout" name="Coût" fill={chartPalette[0]} radius={[8, 8, 0, 0]} /></BarChart></ResponsiveContainer>
+            </ChartCard>
+          </>
+        ) : moduleKey === "reviews" ? (
+          <>
+            <ChartCard title="Atteinte des objectifs par collaborateur" description="Part des objectifs déclarés comme atteints dans chaque entretien annuel.">
+              <ResponsiveContainer width="100%" height="100%"><BarChart data={reviewObjectiveData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" tick={{ fontSize: 10 }} interval={reviewObjectiveData.length > 8 ? 1 : 0} /><YAxis domain={[0, 100]} /><Tooltip /><Legend /><Bar dataKey="atteinte" name="Objectifs atteints (%)" fill="#10b981" radius={[8, 8, 0, 0]} /></BarChart></ResponsiveContainer>
+            </ChartCard>
+            <ChartCard title="Notes globales des entretiens" description="Évaluation globale sur 5 pour identifier les besoins d’accompagnement et de reconnaissance.">
+              <ResponsiveContainer width="100%" height="100%"><BarChart data={reviewObjectiveData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" tick={{ fontSize: 10 }} interval={reviewObjectiveData.length > 8 ? 1 : 0} /><YAxis domain={[0, 5]} /><Tooltip /><Legend /><Bar dataKey="note" name="Note globale (/5)" fill="#6366f1" radius={[8, 8, 0, 0]} /></BarChart></ResponsiveContainer>
+            </ChartCard>
+            <ChartCard title="Avancement du workflow de validation" description="Répartition entre saisie, envoi manager, validation manager, contrôle RH et clôture.">
+              <ResponsiveContainer width="100%" height="100%"><BarChart data={reviewWorkflowData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" tick={{ fontSize: 10 }} /><YAxis allowDecimals={false} /><Tooltip /><Legend /><Bar dataKey="value" name="Entretiens" fill="#f59e0b" radius={[8, 8, 0, 0]} /></BarChart></ResponsiveContainer>
             </ChartCard>
           </>
         ) : (
@@ -1602,7 +1623,7 @@ function Insight({ title, description, level }: { title: string; description: st
 }
 
 function AlertsPanel({ moduleKey, rows }: { moduleKey: HrTalentModuleKey; rows: AnyRow[] }) {
-  const actionNeeded = rows.filter((row) => ["submitted", "manager_approved", "to_develop", "delayed", "employee_input", "manager_input", "calibration"].includes(row.status) || Number(row.gap ?? 0) > 0 || row.risk_level === "high").length;
+  const actionNeeded = rows.filter((row) => ["submitted", "manager_approved", "to_develop", "delayed", "in_progress", "sent_to_manager", "hr_provisional", "employee_input", "manager_input", "calibration"].includes(row.status) || Number(row.gap ?? 0) > 0 || row.risk_level === "high").length;
   const ok = rows.filter((row) => ["approved", "validated", "completed"].includes(row.status) || (moduleKey === "skills" && Number(row.gap ?? 0) === 0)).length;
   const nok = rows.filter((row) => row.status === "rejected" || row.risk_level === "high" || Number(row.gap ?? 0) > 1).length;
   const missingManager = rows.filter((row) => !row.manager_name).length;
@@ -1660,7 +1681,7 @@ function buildMetrics(moduleKey: HrTalentModuleKey, rows: AnyRow[], catalog: Ski
     return [
       { label: "Entretiens", value: rows.length, description: "Entretiens et objectifs suivis.", icon: Target, accent: "indigo" as Accent },
       { label: "Validés", value: rows.filter((row) => row.status === "completed").length, description: "Entretiens finalisés et exploitables.", icon: CheckCircle2, accent: "emerald" as Accent },
-      { label: "En cours", value: rows.filter((row) => ["employee_input", "manager_input", "calibration"].includes(row.status)).length, description: "Saisies, arbitrages ou calibration en cours.", icon: CalendarClock, accent: "amber" as Accent },
+      { label: "En cours", value: rows.filter((row) => ["in_progress", "sent_to_manager", "manager_approved", "hr_provisional", "employee_input", "manager_input", "calibration"].includes(row.status)).length, description: "Saisies et validations collaborateur, manager ou RH en cours.", icon: CalendarClock, accent: "amber" as Accent },
       { label: "Objectifs atteints", value: `${percentage(rows.reduce((sum, row) => sum + Number(row.completed_objective_count || 0), 0), rows.reduce((sum, row) => sum + Number(row.objective_count || 0), 0))}%`, description: "Taux global des objectifs déclarés.", icon: Gauge, accent: "rose" as Accent },
     ];
   }
@@ -1785,7 +1806,7 @@ function CreateModal({ moduleKey, organizationId, employees, catalog, onClose }:
           cycleId = cycleInsert.data.id;
         }
         const reviewDetails = { previous_year: { objectives: "Bilan année écoulée à compléter.", achievement: 0, highlights: "Réussites, irritants et axes de progrès." }, current_year: { objectives: "Objectifs de l’année à définir.", priority: "Performance, compétences et contribution collective." }, training: ["Formation métier à qualifier"], employee_validation: false, manager_validation: false, development_plan: "Plan de développement à définir." };
-        const { error } = await (supabase.from("hr_review_items" as never) as any).insert({ organization_id: organizationId, cycle_id: cycleId, employee_id: employeeId, manager_employee_id: employees.find((item) => item.id === employeeId)?.manager_employee_id || null, status: "employee_input", objective_count: 4, completed_objective_count: 0, global_rating: null, employee_comment: "Auto-évaluation à compléter.", manager_comment: "Évaluation manager à compléter.", review_details: reviewDetails });
+        const { error } = await (supabase.from("hr_review_items" as never) as any).insert({ organization_id: organizationId, cycle_id: cycleId, employee_id: employeeId, manager_employee_id: employees.find((item) => item.id === employeeId)?.manager_employee_id || null, review_year: year, status: "in_progress", objective_count: 4, completed_objective_count: 0, global_rating: null, employee_comment: "Auto-évaluation à compléter.", manager_comment: "Évaluation manager à compléter.", review_details: reviewDetails });
         if (error) throw error;
       } else {
         const selectedEmployee = employees.find((item) => item.id === employeeId);
@@ -1846,10 +1867,10 @@ function CreateModal({ moduleKey, organizationId, employees, catalog, onClose }:
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
-      <div className="max-h-[90vh] w-full max-w-6xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-600 dark:bg-slate-800">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose(); }}>
+      <div className="max-h-[90vh] w-full max-w-6xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-600 dark:bg-slate-800" onMouseDown={(event) => event.stopPropagation()}>
         <div className="border-b border-slate-100 bg-gradient-to-r from-sky-50/70 via-white to-indigo-50/60 px-5 py-4 dark:border-slate-600 dark:from-sky-900/25 dark:via-slate-800 dark:to-indigo-900/25">
-          <div className="flex items-center justify-between gap-3"><h2 className="text-sm font-black text-slate-950 dark:text-white">{getConfig(moduleKey).newLabel}</h2><button onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100"><X className="h-4 w-4" /></button></div>
+          <div className="flex items-center gap-3"><h2 className="text-sm font-black text-slate-950 dark:text-white">{getConfig(moduleKey).newLabel}</h2></div>
         </div>
         <div className="max-h-[72vh] space-y-4 overflow-auto p-5">
           <label className="block"><span className="text-xs font-bold text-slate-600 dark:text-slate-300">Ressource</span><select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} className={`${selectClassName} mt-1 w-full`}>{employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.full_name || employee.employee_number || employee.id}</option>)}</select></label>
@@ -1865,7 +1886,7 @@ function CreateModal({ moduleKey, organizationId, employees, catalog, onClose }:
             <label className="block"><span className="text-xs font-bold text-slate-600 dark:text-slate-300">Commentaires</span><textarea value={comments} onChange={(e)=>setComments(e.target.value)} className="mt-1 min-h-24 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300" /></label>
           </div>}
           {moduleKey === "onboarding" && <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 text-xs leading-5 text-slate-600 dark:border-slate-600 dark:bg-slate-900/30 dark:text-slate-300">Le parcours sera créé avec une checklist complète RH / IT / manager / qualité / collaborateur : livret, PC, mail, accès outils, projet, fiche poste, matrice compétences, formations, points manager et période d’essai.</div>}
-          <div className="flex justify-end gap-2"><button type="button" onClick={onClose} className="inline-flex h-10 items-center rounded-xl border border-rose-200 bg-white px-4 text-sm font-bold text-rose-700 shadow-sm hover:bg-rose-50 dark:border-rose-800 dark:bg-slate-800 dark:text-rose-300">Annuler</button><button type="button" onClick={() => void save()} disabled={isSaving || !employeeId || (moduleKey === "skills" && !skillId)} className="inline-flex h-10 items-center rounded-xl bg-indigo-600 px-4 text-sm font-bold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-50">Enregistrer</button></div>
+          <div className="flex justify-end gap-2"><button type="button" onClick={onClose} className={hrCancelButtonClassName}>Annuler</button><button type="button" onClick={() => void save()} disabled={isSaving || !employeeId || (moduleKey === "skills" && !skillId)} className={hrSaveButtonClassName}>{isSaving ? "Enregistrement…" : "Enregistrer"}</button></div>
         </div>
       </div>
     </div>
@@ -1878,6 +1899,7 @@ export default function HrTalentModulePage({ params, moduleKey }: { params: Prom
   const [activeTab, setActiveTab] = useState<TabKey>("main");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedSkillEmployeeId, setSelectedSkillEmployeeId] = useState<string | undefined>(undefined);
+  const [selectedReview, setSelectedReview] = useState<AnyRow | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const config = getConfig(moduleKey);
   const query = useQuery({ queryKey: ["hr-talent-module", moduleKey, orgId], queryFn: () => loadData(orgId, moduleKey) });
@@ -1895,7 +1917,7 @@ export default function HrTalentModulePage({ params, moduleKey }: { params: Prom
   const restoreMutation = useMutation({
     mutationFn: async (row: AnyRow) => {
       const table = moduleKey === "time" ? "hr_time_activity_entries" : moduleKey === "skills" ? "hr_employee_skills" : moduleKey === "onboarding" ? "hr_onboarding_plans" : "hr_review_items";
-      const status = moduleKey === "time" ? "submitted" : moduleKey === "skills" ? "active" : moduleKey === "onboarding" ? "in_progress" : "employee_input";
+      const status = moduleKey === "time" ? "submitted" : moduleKey === "skills" ? "active" : moduleKey === "onboarding" ? "in_progress" : "in_progress";
       const { error } = await (supabase.from(table as never) as any).update({ status, archived_at: null }).eq("id", row.id);
       if (error) throw error;
     },
@@ -1924,7 +1946,7 @@ export default function HrTalentModulePage({ params, moduleKey }: { params: Prom
           <>
             <button type="button" onClick={() => setHistoryOpen((current) => !current)} className="inline-flex h-10 items-center gap-2 rounded-xl border border-sky-100 bg-white px-3 text-sm font-bold text-sky-700 shadow-sm transition hover:border-sky-200 hover:bg-sky-50 dark:border-sky-900 dark:bg-slate-700/70 dark:text-sky-300 dark:hover:bg-sky-900/30"><Clock3 className="h-4 w-4" />Historique RH</button>
             <DataExportMenu data={filteredRows} columns={buildExportColumns(moduleKey)} fileName={config.exportFile} sheetName={config.title} disabled={filteredRows.length === 0} />
-            <button type="button" onClick={() => setShowCreateModal(true)} className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-4 text-sm font-bold text-white shadow-sm transition hover:bg-indigo-700"><Plus className="h-4 w-4" />{config.newLabel}</button>
+            <button type="button" onClick={() => { setSelectedReview(null); setShowCreateModal(true); }} className={hrSaveButtonClassName}><Plus className="h-4 w-4" />{config.newLabel}</button>
           </>
         }
       />
@@ -1955,13 +1977,14 @@ export default function HrTalentModulePage({ params, moduleKey }: { params: Prom
         </div>
       </div>
 
-      {activeTab === "main" && <WorkCardsAndTable moduleKey={moduleKey} rows={filteredRows} employees={data.employees} onOpenSkills={(employeeId) => { setSelectedSkillEmployeeId(employeeId); setShowCreateModal(true); }} onArchive={(row) => archiveMutation.mutate(row)} onRestore={(row) => restoreMutation.mutate(row)} />}
+      {activeTab === "main" && <WorkCardsAndTable moduleKey={moduleKey} rows={filteredRows} employees={data.employees} onOpenSkills={(employeeId) => { setSelectedSkillEmployeeId(employeeId); setShowCreateModal(true); }} onOpenReview={(row) => { setSelectedReview(row); setShowCreateModal(true); }} onArchive={(row) => archiveMutation.mutate(row)} onRestore={(row) => restoreMutation.mutate(row)} />}
       {activeTab === "graphs" && <GraphsPanel moduleKey={moduleKey} rows={filteredRows} catalog={data.catalog} />}
       {activeTab === "library" && <LibraryPanel catalog={data.catalog} rows={filteredRows} />}
       {activeTab === "alerts" && <AlertsPanel moduleKey={moduleKey} rows={filteredRows} />}
 
       {showCreateModal && moduleKey === "skills" && <HrEmployeeSkillsForm organizationId={data.organization.id} employees={data.employees} catalog={data.catalog} assessments={data.rows} initialEmployeeId={selectedSkillEmployeeId} onClose={() => { setShowCreateModal(false); setSelectedSkillEmployeeId(undefined); }} onSaved={() => void query.refetch()} />}
-      {showCreateModal && moduleKey !== "skills" && <CreateModal moduleKey={moduleKey} organizationId={data.organization.id} employees={data.employees} catalog={data.catalog} onClose={() => setShowCreateModal(false)} />}
+      {showCreateModal && moduleKey === "reviews" && <HrReviewForm organizationId={data.organization.id} employees={data.employees} cycles={data.cycles} review={selectedReview} onClose={() => { setShowCreateModal(false); setSelectedReview(null); }} onSaved={async () => { await query.refetch(); }} />}
+      {showCreateModal && moduleKey !== "skills" && moduleKey !== "reviews" && <CreateModal moduleKey={moduleKey} organizationId={data.organization.id} employees={data.employees} catalog={data.catalog} onClose={() => setShowCreateModal(false)} />}
     </div>
   );
 }

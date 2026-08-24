@@ -1,2 +1,2 @@
-import OperationalModulePage from "@/components/platform/OperationalModulePage";
-export default function ExpensesPage({ params }: { params: Promise<{ orgId: string }> }) { return <OperationalModulePage params={params} mode="expenses" />; }
+import FinanceOperationsPage from "@/components/finance/FinanceOperationsPage";
+export default function ExpensesPage({ params }: { params: Promise<{ orgId: string }> }) { return <FinanceOperationsPage params={params} mode="expenses" />; }

@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
-import { X, Briefcase, ShoppingCart } from "lucide-react";
+import { Briefcase, ShoppingCart } from "lucide-react";
 import { hrCancelButtonClassName, hrSaveButtonClassName } from "@/components/hr/HrReferenceUi";
 
 const supabase = createClient();
@@ -107,13 +107,13 @@ export default function CommandeForm({ currentOrgId, onClose, onRefresh }: Comma
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/40 flex items-center justify-center z-50 p-4 text-[11px] font-sans">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 w-full max-w-sm rounded-lg p-4 shadow-xl space-y-4">
-        <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-2">
-          <h3 className="font-bold uppercase tracking-tight text-slate-800 dark:text-slate-200 text-[11px]">Créer une Commande</h3>
-          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={14}/></button>
-        </div>
-        <form onSubmit={handleSubmit} className="space-y-4">
+    <div className="fixed inset-0 z-[125] flex items-center justify-center bg-slate-950/35 p-4" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose(); }}>
+      <section className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl">
+        <header className="sticky top-0 z-20 border-b border-slate-200 bg-gradient-to-r from-sky-50 via-white to-indigo-50 px-5 py-4">
+          <h3 className="text-lg font-black text-slate-950">Créer une commande</h3>
+          <p className="mt-1 text-xs text-slate-500">Rattachez la commande à l’opportunité gagnée pour alimenter Projets et Finance sans ressaisie.</p>
+        </header>
+        <form onSubmit={handleSubmit} className="space-y-4 p-5 text-sm">
           <div className="flex gap-1 py-1">
             <button type="button" onClick={() => { setCmdType('CLIENT'); setSelectedProspectId(""); }} className={`flex flex-1 items-center justify-center gap-1 py-1.5 rounded text-[10px] font-medium transition-all ${cmdType === 'CLIENT' ? 'bg-blue-600 text-white shadow-xs font-semibold' : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}><Briefcase size={12} /> Cmd Client</button>
             <button type="button" onClick={() => { setCmdType('FOURNISSEUR'); setSelectedProspectId(""); }} className={`flex flex-1 items-center justify-center gap-1 py-1.5 rounded text-[10px] font-medium transition-all ${cmdType === 'FOURNISSEUR' ? 'bg-blue-600 text-white shadow-xs font-semibold' : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}><ShoppingCart size={12} /> Cmd Fournisseur</button>
@@ -153,7 +153,7 @@ export default function CommandeForm({ currentOrgId, onClose, onRefresh }: Comma
             <button type="submit" className={hrSaveButtonClassName} disabled={isSubmitting}>{isSubmitting ? "Création..." : "Enregistrer"}</button>
           </div>
         </form>
-      </div>
+      </section>
     </div>
   );
 }

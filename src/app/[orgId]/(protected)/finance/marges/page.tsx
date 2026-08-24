@@ -1,2 +1,2 @@
-import OperationalModulePage from "@/components/platform/OperationalModulePage";
-export default function MarginsPage({ params }: { params: Promise<{ orgId: string }> }) { return <OperationalModulePage params={params} mode="margins" />; }
+import FinanceOperationsPage from "@/components/finance/FinanceOperationsPage";
+export default function MarginsPage({ params }: { params: Promise<{ orgId: string }> }) { return <FinanceOperationsPage params={params} mode="margins" />; }

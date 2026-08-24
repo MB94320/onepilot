@@ -3,7 +3,7 @@
 import { use, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { Activity, CalendarClock, CircleDollarSign, Search, SlidersHorizontal, Target, TrendingUp } from "lucide-react";
+import { Activity, CalendarClock, CheckCircle2, CircleDollarSign, Search, SlidersHorizontal, Target, TrendingUp } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import { HrActionMenu, HrChartCard, HrColumnFilterMenu, HrMetricCard, HrResetFilters, HrSectionCard, HrStatusBadge, hrInputClassName, hrSelectClassName, hrTableClassName, hrTableHeaderClassName } from "@/components/hr/HrReferenceUi";
@@ -41,20 +41,44 @@ function probability(row: AnyRow) {
   return 15;
 }
 
+function opportunityNumber(value: unknown, createdAt?: unknown) {
+  const raw = String(value || "").trim();
+  if (/^OPP-\d{4}-\d{4,}$/i.test(raw)) return raw.toUpperCase();
+  const year = String(createdAt || "").slice(0, 4).match(/^\d{4}$/)?.[0] || String(new Date().getFullYear());
+  const sequence = raw.match(/\d+/g)?.at(-1);
+  return sequence ? `OPP-${year}-${String(Number(sequence)).padStart(4, "0")}` : "À générer";
+}
+
 async function loadForecast(orgId: string) {
   const organization = await resolveOrganization(orgId);
   const table = (name: string) => (supabase.from(name as never) as any).select("*").eq("organization_id", organization.id);
-  const [offers, prospects, clients] = await Promise.all([table("offres"), table("prospects"), table("clients")]);
+  const [offers, prospects, clients, projectResult, orderResult] = await Promise.all([
+    table("offres"),
+    table("prospects"),
+    table("clients"),
+    table("project_projects"),
+    table("commandes"),
+  ]);
   for (const result of [offers, prospects, clients]) if (result.error) throw new Error(result.error.message);
+  const projects: AnyRow[] = projectResult.error ? [] : (projectResult.data || []).filter((row: AnyRow) => !row.archived_at);
+  const orders: AnyRow[] = orderResult.error ? [] : (orderResult.data || []).filter((row: AnyRow) => !row.archived_at);
   const offerIds = (offers.data || []).map((row: AnyRow) => row.id).filter(Boolean);
   const technical = offerIds.length
     ? await (supabase.from("offres_fiche_technique" as never) as any).select("*").in("offre_id", offerIds)
     : { data: [], error: null };
-  if (technical.error) throw new Error(technical.error.message);
   const prospectMap = new Map((prospects.data || []).map((row: AnyRow) => [String(row.id), row]));
   const clientMap = new Map((clients.data || []).map((row: AnyRow) => [String(row.id), row]));
-  const technicalMap = new Map((technical.data || []).map((row: AnyRow) => [String(row.offre_id), row]));
-  const rows = (offers.data || []).map((offer: AnyRow) => {
+  const technicalMap = new Map((technical.error ? [] : technical.data || []).map((row: AnyRow) => [String(row.offre_id), row]));
+  const projectByOpportunity = new Map<string, AnyRow>();
+  projects.forEach((project) => {
+    const key = opportunityNumber(project.opportunity_number || project.source_reference, project.created_at);
+    if (key !== "À générer") projectByOpportunity.set(key, project);
+  });
+  const orderByProspect = new Map<string, AnyRow>();
+  orders.forEach((order) => { if (order.prospect_id) orderByProspect.set(String(order.prospect_id), order); });
+  const offerProspectIds = new Set((offers.data || []).map((row: AnyRow) => String(row.prospect_id || "")).filter(Boolean));
+
+  const offerRows = (offers.data || []).map((offer: AnyRow) => {
     const prospect = prospectMap.get(String(offer.prospect_id)) as AnyRow | undefined;
     const client = clientMap.get(String(prospect?.client_id)) as AnyRow | undefined;
     const sheet = technicalMap.get(String(offer.id)) as AnyRow | undefined;
@@ -63,11 +87,36 @@ async function loadForecast(orgId: string) {
     const status = String(offer.statut_offre || prospect?.status || "A faire");
     const expectedDate = offer.date_validation_previsionnelle || offer.date_diffusion_previsionnelle || prospect?.expected_close_date || offer.updated_at;
     const chance = probability({ probability_percent: offer.probability_percent ?? prospect?.probability_percent, status });
-    const rawNumber = prospect?.opp_number || prospect?.opportunity_number || offer.opportunity_number;
-    const opportunity = String(rawNumber || "").startsWith("OPP-") ? String(rawNumber) : rawNumber ? `OPP-${new Date(expectedDate || Date.now()).getFullYear()}-${String(rawNumber).padStart(4, "0")}` : "À générer";
-    return { ...offer, prospect, client, sheet, opportunity, title: prospect?.titre || offer.title || "Opportunité sans désignation", client_name: client?.name || "Client à renseigner", status, expected_date: expectedDate, amount, margin, probability: chance, weighted_amount: amount * chance / 100 };
-  }).sort((a: AnyRow, b: AnyRow) => String(a.opportunity).localeCompare(String(b.opportunity), "fr", { numeric: true }));
-  return { organization, rows };
+    const opportunity = opportunityNumber(prospect?.opp_number || prospect?.opportunity_number || offer.opportunity_number, expectedDate || offer.created_at);
+    const linkedProject = projects.find((project) => String(project.opportunity_id || project.source_id || "") === String(prospect?.id || "")) || projectByOpportunity.get(opportunity);
+    const linkedOrder = orderByProspect.get(String(prospect?.id || ""));
+    return { ...offer, source_type: "offer", prospect, client, sheet, linkedProject, linkedOrder, project_code: linkedProject?.code, order_number: linkedOrder?.num_commande || linkedOrder?.numero_commande || linkedOrder?.order_number, opportunity, title: prospect?.titre || offer.title || linkedProject?.name || "Opportunité sans désignation", client_name: client?.name || linkedProject?.client_name || "Client à renseigner", status, expected_date: expectedDate, amount, margin, probability: chance, weighted_amount: amount * chance / 100 };
+  });
+
+  // Une opportunité qualifiée doit apparaître dans la prévision même si sa
+  // fiche AVV n'est pas encore créée. Les valeurs sont alors reprises du CRM.
+  const prospectRows = (prospects.data || []).filter((prospect: AnyRow) => !offerProspectIds.has(String(prospect.id))).map((prospect: AnyRow) => {
+    const client = clientMap.get(String(prospect.client_id)) as AnyRow | undefined;
+    const expectedDate = prospect.expected_close_date || prospect.date_cible || prospect.target_date || prospect.updated_at || prospect.created_at;
+    const opportunity = opportunityNumber(prospect.opp_number || prospect.opportunity_number, prospect.created_at);
+    const linkedProject = projects.find((project) => String(project.opportunity_id || project.source_id || "") === String(prospect.id)) || projectByOpportunity.get(opportunity);
+    const linkedOrder = orderByProspect.get(String(prospect.id));
+    const status = String(prospect.statut || prospect.status || (linkedProject ? "Gagné" : "Qualification"));
+    const amount = prospect["ca_estime_k€"] != null ? Number(prospect["ca_estime_k€"] || 0) * 1000 : Number(prospect.estimated_amount || prospect.amount || linkedProject?.ordered_budget || 0);
+    const chance = linkedProject ? 100 : probability({ probability_percent: prospect.probabilite_gain ?? prospect.probability_percent ?? prospect.probability, status });
+    return { ...prospect, id: `prospect-${prospect.id}`, source_id: prospect.id, source_type: "prospect", prospect, client, linkedProject, linkedOrder, project_code: linkedProject?.code, order_number: linkedOrder?.num_commande || linkedOrder?.numero_commande || linkedOrder?.order_number, opportunity, title: prospect.titre || prospect.title || linkedProject?.name || "Opportunité à qualifier", client_name: client?.name || linkedProject?.client_name || "Client à renseigner", status, expected_date: expectedDate, amount, margin: Number(prospect.margin_percent || linkedProject?.target_margin_rate || 0), probability: chance, weighted_amount: amount * chance / 100 };
+  });
+
+  const knownOpportunities = new Set([...offerRows, ...prospectRows].map((row) => row.opportunity).filter((value) => value !== "À générer"));
+  const projectRows = projects.filter((project) => {
+    const opportunity = opportunityNumber(project.opportunity_number || project.source_reference, project.created_at);
+    return opportunity !== "À générer" && !knownOpportunities.has(opportunity);
+  }).map((project) => {
+    const amount = Number(project.ordered_budget || project.sold_amount || project.budget_amount || 0);
+    return { id: `project-${project.id}`, source_id: project.id, source_type: "project", linkedProject: project, project_code: project.code, opportunity: opportunityNumber(project.opportunity_number || project.source_reference, project.created_at), title: project.name || "Projet transformé", client_name: project.client_name || "Client projet", status: "Gagné · projet créé", expected_date: project.start_date || project.created_at, amount, margin: Number(project.target_margin_rate || 0), probability: 100, weighted_amount: amount };
+  });
+  const rows = [...offerRows, ...prospectRows, ...projectRows].sort((a: AnyRow, b: AnyRow) => String(a.opportunity).localeCompare(String(b.opportunity), "fr", { numeric: true }));
+  return { organization, rows, projects, orders };
 }
 
 export default function CommercialForecastPage({ params }: { params: Promise<Params> }) {
@@ -101,10 +150,17 @@ export default function CommercialForecastPage({ params }: { params: Promise<Par
   const total = visibleRows.reduce((sum: number, row: AnyRow) => sum + row.amount, 0);
   const weighted = visibleRows.reduce((sum: number, row: AnyRow) => sum + row.weighted_amount, 0);
   const avgMargin = visibleRows.length ? visibleRows.reduce((sum: number, row: AnyRow) => sum + row.margin, 0) / visibleRows.length : 0;
+  const transformedCount = visibleRows.filter((row: AnyRow) => row.linkedProject || row.source_type === "project").length;
+  const orderedCount = new Set(visibleRows.map((row: AnyRow) => row.linkedOrder?.id || row.order_number).filter(Boolean)).size;
   const monthly = useMemo(() => {
     const map = new Map<string, { month: string; gross: number; weighted: number }>();
     visibleRows.forEach((row: AnyRow) => { const key = String(row.expected_date || "").slice(0, 7); if (!key) return; const item = map.get(key) || { month: key, gross: 0, weighted: 0 }; item.gross += row.amount; item.weighted += row.weighted_amount; map.set(key, item); });
     return [...map.values()].sort((a, b) => a.month.localeCompare(b.month)).map((item) => ({ ...item, label: month(item.month) }));
+  }, [visibleRows]);
+  const statusSeries = useMemo(() => {
+    const map = new Map<string, { label: string; volume: number; amount: number }>();
+    visibleRows.forEach((row: AnyRow) => { const key = String(row.status || "À qualifier"); const item = map.get(key) || { label: key, volume: 0, amount: 0 }; item.volume += 1; item.amount += Number(row.weighted_amount || 0); map.set(key, item); });
+    return [...map.values()].sort((left, right) => right.amount - left.amount);
   }, [visibleRows]);
   const exportColumns: ExportColumn<AnyRow>[] = [
     { key: "opportunity", label: "N° Opportunité", value: (row) => row.opportunity }, { key: "title", label: "Désignation", value: (row) => row.title }, { key: "client", label: "Client", value: (row) => row.client_name }, { key: "status", label: "Statut", value: (row) => row.status }, { key: "date", label: "Date prévisionnelle", value: (row) => row.expected_date }, { key: "amount", label: "Montant", value: (row) => row.amount }, { key: "probability", label: "Probabilité (%)", value: (row) => row.probability }, { key: "weighted", label: "Prévision pondérée", value: (row) => row.weighted_amount }, { key: "margin", label: "Marge prévisionnelle (%)", value: (row) => row.margin },
@@ -117,17 +173,22 @@ export default function CommercialForecastPage({ params }: { params: Promise<Par
     { label: "Marge sous 20 %", count: visibleRows.filter((row: AnyRow) => row.margin > 0 && row.margin < 20).length, impact: "Rentabilité commerciale insuffisante.", action: "Revoir prix, charge, achats et hypothèses avant engagement.", accent: "rose" as const },
     { label: "Numéros à générer", count: visibleRows.filter((row: AnyRow) => row.opportunity === "À générer").length, impact: "Continuité Commerce–Projets non garantie.", action: "Générer le chrono OPP-AAAA-0001 avant transformation en projet.", accent: "sky" as const },
   ];
+  const openForecastRow = (row: AnyRow) => {
+    if (row.source_type === "project" && row.linkedProject?.id) return router.push(`/${orgId}/projects/${row.linkedProject.id}`);
+    if (row.source_type === "prospect" && row.source_id) return router.push(`/${orgId}/prospects?opportunite=${row.source_id}`);
+    return router.push(`/${orgId}/avant-vente/${row.id}`);
+  };
   const tabs: Array<{ key: TabKey; label: string; color: string }> = [{ key: "pilotage", label: "Pilotage", color: "bg-indigo-600 text-white" }, { key: "analyses", label: "Analyses", color: "bg-violet-600 text-white" }, { key: "alerts", label: "Alertes", color: "bg-emerald-600 text-white" }];
   return <div className="onepilot-business-page space-y-6">
     <PageHeader title="Prévisions commerciales" subtitle="Projeter le chiffre d’affaires, la marge et les décisions clients depuis les opportunités et offres réelles." actions={<DataExportMenu data={visibleRows} columns={exportColumns} fileName="onepilot_previsions_commerciales" sheetName="Prévisions" disabled={!visibleRows.length} />} />
     <PageTutorial title="Guide de la page" description={"Consolider automatiquement le pipeline Commerce pour obtenir une prévision brute et pondérée, sans ressaisie entre Prospects, Avant-vente, Commandes et Projets.\nQualifier montants, probabilités, dates, marges et qualité des données avant les revues commerciales et arbitrages de capacité."} objectives={["Fiabiliser le chiffre d’affaires prévisionnel.", "Anticiper charge, marge et transformation des opportunités gagnées en projets."]} steps={[{ title: "Qualifier", description: "Compléter offre, montant, marge, date et statut." }, { title: "Analyser", description: "Comparer prévision brute, pondérée et trajectoire mensuelle." }, { title: "Arbitrer", description: "Traiter les opportunités incomplètes, peu rentables ou sans échéance." }]} analyses={[{ title: "Lecture décisionnelle", description: "Le montant pondéré applique la probabilité commerciale à la valeur estimée." }]} recommendations={["Tracer toute modification de probabilité.", "Aligner le forecast avec la capacité disponible.", "Transformer une offre gagnée en projet sans double saisie."]} />
-    <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><HrMetricCard icon={Target} label="Opportunités" value={visibleRows.length} description="Offres présentes dans le périmètre commercial." accent="indigo" /><HrMetricCard icon={CircleDollarSign} label="Prévision brute" value={money(total)} description="Somme des montants avant pondération." accent="emerald" /><HrMetricCard icon={TrendingUp} label="Prévision pondérée" value={money(weighted)} description="Montants multipliés par la probabilité de gain." accent="amber" /><HrMetricCard icon={Activity} label="Marge moyenne" value={`${avgMargin.toFixed(1)} %`} description="Marge prévisionnelle moyenne des offres filtrées." accent="rose" /></section>
+    <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6"><HrMetricCard icon={Target} label="Opportunités" value={visibleRows.length} description="Prospects, offres et historique projets consolidés." accent="indigo" /><HrMetricCard icon={CircleDollarSign} label="Prévision brute" value={money(total)} description="Somme des montants avant pondération." accent="emerald" /><HrMetricCard icon={TrendingUp} label="Prévision pondérée" value={money(weighted)} description="Montants multipliés par la probabilité de gain." accent="amber" /><HrMetricCard icon={Activity} label="Marge moyenne" value={`${avgMargin.toFixed(1)} %`} description="Marge prévisionnelle moyenne du périmètre." accent="rose" /><HrMetricCard icon={CheckCircle2} label="Transformées en projets" value={transformedCount} description="Opportunités rapprochées du portefeuille projets." accent="sky" /><HrMetricCard icon={CalendarClock} label="Commandes liées" value={orderedCount} description="Commandes retrouvées sans double saisie." accent="indigo" /></section>
     <HrSectionCard icon={SlidersHorizontal} title="Périmètre d’analyse" description="Recherchez puis filtrez le statut et la période prévisionnelle."><div className="space-y-4"><label className="relative block"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-indigo-500" /><input value={search} onChange={(event) => setSearch(event.target.value)} className={`${hrInputClassName} w-full pl-10`} placeholder="Rechercher un numéro, une désignation ou un client…" /></label><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4"><select value={status} onChange={(event) => setStatus(event.target.value)} className={hrSelectClassName}><option value="">Tous les statuts</option>{statuses.map((value) => <option key={value}>{value}</option>)}</select><input type="date" value={start} onChange={(event) => setStart(event.target.value)} className={hrInputClassName} /><input type="date" value={end} onChange={(event) => setEnd(event.target.value)} className={hrInputClassName} /><div className="flex items-center justify-end"><HrStatusBadge status="planned" label={`${visibleRows.length} résultat(s) sur ${rows.length}`} /></div></div>{filtersActive && <HrResetFilters onReset={reset} />}</div></HrSectionCard>
     <div className="flex justify-center"><div className="inline-flex gap-1 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm">{tabs.map((item) => <button key={item.key} type="button" onClick={() => setTab(item.key)} className={`h-10 rounded-xl px-4 text-sm font-bold ${tab === item.key ? item.color : "text-slate-500 hover:bg-slate-50"}`}>{item.label}</button>)}</div></div>
-    {tab === "pilotage" && <HrSectionCard icon={CalendarClock} title="Pipeline prévisionnel" description="Cartes et tableau reprennent les mêmes données issues de Commerce." right={<div className="inline-flex rounded-xl border border-slate-200 bg-white p-1"><button type="button" onClick={() => setView("cards")} className={`rounded-lg px-3 py-1.5 text-xs font-bold ${view === "cards" ? "bg-indigo-600 text-white" : "text-slate-500"}`}>Cartes</button><button type="button" onClick={() => setView("table")} className={`rounded-lg px-3 py-1.5 text-xs font-bold ${view === "table" ? "bg-indigo-600 text-white" : "text-slate-500"}`}>Tableau</button></div>}>
-      {view === "cards" ? <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{visibleRows.map((row: AnyRow) => <article key={row.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:border-indigo-200"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-black text-indigo-700">{row.opportunity}</p><h3 className="mt-1 text-sm font-black text-slate-950">{row.title}</h3><p className="mt-1 text-xs text-slate-500">{row.client_name}</p></div><HrActionMenu labels={{ view: "Voir l’offre", edit: "Modifier l’offre", archive: "Archiver l’offre", restore: "Réactiver l’offre" }} onView={() => router.push(`/${orgId}/avant-vente/${row.id}`)} onEdit={() => router.push(`/${orgId}/avant-vente/${row.id}`)} /></div><div className="mt-4 flex flex-wrap gap-2"><HrStatusBadge status={row.status} label={row.status} /><HrStatusBadge status={row.probability >= 70 ? "completed" : row.probability >= 35 ? "in_progress" : "planned"} label={`${row.probability} %`} /></div><div className="mt-4 grid grid-cols-2 gap-2 text-xs"><Info label="Montant" value={money(row.amount)} /><Info label="Pondéré" value={money(row.weighted_amount)} /><Info label="Marge" value={`${row.margin.toFixed(1)} %`} /><Info label="Décision" value={date(row.expected_date)} /></div></article>)}</div> : <div className="max-h-[334px] overflow-auto rounded-2xl border border-slate-200"><table className={`${hrTableClassName} min-w-[1450px]`}><thead className={hrTableHeaderClassName}><tr>{columns.map((column, index) => <th key={column.key} className={index === 0 ? "sticky left-0 z-30 bg-sky-50 text-left" : "text-left"}><HrColumnFilterMenu label={column.label} values={rows.map((row: AnyRow) => String(column.value(row)))} selected={columnFilters[column.key] || []} onChange={(values) => setColumnFilters((current) => ({ ...current, [column.key]: values }))} /></th>)}<th>Date prévue</th><th>Montant</th><th>Pondéré</th><th>Marge</th><th className="sticky right-0 z-30 bg-sky-50 text-right">Actions</th></tr></thead><tbody>{visibleRows.map((row: AnyRow) => <tr key={row.id}><td className="sticky left-0 z-10 bg-white font-bold text-indigo-700">{row.opportunity}</td><td>{row.title}</td><td>{row.client_name}</td><td><HrStatusBadge status={row.status} label={row.status} /></td><td>{row.probability} %</td><td>{date(row.expected_date)}</td><td>{money(row.amount)}</td><td className="font-bold text-emerald-700">{money(row.weighted_amount)}</td><td>{row.margin.toFixed(1)} %</td><td className="sticky right-0 bg-white text-right"><HrActionMenu labels={{ view: "Voir l’offre", edit: "Modifier l’offre", archive: "Archiver l’offre", restore: "Réactiver l’offre" }} onView={() => router.push(`/${orgId}/avant-vente/${row.id}`)} onEdit={() => router.push(`/${orgId}/avant-vente/${row.id}`)} /></td></tr>)}</tbody></table></div>}
+    {tab === "pilotage" && <HrSectionCard icon={CalendarClock} title="Prévision commerciale consolidée" description="Cartes et tableau rapprochent Prospects, Avant-vente, Commandes et Projets sans double saisie." right={<div className="inline-flex rounded-xl border border-slate-200 bg-white p-1"><button type="button" onClick={() => setView("cards")} className={`rounded-lg px-3 py-1.5 text-xs font-bold ${view === "cards" ? "bg-indigo-600 text-white" : "text-slate-500"}`}>Cartes</button><button type="button" onClick={() => setView("table")} className={`rounded-lg px-3 py-1.5 text-xs font-bold ${view === "table" ? "bg-indigo-600 text-white" : "text-slate-500"}`}>Tableau</button></div>}>
+      {view === "cards" ? <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{visibleRows.map((row: AnyRow) => <article key={row.id} onClick={() => openForecastRow(row)} className="cursor-pointer rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-black text-indigo-700">{row.opportunity}</p><h3 className="mt-1 text-sm font-black text-slate-950">{row.title}</h3><p className="mt-1 text-xs text-slate-500">{row.client_name}</p></div><div onClick={(event) => event.stopPropagation()}><HrActionMenu labels={{ view: "Voir le dossier", edit: "Modifier le dossier", archive: "Archiver", restore: "Réactiver" }} onView={() => openForecastRow(row)} onEdit={() => openForecastRow(row)} /></div></div><div className="mt-4 flex flex-wrap gap-2"><HrStatusBadge status={row.status} label={row.status} /><HrStatusBadge status={row.probability >= 70 ? "completed" : row.probability >= 35 ? "in_progress" : "planned"} label={`${row.probability} %`} />{row.project_code && <HrStatusBadge status="completed" label={row.project_code} />}</div><div className="mt-4 grid grid-cols-2 gap-2 text-xs"><Info label="Montant" value={money(row.amount)} /><Info label="Pondéré" value={money(row.weighted_amount)} /><Info label="Marge" value={`${row.margin.toFixed(1)} %`} /><Info label="Décision" value={date(row.expected_date)} /></div></article>)}</div> : <div className="max-h-[430px] overflow-auto rounded-2xl border border-slate-200"><table className={`${hrTableClassName} min-w-[1750px]`}><thead className={hrTableHeaderClassName}><tr>{columns.map((column, index) => <th key={column.key} className={index === 0 ? "sticky left-0 z-30 bg-sky-50 text-left" : "text-left"}><HrColumnFilterMenu label={column.label} values={rows.map((row: AnyRow) => String(column.value(row)))} selected={columnFilters[column.key] || []} onChange={(values) => setColumnFilters((current) => ({ ...current, [column.key]: values }))} /></th>)}<th>Source</th><th>Projet lié</th><th>Commande liée</th><th>Date prévue</th><th>Montant</th><th>Pondéré</th><th>Marge</th><th className="sticky right-0 z-30 bg-sky-50 text-right">Actions</th></tr></thead><tbody>{visibleRows.map((row: AnyRow) => <tr key={row.id}><td className="sticky left-0 z-10 bg-white font-semibold text-slate-900">{row.opportunity}</td><td>{row.title}</td><td>{row.client_name}</td><td><HrStatusBadge status={row.status} label={row.status} /></td><td>{row.probability} %</td><td>{row.source_type === "project" ? "Projet" : row.source_type === "prospect" ? "Prospect" : "Avant-vente"}</td><td>{row.project_code || "—"}</td><td>{row.order_number || "—"}</td><td>{date(row.expected_date)}</td><td>{money(row.amount)}</td><td className="font-bold text-emerald-700">{money(row.weighted_amount)}</td><td>{row.margin.toFixed(1)} %</td><td className="sticky right-0 bg-white text-right"><HrActionMenu labels={{ view: "Voir le dossier", edit: "Modifier le dossier", archive: "Archiver", restore: "Réactiver" }} onView={() => openForecastRow(row)} onEdit={() => openForecastRow(row)} /></td></tr>)}</tbody></table></div>}
     </HrSectionCard>}
-    {tab === "analyses" && <section ref={chartRef}><HrChartCard title="Prévision commerciale mensuelle" description="Montants bruts et pondérés par mois de décision client." exportConfig={{ type: "bar", data: monthly, nameKey: "label", series: [{ key: "gross", label: "Prévision brute", color: "#818cf8" }, { key: "weighted", label: "Prévision pondérée", color: "#6ee7b7" }], unit: " €" }}><ResponsiveContainer width="100%" height={340}><BarChart data={monthly}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="label" interval={0} /><YAxis /><Tooltip formatter={(value) => money(value)} /><Legend /><Bar dataKey="gross" name="Prévision brute" fill="#818cf8" radius={[6, 6, 0, 0]} /><Bar dataKey="weighted" name="Prévision pondérée" fill="#6ee7b7" radius={[6, 6, 0, 0]} /></BarChart></ResponsiveContainer></HrChartCard></section>}
+    {tab === "analyses" && <section ref={chartRef} className="grid gap-5 xl:grid-cols-2"><HrChartCard title="Prévision commerciale mensuelle" description="Montants bruts et pondérés par mois de décision client." exportConfig={{ type: "bar", data: monthly, nameKey: "label", series: [{ key: "gross", label: "Prévision brute", color: "#818cf8" }, { key: "weighted", label: "Prévision pondérée", color: "#6ee7b7" }], unit: " €" }}><ResponsiveContainer width="100%" height="100%"><BarChart data={monthly}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="label" interval={monthly.length > 8 ? 1 : 0} /><YAxis /><Tooltip formatter={(value) => money(value)} /><Legend /><Bar dataKey="gross" name="Prévision brute" fill="#818cf8" radius={[6, 6, 0, 0]} /><Bar dataKey="weighted" name="Prévision pondérée" fill="#6ee7b7" radius={[6, 6, 0, 0]} /></BarChart></ResponsiveContainer></HrChartCard><HrChartCard title="Valeur pondérée par statut" description="Repérer les étapes où se concentre le chiffre d’affaires encore incertain." exportConfig={{ type: "bar", data: statusSeries, nameKey: "label", series: [{ key: "amount", label: "Valeur pondérée", color: "#38bdf8" }], unit: " €" }}><ResponsiveContainer width="100%" height="100%"><BarChart data={statusSeries}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="label" interval={0} tick={{ fontSize: 10 }} /><YAxis /><Tooltip formatter={(value) => money(value)} /><Legend /><Bar dataKey="amount" name="Valeur pondérée" fill="#38bdf8" radius={[6, 6, 0, 0]} /></BarChart></ResponsiveContainer></HrChartCard></section>}
     {tab === "alerts" && <ProjectAlertsPanel title="Alertes commerciales" description="Qualité du forecast, rentabilité et continuité Commerce–Projets." items={alerts} />}
   </div>;
 }

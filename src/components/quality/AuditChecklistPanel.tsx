@@ -19,6 +19,8 @@ type Answer = "yes" | "no" | "na" | "";
 type ResponseDraft = { answer: Answer; comment: string; evidence_reference: string };
 
 const supabase = createClient();
+const AVV_THEME_CODES = new Set(["AVV-OPP", "AVV-REP", "AVV-CTR", "AVV-PRO"]);
+const DELIVERY_THEME_CODES = new Set("ABCDEFGHIJKLMNOPQR".split(""));
 
 function decisionFor(score: number) {
   if (score >= 80) return "Conforme";
@@ -33,14 +35,28 @@ function scoreTone(score: number) {
 }
 
 async function loadChecklist(organizationId: string, audit: AnyRow) {
+  const auditScope = audit.audit_type === "avv" ? "avv" : "delivery";
   const [themes, questions, responses, previous] = await Promise.all([
     (supabase.from("project_audit_themes" as never) as any).select("*").eq("organization_id", organizationId).is("archived_at", null).order("display_order"),
     (supabase.from("project_audit_questions" as never) as any).select("*").eq("organization_id", organizationId).is("archived_at", null).order("question_order"),
     (supabase.from("project_audit_responses" as never) as any).select("*").eq("organization_id", organizationId).eq("audit_id", audit.id).is("archived_at", null),
-    (supabase.from("project_audits" as never) as any).select("overall_score,audit_date,audit_number").eq("organization_id", organizationId).eq("project_id", audit.project_id).neq("id", audit.id).lt("audit_date", audit.audit_date).not("overall_score", "is", null).order("audit_date", { ascending: false }).limit(1).maybeSingle(),
+    (supabase.from("project_audits" as never) as any).select("overall_score,audit_date,audit_number").eq("organization_id", organizationId).eq("project_id", audit.project_id).eq("audit_type", audit.audit_type).neq("id", audit.id).lt("audit_date", audit.audit_date).not("overall_score", "is", null).order("audit_date", { ascending: false }).limit(1).maybeSingle(),
   ]);
   for (const result of [themes, questions, responses, previous]) if (result.error) throw new Error(result.error.message);
-  return { themes: themes.data || [], questions: questions.data || [], responses: responses.data || [], previous: previous.data || null };
+  const allowedCodes = auditScope === "avv" ? AVV_THEME_CODES : DELIVERY_THEME_CODES;
+  const scopedThemes = (themes.data || []).filter((theme: AnyRow) =>
+    (theme.audit_scope || "delivery") === auditScope && allowedCodes.has(String(theme.code)),
+  );
+  const themeIds = new Set(scopedThemes.map((theme: AnyRow) => theme.id));
+  const scopedQuestions = (questions.data || []).filter((question: AnyRow) => themeIds.has(question.theme_id));
+  const questionIds = new Set(scopedQuestions.map((question: AnyRow) => question.id));
+  return {
+    auditScope,
+    themes: scopedThemes,
+    questions: scopedQuestions,
+    responses: (responses.data || []).filter((response: AnyRow) => questionIds.has(response.question_id)),
+    previous: previous.data || null,
+  };
 }
 
 export default function AuditChecklistPanel({ organizationId, audit, onSaved }: { organizationId: string; audit: AnyRow; onSaved?: () => void }) {
@@ -103,7 +119,9 @@ export default function AuditChecklistPanel({ organizationId, audit, onSaved }: 
       if (auditResult.error) throw new Error(auditResult.error.message);
 
       const themes = new Map(query.data.themes.map((theme: AnyRow) => [theme.id, theme.name]));
-      for (const question of query.data.questions.filter((item: AnyRow) => drafts[item.id].answer === "no")) {
+      const nonCompliantQuestions = query.data.questions.filter((item: AnyRow) => drafts[item.id].answer === "no");
+      const activeSourceReferences = new Set(nonCompliantQuestions.map((question: AnyRow) => `${audit.audit_number}-${question.code}`));
+      for (const question of nonCompliantQuestions) {
         const sourceReference = `${audit.audit_number}-${question.code}`;
         const existing = await (supabase.from("project_actions" as never) as any).select("id,status").eq("organization_id", organizationId).eq("source_entity_type", "audit_response").eq("source_reference", sourceReference).is("archived_at", null).maybeSingle();
         if (existing.error) throw new Error(existing.error.message);
@@ -113,7 +131,7 @@ export default function AuditChecklistPanel({ organizationId, audit, onSaved }: 
           action_type: "corrective",
           title: `Écart d’audit · ${question.code}`,
           description: `${themes.get(question.theme_id) || "Audit"} — ${question.question_text}`,
-          status: existing.data?.status === "completed" ? "completed" : "open",
+          status: ["closed", "completed"].includes(existing.data?.status) ? "open" : existing.data?.status || "open",
           priority: Number(question.weight || 1) >= 2 ? "high" : "medium",
           owner_name: audit.responsible_name || audit.auditor_name || "Chef de projet",
           opened_at: new Date().toISOString().slice(0, 10),
@@ -128,16 +146,35 @@ export default function AuditChecklistPanel({ organizationId, audit, onSaved }: 
           expected_result: "Exigence rendue conforme et preuve validée lors de la prochaine revue.",
         };
         if (existing.data?.id) {
-          if (existing.data.status !== "completed") {
-            const update = await (supabase.from("project_actions" as never) as any).update(actionPayload).eq("id", existing.data.id);
-            if (update.error) throw new Error(update.error.message);
-          }
+          const update = await (supabase.from("project_actions" as never) as any).update(actionPayload).eq("id", existing.data.id);
+          if (update.error) throw new Error(update.error.message);
         } else {
           const code = await (supabase.rpc("next_project_code" as never, { target_organization_id: organizationId, target_year: new Date().getFullYear(), code_prefix: "ACT" } as never) as any);
           if (code.error) throw new Error(code.error.message);
           const insert = await (supabase.from("project_actions" as never) as any).insert({ ...actionPayload, code: code.data });
           if (insert.error) throw new Error(insert.error.message);
         }
+      }
+
+      const linkedActions = await (supabase.from("project_actions" as never) as any)
+        .select("id,status,source_reference")
+        .eq("organization_id", organizationId)
+        .eq("origin_type", "audit")
+        .eq("origin_id", audit.id)
+        .eq("source_entity_type", "audit_response")
+        .is("archived_at", null);
+      if (linkedActions.error) throw new Error(linkedActions.error.message);
+      const obsoleteActionIds = (linkedActions.data || [])
+        .filter((action: AnyRow) => !activeSourceReferences.has(action.source_reference) && !["closed", "completed"].includes(action.status))
+        .map((action: AnyRow) => action.id);
+      if (obsoleteActionIds.length) {
+        const closeResult = await (supabase.from("project_actions" as never) as any).update({
+          status: "completed",
+          progress_percent: 100,
+          closed_at: new Date().toISOString().slice(0, 10),
+          updated_at: new Date().toISOString(),
+        }).in("id", obsoleteActionIds).eq("organization_id", organizationId);
+        if (closeResult.error) throw new Error(closeResult.error.message);
       }
     },
     onSuccess: async () => {
@@ -153,7 +190,7 @@ export default function AuditChecklistPanel({ organizationId, audit, onSaved }: 
   if (query.error || !query.data) return <p className="m-5 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm font-bold text-rose-700">Checklist indisponible : {query.error instanceof Error ? query.error.message : "erreur inconnue"}</p>;
 
   return <div className="space-y-5 border-t border-slate-200 p-5">
-    <HrSectionCard icon={ClipboardCheck} title="Checklist d’audit" description="Le score, la décision et les actions sont calculés à partir des réponses pondérées. Les questions non applicables sont exclues du calcul.">
+    <HrSectionCard icon={ClipboardCheck} title={`Checklist d’audit ${query.data.auditScope === "avv" ? "AVV" : "Delivery"}`} description={query.data.auditScope === "avv" ? "Périmètre strict : Revue d’Opportunité, Pilotage de la Réponse, Revue de Contrat et Revue de Proposition. Le score, la décision et les actions sont calculés automatiquement." : "Périmètre Delivery : Gestion des exigences jusqu’au Plan de Management Projet. Les questions non applicables sont exclues du calcul."}>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <HrMetricCard icon={ClipboardCheck} label="Avancement" value={`${Math.round(completion)} %`} description={`${answered} réponse(s) sur ${query.data.questions.length}`} accent="indigo" />
         <HrMetricCard icon={ShieldCheck} label="Conformité" value={`${score.toLocaleString("fr-FR", { maximumFractionDigits: 1 })} %`} description={decisionFor(score)} accent={score >= 80 ? "emerald" : score >= 65 ? "amber" : "rose"} />

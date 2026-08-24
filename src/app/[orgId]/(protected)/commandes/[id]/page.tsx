@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { 
   ArrowLeft, Save, DollarSign, Calendar, Target, CheckSquare, Info, Repeat, FileText
 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 const supabase = createClient();
 const STATUTS_COMMANDE = ['Brouillon', 'Envoyée', 'Validée', 'En cours', 'Livrée', 'Facturée', 'Annulée'];
@@ -25,8 +25,12 @@ const CRITERES_REVUE = [
 export default function CommandeIndividuellePage({ params }: { params: Promise<{ orgId: string; id: string }> }) {
   const { orgId: slugOrId, id: commandeId } = use(params);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const qc = useQueryClient();
-  const [activeTab, setActiveTab] = useState<'kpis' | 'lignes' | 'revue' | 'tiers'>('kpis');
+  const [activeTab, setActiveTab] = useState<'kpis' | 'lignes' | 'revue' | 'tiers'>(() => {
+    const requested = searchParams.get("onglet");
+    return requested === "lignes" || requested === "revue" || requested === "tiers" ? requested : "kpis";
+  });
 
   const [form, setForm] = useState<any>({
     statut: "Brouillon", date_commande: "", date_livraison_prevue: "", titre_commande: "", numero_commande: "", commentaire: "", date_validation_ptf: ""

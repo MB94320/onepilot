@@ -91,18 +91,26 @@ export default function ProspectForm({ selectedProspect, clientsList, currentOrg
         const { error } = await (supabase.from('prospects' as any).update(supabasePayload) as any).eq('id', selectedProspect.id);
         if (error) throw error;
       } else {
-        const existingNumbers = prospectsCount.map(p => p.opp_number).sort((a, b) => a - b);
-        let targetChrono = 1;
-        for (let i = 0; i < existingNumbers.length; i++) {
-          if (existingNumbers[i] === targetChrono) targetChrono++;
-          else break;
-        }
-
-        supabasePayload.opp_number = targetChrono;
+        if (!currentOrgId) throw new Error("Organisation introuvable.");
         supabasePayload.organization_id = currentOrgId;
-
-        const { error } = await supabase.from('prospects' as any).insert([supabasePayload]);
-        if (error) throw error;
+        let inserted = false;
+        let lastError: any = null;
+        for (let attempt = 0; attempt < Math.max(10, prospectsCount.length + 2); attempt += 1) {
+          const sequence = await (supabase.rpc("next_project_code" as never, {
+            target_organization_id: currentOrgId,
+            target_year: new Date().getFullYear(),
+            code_prefix: "OPP",
+          } as never) as any);
+          if (sequence.error) throw sequence.error;
+          const sequenceNumber = Number(String(sequence.data || "").match(/(\d+)$/)?.[1] || 0);
+          if (!sequenceNumber) throw new Error("Impossible de générer le numéro d’opportunité.");
+          supabasePayload.opp_number = sequenceNumber;
+          const { error } = await supabase.from('prospects' as any).insert([supabasePayload]);
+          if (!error) { inserted = true; break; }
+          lastError = error;
+          if (error.code !== "23505") throw error;
+        }
+        if (!inserted) throw lastError || new Error("Impossible de réserver un numéro d’opportunité unique.");
       }
       
       qc.invalidateQueries({ queryKey: ['prospects', currentOrgId] });
@@ -112,17 +120,17 @@ export default function ProspectForm({ selectedProspect, clientsList, currentOrg
   });
 
   return (
-    <div className="fixed inset-0 bg-slate-900/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-4 flex flex-col space-y-4">
+    <div className="fixed inset-0 z-[125] flex items-center justify-center bg-slate-950/35 p-4" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose(); }}>
+      <section className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl">
         
-        <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-2">
-          <h3 className="text-[11px] font-bold uppercase text-slate-800 dark:text-white">
-            {selectedProspect ? `Modifier Prospect` : 'Créer un Nouveau Prospect'}
+        <header className="sticky top-0 z-20 border-b border-slate-200 bg-gradient-to-r from-sky-50 via-white to-indigo-50 px-5 py-4">
+          <h3 className="text-lg font-black text-slate-950">
+            {selectedProspect ? "Modifier l’opportunité" : "Créer une nouvelle opportunité"}
           </h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 font-bold text-sm">✕</button>
-        </div>
+          <p className="mt-1 text-xs text-slate-500">Qualifiez la valeur, l’échéance, le responsable et la prochaine décision commerciale.</p>
+        </header>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[11px]">
+        <div className="grid grid-cols-1 gap-4 p-5 text-sm sm:grid-cols-2">
           <div className="sm:col-span-2">
             <label className="block text-[10px] uppercase font-bold text-slate-400 mb-0.5">Titre de l'opportunité *</label>
             <input value={f.title} onChange={e => setF({...f, title: e.target.value})} placeholder="Ex: Refonte Plateforme BI" className="w-full h-7 px-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded text-slate-700 dark:text-slate-300 focus:outline-none" />
@@ -206,14 +214,14 @@ export default function ProspectForm({ selectedProspect, clientsList, currentOrg
           )}
         </div>
 
-        <div className="flex justify-end gap-2 border-t border-slate-100 dark:border-slate-800 pt-3">
+        <footer className="flex justify-end gap-3 border-t border-slate-200 p-5">
           <button onClick={onClose} className={hrCancelButtonClassName}>Annuler</button>
           <button onClick={() => saveMutation.mutate(f)} disabled={!f.title || !f.client_id} className={hrSaveButtonClassName}>
             Enregistrer
           </button>
-        </div>
+        </footer>
 
-      </div>
+      </section>
     </div>
   );
 }

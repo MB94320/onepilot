@@ -1,2 +1,2 @@
-import { UnifiedModulePage } from "@/components/platform/UnifiedModulePage";
-export default function AutomationsPage({ params }: { params: Promise<{ orgId: string }> }) { return <UnifiedModulePage params={params} mode="automations" />; }
+import DocumentToolsPage from "@/components/platform/DocumentToolsPage";
+export default function AutomationsPage({ params }: { params: Promise<{ orgId: string }> }) { return <DocumentToolsPage params={params} mode="automations" />; }

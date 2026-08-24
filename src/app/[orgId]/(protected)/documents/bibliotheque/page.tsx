@@ -1,2 +1,2 @@
-import { UnifiedModulePage } from "@/components/platform/UnifiedModulePage";
-export default function LibraryPage({ params }: { params: Promise<{ orgId: string }> }) { return <UnifiedModulePage params={params} mode="library" />; }
+import DocumentToolsPage from "@/components/platform/DocumentToolsPage";
+export default function LibraryPage({ params }: { params: Promise<{ orgId: string }> }) { return <DocumentToolsPage params={params} mode="library" />; }

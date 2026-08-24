@@ -56,31 +56,33 @@ async function resolveOrganization(orgId: string) {
 
 async function loadAdministration(orgId: string, mode: Mode) {
   const organization = await resolveOrganization(orgId);
-  const table = (name: string) => (supabase.from(name as never) as any).select("*").eq("organization_id", organization.id);
-  const [membersResult, auditResult, accessResult] = await Promise.all([
-    table("organization_members").order("created_at", { ascending: false }),
-    table("hr_audit_logs").order("performed_at", { ascending: false }).limit(1000),
-    table("platform_access_grants").is("archived_at", null).order("created_at", { ascending: false }),
+  // Les premiers tenants ne disposent pas tous des mêmes colonnes d'historique.
+  // On ne référence donc aucune colonne de date optionnelle dans la requête : le
+  // tri est fait côté client, après l'application obligatoire du filtre tenant.
+  const safeTenantRows = async (name: string, limit = 1500) => {
+    const result = await (supabase.from(name as never) as any)
+      .select("*")
+      .eq("organization_id", organization.id)
+      .limit(limit);
+    return result.error ? [] : (result.data || []);
+  };
+  const [memberships, rawAudits, rawAccesses] = await Promise.all([
+    safeTenantRows("organization_members"),
+    safeTenantRows("hr_audit_logs", 1000),
+    safeTenantRows("platform_access_grants"),
   ]);
-  if (membersResult.error) throw new Error(membersResult.error.message);
-  if (auditResult.error) throw new Error(auditResult.error.message);
-  if (accessResult.error) throw new Error(accessResult.error.message);
   let organizations: AnyRow[] = [organization];
-  if (mode === "organizations") {
+  if (mode === "organizations" || mode === "subscriptions") {
     const result = await (supabase.from("organizations" as never) as any).select("*").order("created_at", { ascending: false });
     if (result.error) throw new Error(result.error.message);
     organizations = result.data || [];
   }
-  const memberships: AnyRow[] = membersResult.data || [];
-  const memberIds = memberships.map((row) => row.user_id).filter(Boolean);
+  const memberIds = memberships.map((row: AnyRow) => row.user_id).filter(Boolean);
   let profiles: AnyRow[] = [];
   if (memberIds.length) {
-    const profilesResult = await (supabase.from("profiles" as never) as any)
-      .select("*")
-      .in("id", memberIds)
-      .order("created_at", { ascending: false });
-    if (profilesResult.error) throw new Error(profilesResult.error.message);
-    const roleByUser = new Map(memberships.map((membership) => [membership.user_id, membership.role]));
+    const profilesResult = await (supabase.from("profiles" as never) as any).select("*").in("id", memberIds);
+    if (profilesResult.error) return { organization, organizations, profiles: [], audits: [], accesses: [], rows: [] };
+    const roleByUser = new Map(memberships.map((membership: AnyRow) => [membership.user_id, membership.role]));
     profiles = (profilesResult.data || []).map((profile: AnyRow) => ({
       ...profile,
       name: profile.full_name,
@@ -89,14 +91,16 @@ async function loadAdministration(orgId: string, mode: Mode) {
       status: "ACTIVE",
     }));
   }
-  const audits: AnyRow[] = auditResult.data || [];
-  const accesses: AnyRow[] = accessResult.data || [];
+  const newestFirst = (left: AnyRow, right: AnyRow) => String(right.performed_at || right.updated_at || right.created_at || "").localeCompare(String(left.performed_at || left.updated_at || left.created_at || ""));
+  const audits: AnyRow[] = [...rawAudits].sort(newestFirst);
+  const accesses: AnyRow[] = rawAccesses.filter((row: AnyRow) => !row.archived_at).sort(newestFirst);
   const settings = [
     { id: "tenant", organization_id: organization.id, category: "Organisation", name: "Tenant courant", value: organization.name || organization.slug, status: "Actif", updated_at: organization.updated_at || organization.created_at },
     { id: "modules", organization_id: organization.id, category: "Modules", name: "Modules explicitement partagés", value: new Set(accesses.map((row) => row.module_key)).size, status: "Actif", updated_at: accesses[0]?.updated_at },
     { id: "permissions", organization_id: organization.id, category: "Sécurité", name: "Autorisations actives", value: accesses.length, status: "Actif", updated_at: accesses[0]?.updated_at },
   ];
-  const rows = mode === "organizations" ? organizations : mode === "security" ? audits : mode === "settings" ? settings : profiles;
+  const subscriptions = organizations.map((row) => ({ ...row, name: row.name || row.slug, plan: row.plan || row.subscription_plan || "Essentiel", status: row.subscription_status || row.status || "Actif" }));
+  const rows = mode === "organizations" ? organizations : mode === "subscriptions" ? subscriptions : mode === "security" ? audits : mode === "settings" ? settings : profiles;
   return { organization, organizations, profiles, audits, accesses, rows };
 }
 
@@ -127,7 +131,7 @@ export default function AdministrationModulePage({ params, mode }: { params: Pro
   const columns: Column[] = useMemo(() => mode === "organizations" ? [
     { key: "name", label: "Organisation", value: (row) => row.name || "—" }, { key: "slug", label: "Identifiant", value: (row) => row.slug || "—" }, { key: "plan", label: "Offre", value: (row) => row.plan || row.subscription_plan || "Non renseignée" }, { key: "status", label: "Statut", value: (row) => <HrStatusBadge status={tone(row.status || "active")} label={row.status || "Actif"} />, raw: (row) => row.status || "Actif" }, { key: "date", label: "Création", value: (row) => date(row.created_at) },
   ] : mode === "security" ? [
-    { key: "date", label: "Date", value: (row) => date(row.performed_at) },
+    { key: "date", label: "Date", value: (row) => date(row.performed_at || row.created_at || row.updated_at) },
     { key: "user", label: "Utilisateur", value: (row) => row.performed_by || "Système" },
     { key: "entity", label: "Objet", value: (row) => [row.entity_type, row.entity_id].filter(Boolean).join(" · ") || "Objet non renseigné" },
     { key: "action", label: "Action", value: (row) => row.action || "Événement" },

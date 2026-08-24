@@ -73,18 +73,18 @@ export default function ClientForm({ modalMode, clientData, orgSlugOrId, onClose
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-4 flex flex-col space-y-4">
+    <div className="fixed inset-0 z-[125] flex items-center justify-center bg-slate-950/35 p-4" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose(); }}>
+      <section className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl">
         
-        <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-2">
-          <h3 className="text-[11px] font-bold uppercase text-slate-800 dark:text-white">
+        <header className="sticky top-0 z-20 border-b border-slate-200 bg-gradient-to-r from-sky-50 via-white to-indigo-50 px-5 py-4">
+          <h3 className="text-lg font-black text-slate-950">
             {modalMode === "create" ? "Créer un nouveau client" : "Modifier la fiche client"}
           </h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 font-bold text-sm">✕</button>
-        </div>
+          <p className="mt-1 text-xs text-slate-500">Référentiel partagé avec les opportunités, commandes, projets et factures.</p>
+        </header>
 
         {/* GRILLE PHILOSOPHIE PROSPECTFORM : LABEL EN HAUT ET PLACEHOLDER DEDANS */}
-        <div className="grid grid-cols-6 gap-3 text-[11px]">
+        <div className="grid grid-cols-6 gap-4 p-5 text-sm">
           
           {/* Ligne 1 : Entreprise + Secteur (Côte à côte) */}
           <div className="col-span-3">
@@ -149,14 +149,14 @@ export default function ClientForm({ modalMode, clientData, orgSlugOrId, onClose
 
         </div>
 
-        <div className="flex justify-end gap-2 border-t border-slate-100 dark:border-slate-800 pt-3">
+        <footer className="flex justify-end gap-3 border-t border-slate-200 p-5">
           <button onClick={onClose} className={hrCancelButtonClassName}>Annuler</button>
           <button onClick={handleSave} disabled={!f.name} className={hrSaveButtonClassName}>
             Enregistrer
           </button>
-        </div>
+        </footer>
 
-      </div>
+      </section>
     </div>
   );
 }

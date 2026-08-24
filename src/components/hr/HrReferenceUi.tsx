@@ -211,9 +211,9 @@ export function HrInfo({ label, value, accent = "slate" }: { label: string; valu
 
 const hrStatusTranslations: Record<string, string> = {
   completed: "Clôturé", closed: "Clôturé", done: "Terminé", delivered: "Livré", accepted: "Accepté",
-  approved: "Validé", validated: "Validé", manager_approved: "Validé manager", hr_approved: "Validé RH",
+  approved: "Validé", validated: "Validé", manager_approved: "Validé manager", hr_approved: "Validé RH", hr_provisional: "Validé RH (provisoire)",
   in_progress: "En cours", active: "En cours", pending: "En attente", on_hold: "En attente", submitted: "Soumis",
-  prepared: "Préparé", draft: "Brouillon", not_started: "Non démarré", planned: "Planifié", open: "Ouvert",
+  prepared: "Préparé", draft: "Brouillon", not_started: "Non démarré", planned: "Planifié", open: "Ouvert", sent_to_manager: "Envoyé au manager",
   rejected: "Refusé", blocked: "Bloqué", delayed: "En retard", late: "En retard", overdue: "En retard", cancelled: "Annulé", archived: "Archivé",
   review: "En revue", compliant: "Conforme", partially_compliant: "Partiellement conforme", non_compliant: "Non conforme",
   not_applicable: "Non applicable", invoiced: "Facturé", collected: "Encaissé", unpaid: "Non réglé", partially_paid: "Partiellement réglé",
@@ -226,11 +226,11 @@ export function hrStatusLabel(status?: string | null) {
 
 export function HrStatusBadge({ status, label }: { status?: string | null; label?: string }) {
   const normalized = String(status || "").toLowerCase();
-  const className = normalized === "completed" || normalized === "closed" || normalized === "done" || normalized === "delivered" || normalized === "accepted" || normalized === "approved" || normalized === "validated" || normalized === "manager_approved" || normalized === "hr_approved" || normalized === "compliant"
+  const className = normalized === "completed" || normalized === "closed" || normalized === "done" || normalized === "delivered" || normalized === "accepted" || normalized === "approved" || normalized === "validated" || normalized === "manager_approved" || normalized === "hr_approved" || normalized === "hr_provisional" || normalized === "compliant"
     ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
     : normalized === "in_progress" || normalized === "active" || normalized === "pending" || normalized === "on_hold" || normalized === "submitted" || normalized === "manager_input" || normalized === "employee_input" || normalized === "calibration"
       ? "bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
-      : normalized === "prepared" || normalized === "draft" || normalized === "not_started" || normalized === "planned" || normalized === "open"
+      : normalized === "prepared" || normalized === "draft" || normalized === "not_started" || normalized === "planned" || normalized === "open" || normalized === "sent_to_manager"
         ? "bg-sky-50 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300"
         : normalized === "rejected" || normalized === "blocked" || normalized === "delayed" || normalized === "late" || normalized === "non_compliant"
           ? "bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300"

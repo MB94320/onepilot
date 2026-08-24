@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { 
   ArrowLeft, Save, DollarSign, Calendar, TrendingUp, Award, CheckSquare, FileText
 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 const supabase = createClient();
 const STATUTS_OFFRE = ['NoGo', 'A faire', 'En cours', 'Attente retour client', 'Validation client', 'Refus client'];
@@ -19,8 +19,12 @@ const STATUT_LABELS: Record<string, string> = {
 export default function OffreIndividuellePage({ params }: { params: Promise<{ orgId: string; id: string }> }) {
   const { orgId: slugOrId, id: offreId } = use(params);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const qc = useQueryClient();
-  const [activeTab, setActiveTab] = useState<'kpis' | 'ft' | 'gonogo'>('kpis');
+  const [activeTab, setActiveTab] = useState<'kpis' | 'ft' | 'gonogo'>(() => {
+    const requested = searchParams.get("onglet");
+    return requested === "ft" || requested === "gonogo" ? requested : "kpis";
+  });
 
   const [statutOffre, setStatutOffre] = useState("A faire");
   const [datePrev, setDatePrev] = useState("");
